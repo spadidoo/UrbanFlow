@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+
+/* Loading overlay */
+.uf-loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.uf-logo-fill-wrap {
+  position: relative;
+  width: 180px;
+  height: auto;
+}
+
+.logo-grey {
+  display: block;
+  filter: grayscale(100%);
+}
+
+.logo-color-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 180px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.logo-color {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 180px;
+
+  /* Apply your mask animation here */
+  -webkit-mask-image: repeating-linear-gradient(
+    to top,
+    black 0%,
+    black 60%,
+    transparent 80%,
+    transparent 100%
+  );
+  -webkit-mask-repeat: repeat-y;
+  -webkit-mask-size: 200% 200%;
+  mask-image: repeating-linear-gradient(
+    to top,
+    black 0%,
+    black 60%,
+    transparent 80%,
+    transparent 100%
+  );
+  mask-repeat: repeat-y;
+  mask-size: 200% 200%;
+
+  animation: fillUpWave 5s ease forwards, waveMotion 3s linear infinite;
+}
+
+/* Keyframes as you defined */
+@keyframes fillUpWave {
+  from {
+    -webkit-mask-position: 0% 0%;
+            mask-position: 0% 0%;
+  }
+  to {
+    -webkit-mask-position: 0% 100%;
+            mask-position: 0% 100%;
+  }
+}
+
+@keyframes waveMotion {
+  from {
+    -webkit-mask-position-x: 100%;
+            mask-position-x: 100%;
+  }
+  to {
+    -webkit-mask-position-x: 0%;
+            mask-position-x: 0%;
+  }
+}

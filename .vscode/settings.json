@@ -1,0 +1,19 @@
+{
+  "files.exclude": {
+    "**/.git": false
+  },
+
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "explicit",
+    "source.organizeImports": "explicit"
+  },
+
+  "python.defaultInterpreterPath": "${workspaceFolder}/backend/venv/Scripts/python.exe",
+
+  "terminal.integrated.defaultProfile.windows": "PowerShell",
+
+  "problems.autoReveal": true
+}
