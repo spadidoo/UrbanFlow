@@ -81,7 +81,7 @@ export default function HomeMapWithSidebar() {
             </svg>
             <input
               type="text"
-              placeholder="Search location in Calamba..."
+              placeholder="Search location"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="flex-1 outline-none text-gray-700"
@@ -91,15 +91,17 @@ export default function HomeMapWithSidebar() {
       </div>
 
       {/* Sidebar Toggle Button - Floating Right */}
-    <button
+      <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
         className={`fixed top-20 z-[1002] bg-white p-3 rounded-lg shadow-lg hover:bg-gray-50 transition-all duration-300 ${
-            sidebarOpen ? 'right-[25rem]' : 'right-4'
+          sidebarOpen ? 'right-[25rem]' : 'right-4'
         }`}
-         title="Toggle disruptions list"
+        title="Toggle disruptions list"
       >
+        {/* Sidebar collapse/expand icon */}
         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6h18M3 12h18M3 18h18" />
+        <rect x="2" y="2" width="20" height="20" rx="2" stroke="currentColor" strokeWidth={2} fill="none"/>
         </svg>
       </button>
 
@@ -175,14 +177,27 @@ export default function HomeMapWithSidebar() {
                     📅 {new Date(disruption.start_date).toLocaleDateString()} - {new Date(disruption.end_date).toLocaleDateString()}
                   </p>
 
-                  {/* View on Map Button */}
+                  /* View on Map Button */
                   <button
                     onClick={() => handleViewOnMap(disruption.latitude, disruption.longitude)}
-                    className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition font-semibold text-sm"
+                    className="w-full bg-transparent text-blue-600 py-2 rounded-lg transition font-semibold text-sm hover:text-white rounded-full"
+                    style={{
+                      border: '2px solid rgb(245, 130, 13)',
+                      color: 'rgb(245, 130, 13)',
+                      backgroundColor: 'transparent',
+                    }}
+                    onMouseEnter={e => {
+                      e.target.style.backgroundColor = 'rgb(245, 130, 13)';
+                      e.target.style.color = 'white';
+                    }}
+                    onMouseLeave={e => {
+                      e.target.style.backgroundColor = 'transparent';
+                      e.target.style.color = 'rgb(245, 130, 13)';
+                    }}
                   >
                     View on Map
                   </button>
-                </div>
+                  </div>
               ))}
             </div>
           )}
