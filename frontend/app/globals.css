@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+@import "leaflet/dist/leaflet.css";
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+#map {
+  height: 100%;
+  width: 100%;
+}
+
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
