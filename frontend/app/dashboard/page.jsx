@@ -69,6 +69,7 @@ export default function DashboardPage() {
 
         {/* Quick Actions */}
         <div className="grid md:grid-cols-3 gap-6 mb-8">
+
           <button
             onClick={() => router.push("/simulation")}
             className="bg-blue-600 text-white p-8 rounded-lg shadow-md hover:bg-blue-700 transition text-left"
