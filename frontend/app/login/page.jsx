@@ -42,7 +42,7 @@ export default function LoginPage() {
 
   return (
     <div
-      className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 relative"
+      className="min-h-screen h-screen bg-gradient-to-br from-blue-50 to-blue-100 relative overflow-hidden flex items-center justify-center"
     >
       <div
         className="absolute inset-0"
@@ -50,26 +50,30 @@ export default function LoginPage() {
           backgroundImage: "url('map.jpg')",
           backgroundSize: 'cover',
           backgroundPosition: 'center',
-          opacity: 0.5, // Adjust the opacity here
+          opacity: 0.5,
         }}
       ></div>
       <Navbar />
       
-      <main className="container mx-auto px-4 py-20 relative z-10">
+      <main className="container mx-auto px-4 pt-20 relative z-10">
         <div className="max-w-md mx-auto">
           {/* Login Card */}
           <div className="bg-white rounded-lg shadow-xl p-8">
             {/* Header */}
-                  <div className="text-center mb-10">
-                    <div className="mx-auto w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mb-4">
-                    <img src="urban_planner_icon.png" alt="Urban Planner Icon" className="h-20 w-20" />
-                    </div>
-                    <h1 className="text-3xl font-bold text-gray-800 mb-2">
-                    Urban Planner Login
-                    </h1>
-                  </div>
+            <div className="text-center mb-10">
+              <div className="mx-auto w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mb-4">
+                <img
+                  src="/urban_planner_icon.png"
+                  alt="Urban Planner Icon"
+                  className="h-20 w-20"
+                />
+              </div>
+              <h1 className="text-3xl font-bold text-gray-800 mb-2">
+                Urban Planner Login
+              </h1>
+            </div>
 
-                  {/* Error Message */}
+            {/* Error Message */}
             {error && (
               <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
                 <div className="flex items-center gap-2">
@@ -81,7 +85,7 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Login Form */}
+            {/* Email/Username */}
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Username */}
               <div>
@@ -110,14 +114,14 @@ export default function LoginPage() {
               </div>
 
               {/* Forgot Password */}
-                <div className="text-left">
-                  <a
-                      href="/forgot-password"
-                      className="text-sm text-blue-600 hover:underline font-semibold"
-                    >
-                      Forgot password?
-                  </a>
-                </div>
+              <div className="text-left">
+                <a
+                  href="/forgot-password"
+                  className="text-xs text-blue-600 hover:underline font-semibold"
+                >
+                  Forgot password
+                </a>
+              </div>
 
               {/* Submit Button */}
               <button
@@ -133,19 +137,6 @@ export default function LoginPage() {
               </button>
             </form>
 
-            {/* Test Credentials Notice */}
-            <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <p className="text-sm text-yellow-800 font-semibold mb-1">
-                🔑 Test Credentials:
-              </p>
-              <p className="text-sm text-yellow-700">
-                Username: <code className="bg-yellow-100 px-2 py-1 rounded">admin</code>
-              </p>
-              <p className="text-sm text-yellow-700">
-                Password: <code className="bg-yellow-100 px-2 py-1 rounded">admin123</code>
-              </p>
-            </div>
-
             {/* Footer Links */}
             <div className="mt-6 text-center">
               <p className="text-sm text-gray-600">
@@ -155,13 +146,13 @@ export default function LoginPage() {
                 </a>
               </p>
             </div>
-          </div>
 
-          {/* Info Box */}
-          <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
-            <p className="text-sm text-blue-800">
-              🔒 Only authorized urban planners can access simulation tools
-            </p>
+            {/* Info Box */}
+            <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+              <p className="text-xs text-blue-800">
+                ꗃ Only authorized users can access simulation tools
+              </p>
+            </div>
           </div>
         </div>
       </main>
