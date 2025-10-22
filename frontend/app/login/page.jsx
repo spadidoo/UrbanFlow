@@ -33,7 +33,7 @@ export default function LoginPage() {
       alert('Login successful! 🎉')
       // TODO: Set authentication state
       // TODO: Redirect to dashboard
-      router.push('/dashboard')
+      router.push('/planner')
     } else {
       setError('Invalid username or password')
       setLoading(false)
