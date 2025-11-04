@@ -1,0 +1,155 @@
+roadwork_id,disruption_type,area,date_start,date_end,description,road_corridor
+1,roadwork,Pansol,2024-11-14,2024-11-16,rotomilling works,Calamba_Pagsanjan
+2,roadwork,Bucal,2024-10-14,2024-10-14,road reblocking,Calamba_Pagsanjan
+3,roadwork,Crossing,2024-02-16,2024-02-17,asphalt overlay,Calamba_Pagsanjan
+3,roadwork,Halang,2024-02-16,2024-02-17,asphalt overlay,Calamba_Pagsanjan
+3,roadwork,Bucal,2024-02-16,2024-02-17,asphalt overlay,Calamba_Pagsanjan
+3,roadwork,Pansol,2024-02-16,2024-02-17,asphalt overlay,Calamba_Pagsanjan
+3,roadwork,Bagong Kalsada,2024-02-16,2024-02-17,asphalt overlay,Calamba_Pagsanjan
+4,incident,Turbina,2025-04-18,2025-04-18,Engine failure,Maharlika_Turbina
+5,incident,Turbina,2025-04-19,2025-04-19,mechanical failure,Maharlika_Turbina
+6,weather,Crossing,2025-09-26,2025-09-27,Flood,Calamba_Pagsanjan
+6,weather,Halang,2025-09-26,2025-09-27,Flood,Calamba_Pagsanjan
+6,weather,Bucal,2025-09-26,2025-09-27,Flood,Calamba_Pagsanjan
+6,weather,Pansol,2025-09-26,2025-09-27,Flood,Calamba_Pagsanjan
+6,weather,Bagong Kalsada,2025-09-26,2025-09-27,Flood,Calamba_Pagsanjan
+7,incident,Milagrosa,2025-10-03,2025-10-03,Stalled truck,Maharlika_Turbina
+8,roadwork,Halang,2025-09-30,2025-09-30,road maintenance,Calamba_Pagsanjan
+9,roadwork,Halang,2025-09-30,2025-09-30,Water pipeline maintenance,Calamba_Pagsanjan
+10,incident,Milagrosa,2025-09-29,2025-09-29,Stalled truck,Maharlika_Turbina
+10,incident,Real,2025-09-29,2025-09-29,Stalled truck,Maharlika_Turbina
+11,accident,Pansol,2025-09-23,2025-09-23,Multiple vehicle collision,Calamba_Pagsanjan
+12,roadwork,Turbina,2025-09-18,2025-09-18,drainage repair,Maharlika_Turbina
+13,incident,Real,2025-09-17,2025-09-17,Stalled truck,Maharlika_Turbina
+14,roadwork,Parian,2025-09-15,2025-09-15,road maintenance,Maharlika_Parian
+15,incident,Real,2025-09-12,2025-09-12,Stalled truck,Maharlika_Turbina
+16,accident,Bucal,2025-09-07,2025-09-07,Road Crash,Calamba_Pagsanjan
+17,roadwork,Parian,2025-09-05,2025-09-05,road maintenance,Maharlika_Parian
+18,roadwork,Bucal,2025-09-05,2025-09-05,road excavation,Calamba_Pagsanjan
+19,roadwork,Real,2025-09-04,2025-09-04,Repainting of pavement markings,Maharlika_Turbina
+20,incident,Milagrosa,2025-08-31,2025-08-31,Oil spill,Maharlika_Turbina
+21,roadwork,Bucal,2025-08-30,2025-08-30,road excavation,Calamba_Pagsanjan
+22,roadwork,Parian,2025-08-29,2025-08-29,road excavation,Maharlika_Parian
+23,roadwork,Turbina,2025-08-28,2025-08-28,Meralco line work,Maharlika_Turbina
+24,accident,Milagrosa,2025-08-27,2025-08-27,Multiple vehicle collision,Maharlika_Turbina
+25,roadwork,Parian,2025-08-22,2025-08-22,drainage repair,Maharlika_Parian
+26,roadwork,Parian,2025-08-22,2025-08-22,road excavation,Maharlika_Parian
+27,roadwork,Milagrosa,2025-09-21,2025-09-21,Meralco line work,Maharlika_Turbina
+28,incident,Milagrosa,2025-09-20,2025-09-20,Stalled truck,Maharlika_Turbina
+29,accident,Real,2025-09-19,2025-09-19,Multiple vehicle collision,Maharlika_Turbina
+30,incident,Parian,2025-09-19,2025-09-19,Stalled truck,Maharlika_Parian
+31,incident,Turbina,2025-09-18,2025-09-18,Stalled truck,Maharlika_Turbina
+32,roadwork,Turbina,2025-09-17,2025-09-17,Cleaning Operation,Maharlika_Turbina
+33,roadwork,Turbina,2025-09-18,2025-09-26,Bridge rehabilitation,Maharlika_Turbina
+33,roadwork,Real,2025-09-18,2025-09-26,Bridge rehabilitation,Maharlika_Turbina
+34,accident,Parian,2025-09-11,2025-09-11,Road Crash,Maharlika_Parian
+35,accident,Pansol,2025-09-09,2025-09-09,Multiple vehicle collision,Calamba_Pagsanjan
+36,accident,Halang,2025-09-09,2025-09-09,Road Crash,Calamba_Pagsanjan
+37,roadwork,Bagong Kalsada,2025-09-06,2025-09-06,deep excavation,Calamba_Pagsanjan
+38,accident,Real,2025-09-06,2025-09-06,Road Crash,Maharlika_Turbina
+39,accident,Milagrosa,2025-10-06,2025-10-06,Road Crash,Maharlika_Turbina
+40,roadwork,Bucal,2025-10-04,2025-10-04,Road excavation,Calamba_Pagsanjan
+41,accident,Turbina,2025-10-04,2025-10-04,Road Crash,Maharlika_Turbina
+42,accident,Bagong Kalsada,2025-10-04,2025-10-04,Road Crash,Calamba_Pagsanjan
+43,roadwork,Pansol,2025-10-02,2025-10-02,Road excavation,Calamba_Pagsanjan
+44,accident,Bagong Kalsada,2025-10-02,2025-10-02,Multiple vehicle collision,Calamba_Pagsanjan
+45,accident,Bucal,2025-10-01,2025-10-01,Multiple vehicle collision,Calamba_Pagsanjan
+46,roadwork,Parian,2025-07-30,2025-07-30,Road excavation,Maharlika_Parian
+47,roadwork,Real,2025-07-30,2025-07-30,Road excavation,Maharlika_Turbina
+47,roadwork,Parian,2025-07-30,2025-07-30,Road excavation,Maharlika_Parian
+48,roadwork,Pansol,2025-07-20,2025-07-20,Road excavation,Calamba_Pagsanjan
+49,roadwork,Halang,2025-07-15,2025-07-15,Road excavation,Calamba_Pagsanjan
+50,roadwork,Real,2025-07-15,2025-07-15,Road excavation,Maharlika_Turbina
+51,weather,Parian,2025-07-14,2025-07-14,Heavy Rainfall / Flood,Maharlika_Parian
+52,roadwork,Bagong Kalsada,2025-07-13,2025-07-13,Road excavation,Calamba_Pagsanjan
+53,accident,Real,2025-07-07,2025-07-07,Road Crash,Maharlika_Turbina
+54,accident,Real,2025-06-30,2025-06-30,Road Crash,Maharlika_Turbina
+55,weather,Halang,2025-06-25,2025-06-25,Flood,Calamba_Pagsanjan
+55,weather,Bucal,2025-06-25,2025-06-25,Flood,Calamba_Pagsanjan
+56,roadwork,Parian,2025-06-05,2025-06-05,Road excavation,Maharlika_Parian
+57,event,Pansol,2025-05-30,2025-05-30,Flores de Mayo,Calamba_Pagsanjan
+57,event,Bucal,2025-05-30,2025-05-30,Flores de Mayo,Calamba_Pagsanjan
+57,event,Halang,2025-05-30,2025-05-30,Flores de Mayo,Calamba_Pagsanjan
+58,event,Pansol,2025-05-31,2025-05-31,Flores de Mayo,Calamba_Pagsanjan
+58,event,Parian,2025-05-31,2025-05-31,Flores de Mayo,Maharlika_Parian
+58,event,Milagrosa,2025-05-31,2025-05-31,Flores de Mayo,Maharlika_Turbina
+59,event,Bagong Kalsada,2025-05-15,2025-05-15,Fiesta,Calamba_Pagsanjan
+59,event,Pansol,2025-05-15,2025-05-15,Fiesta,Calamba_Pagsanjan
+59,event,Bucal,2025-05-15,2025-05-15,Fiesta,Calamba_Pagsanjan
+59,event,Halang,2025-05-15,2025-05-15,Fiesta,Calamba_Pagsanjan
+60,event,Crossing,2025-05-01,2025-05-01,Rally,Calamba_Pagsanjan
+61,accident,Crossing,2025-04-14,2025-04-14,Multiple vehicle collision,Calamba_Pagsanjan
+62,roadwork,Real,2025-03-03,2025-03-03,Road excavation,Maharlika_Turbina
+63,incident,Milagrosa,2025-02-07,2025-02-07,Stalled Trailer Truck,Maharlika_Turbina
+64,incident,Turbina,2025-01-08,2025-01-08,Stalled Truck,Maharlika_Turbina
+64,incident,Makiling,2025-01-08,2025-01-08,Stalled Truck,Maharlika_Turbina
+65,incident,Real,2025-01-08,2025-01-08,Stalled Truck,Maharlika_Turbina
+66,roadwork,Parian,2024-11-27,2024-11-27,Road excavation,Maharlika_Parian
+67,incident,Turbina,2024-03-19,2024-03-19,Stalled Truck,Maharlika_Turbina
+68,event,Crossing,2024-05-01,2024-05-01,Rally,Calamba_Pagsanjan
+69,roadwork,Halang,2024-07-19,2024-07-19,CWD Work,Calamba_Pagsanjan
+70,roadwork,Bucal,2024-07-26,2024-07-26,DPWH Work,Calamba_Pagsanjan
+71,accident,Halang,2024-08-08,2024-08-08,Multiple vehicle collision,Calamba_Pagsanjan
+72,roadwork,Pansol,2024-08-26,2024-08-26,Water line repair,Calamba_Pagsanjan
+73,roadwork,Bucal,2024-07-29,2024-07-29,Road repair,Calamba_Pagsanjan
+74,roadwork,Crossing,2024-09-11,2024-09-11,Reblocking,Calamba_Pagsanjan
+75,accident,Bucal,2024-09-14,2024-09-14,Multiple vehicle collision,Calamba_Pagsanjan
+76,roadwork,Crossing,2024-09-18,2024-09-18,Asphalt overlay,Calamba_Pagsanjan
+77,roadwork,Pansol,2024-09-21,2024-09-21,Road excavation,Calamba_Pagsanjan
+78,roadwork,Bucal,2024-09-24,2024-09-24,Road excavation,Calamba_Pagsanjan
+79,incident,Milagrosa,2024-09-25,2024-09-25,Stalled Truck,Maharlika_Turbina
+80,roadwork,Real,2024-09-25,2024-09-25,Asphalt overlay,Maharlika_Turbina
+81,roadwork,Halang,2024-09-26,2024-09-26,Asphalt overlay,Calamba_Pagsanjan
+81,roadwork,Bucal,2024-09-26,2024-09-26,Asphalt overlay,Calamba_Pagsanjan
+82,roadwork,Real,2024-09-26,2024-09-26,rotomilling works,Maharlika_Turbina
+83,roadwork,Real,2024-09-26,2024-09-26,rotomilling works,Maharlika_Turbina
+84,event,Real,2024-09-29,2024-09-29,Charitie Ride,Maharlika_Turbina
+85,accident,Real,2024-09-29,2024-09-29,Road Crash,Maharlika_Turbina
+86,incident,Milagrosa,2024-10-01,2024-10-01,Stalled Truck,Maharlika_Turbina
+87,roadwork,Bucal,2024-10-14,2024-10-14,Reblocking,Calamba_Pagsanjan
+88,roadwork,Real,2024-10-09,2024-10-09,Road excavation,Maharlika_Turbina
+89,roadwork,Milagrosa,2024-10-10,2024-10-10,Utility Works,Maharlika_Turbina
+90,roadwork,Parian,2024-10-11,2024-10-11,Road realigning,Maharlika_Parian
+91,roadwork,Parian,2024-10-15,2024-10-15,Line painting,Maharlika_Parian
+92,roadwork,Bucal,2024-10-15,2024-10-15,road reblocking,Calamba_Pagsanjan
+93,roadwork,Parian,2024-10-21,2024-10-21,Lane lining,Maharlika_Parian
+94,weather,Pansol,2024-10-24,2024-10-24,Flood,Calamba_Pagsanjan
+95,roadwork,Parian,2024-10-24,2024-10-24,Road Closure,Maharlika_Parian
+96,roadwork,Bucal,2024-11-04,2024-11-04,road reblocking,Calamba_Pagsanjan
+97,roadwork,Bucal,2024-11-05,2024-11-05,road reblocking,Calamba_Pagsanjan
+98,incident,Turbina,2024-11-08,2024-11-08,Stalled Truck,Maharlika_Turbina
+99,roadwork,Real,2024-11-08,2024-11-08,rotomilling works,Maharlika_Turbina
+100,roadwork,Bucal,2024-11-19,2024-11-19,rotomilling works,Calamba_Pagsanjan
+101,roadwork,Real,2024-11-21,2024-11-21,Stalled truck,Maharlika_Turbina
+101,roadwork,Turbina,2024-11-21,2024-11-21,Stalled truck,Maharlika_Turbina
+102,roadwork,Crossing,2024-12-30,2024-12-30,Market Goers,Calamba_Pagsanjan
+103,roadwork,Crossing,2024-07-04,2025-01-29,Preventive Maintenance,Calamba_Pagsanjan
+103,roadwork,Halang,2024-07-04,2025-01-29,Preventive Maintenance,Calamba_Pagsanjan
+103,roadwork,Bucal,2024-07-04,2025-01-29,Preventive Maintenance,Calamba_Pagsanjan
+103,roadwork,Pansol,2024-07-04,2025-01-29,Preventive Maintenance,Calamba_Pagsanjan
+103,roadwork,Bagong Kalsada,2024-07-04,2025-01-29,Preventive Maintenance,Calamba_Pagsanjan
+104,roadwork,Crossing,2025-01-03,2025-03-03,Asphalt overlay,Calamba_Pagsanjan
+104,roadwork,Halang,2025-01-03,2025-03-03,Asphalt overlay,Calamba_Pagsanjan
+104,roadwork,Bucal,2025-01-03,2025-03-03,Asphalt overlay,Calamba_Pagsanjan
+104,roadwork,Pansol,2025-01-03,2025-03-03,Asphalt overlay,Calamba_Pagsanjan
+104,roadwork,Bagong Kalsada,2025-01-03,2025-03-03,Asphalt overlay,Calamba_Pagsanjan
+105,roadwork,Crossing,2025-02-14,2025-09-11,Preventive Maintenance,Calamba_Pagsanjan
+105,roadwork,Halang,2025-02-14,2025-09-11,Preventive Maintenance,Calamba_Pagsanjan
+105,roadwork,Bucal,2025-02-14,2025-09-11,Preventive Maintenance,Calamba_Pagsanjan
+105,roadwork,Pansol,2025-02-14,2025-09-11,Preventive Maintenance,Calamba_Pagsanjan
+105,roadwork,Bagong Kalsada,2025-02-14,2025-09-11,Preventive Maintenance,Calamba_Pagsanjan
+106,roadwork,Real,2025-04-12,2025-09-20,Preventive Maintenance,Maharlika_Turbina
+106,roadwork,Turbina,2025-04-12,2025-09-20,Preventive Maintenance,Maharlika_Turbina
+106,roadwork,Milagrosa,2025-04-12,2025-09-20,Preventive Maintenance,Maharlika_Turbina
+106,roadwork,Makiling,2025-04-12,2025-09-20,Preventive Maintenance,Maharlika_Turbina
+106,roadwork,Checkpoint,2025-04-12,2025-09-20,Preventive Maintenance,Maharlika_Parian
+106,roadwork,Parian,2025-04-12,2025-09-20,Preventive Maintenance,Maharlika_Parian
+107,roadwork,Real,2025-01-03,2025-01-24,Preventive Maintenance,Maharlika_Turbina
+107,roadwork,Turbina,2025-01-03,2025-01-24,Preventive Maintenance,Maharlika_Turbina
+107,roadwork,Milagrosa,2025-01-03,2025-01-24,Preventive Maintenance,Maharlika_Turbina
+107,roadwork,Makiling,2025-01-03,2025-01-24,Preventive Maintenance,Maharlika_Turbina
+107,roadwork,Checkpoint,2025-01-03,2025-01-24,Preventive Maintenance,Maharlika_Parian
+107,roadwork,Parian,2025-01-03,2025-01-24,Preventive Maintenance,Maharlika_Parian
+108,roadwork,Makiling,2023-12-01,2024-06-27,Concreting of Road,Maharlika_Turbina
+110,roadwork,Bagong Kalsada,2024-11-27,2024-12-12,Asphalting of Road,Calamba_Pagsanjan
+111,roadwork,Real,2024-12-09,2025-03-08,Concreting of Road,Maharlika_Turbina
