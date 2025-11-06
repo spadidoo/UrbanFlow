@@ -1,5 +1,5 @@
 "use client";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/components/PlannerNavbar";
 
 export default function SimulatePage() {
   const router = useRouter();
@@ -18,12 +18,15 @@ export default function SimulatePage() {
 
       <div className="bg-white shadow rounded-lg p-6">
         <p className="text-gray-600 mb-4">
-          Choose simulation type, input parameters, and run model (frontend mock-up).
+          Choose simulation type, input parameters, and run model (frontend
+          mock-up).
         </p>
 
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-semibold mb-1">Simulation Type</label>
+            <label className="block text-sm font-semibold mb-1">
+              Simulation Type
+            </label>
             <select className="w-full border border-gray-300 rounded p-2">
               <option>Flood Simulation</option>
               <option>Traffic Simulation</option>
