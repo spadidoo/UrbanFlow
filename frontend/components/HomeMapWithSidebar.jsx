@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import L from 'leaflet'
 import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet'
+import api from '@/services/api'
 
 // Fix Leaflet icons
 delete L.Icon.Default.prototype._getIconUrl
@@ -15,36 +16,68 @@ L.Icon.Default.mergeOptions({
 export default function HomeMapWithSidebar() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [disruptions, setDisruptions] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
-  // Mock disruptions data (replace with API call later)
-  const disruptions = [
-    {
-      id: 1,
-      title: 'Bagong Kalsada Roadwork',
-      location: 'Bagong Kalsada',
-      latitude: 14.2108,
-      longitude: 121.1644,
-      type: 'roadwork',
-      status: 'Active',
-      expected_delay: '15-20 minutes',
-      start_date: '2025-10-01',
-      end_date: '2025-10-15',
-      congestion_level: 'Heavy'
-    },
-    {
-      id: 2,
-      title: 'Parian Festival Event',
-      location: 'Parian Road',
-      latitude: 14.2150,
-      longitude: 121.1600,
-      type: 'event',
-      status: 'Active',
-      expected_delay: '10 minutes',
-      start_date: '2025-10-08',
-      end_date: '2025-10-08',
-      congestion_level: 'Moderate'
+  // Fetch disruptions on component mount
+  useEffect(() => {
+    fetchDisruptions()
+  }, [])
+
+  const fetchDisruptions = async () => {
+    try {
+      setLoading(true)
+      // TODO: Replace with actual endpoint when backend has it
+      // For now, use mock data but show structure
+      
+      // Mock data - Replace this with: const data = await api.getPublishedDisruptions()
+      const mockData = [
+        {
+          id: 1,
+          title: 'Bagong Kalsada Roadwork',
+          location: 'Bagong Kalsada',
+          area: 'Bucal',
+          latitude: 14.1894,
+          longitude: 121.1691,
+          road_corridor: 'Calamba_Pagsanjan',
+          type: 'roadwork',
+          status: 'Active',
+          expected_delay: 15, // minutes
+          start_date: '2025-01-13',
+          end_date: '2025-01-15',
+          congestion_level: 'Heavy',
+          avg_severity: 2.1,
+          description: 'Road repair work'
+        },
+        {
+          id: 2,
+          title: 'Parian Festival Event',
+          location: 'Parian Road',
+          area: 'Parian',
+          latitude: 14.2137,
+          longitude: 121.1510,
+          road_corridor: 'Maharlika_Parian',
+          type: 'event',
+          status: 'Active',
+          expected_delay: 8,
+          start_date: '2025-01-18',
+          end_date: '2025-01-18',
+          congestion_level: 'Moderate',
+          avg_severity: 1.3,
+          description: 'Annual town festival'
+        }
+      ]
+      
+      setDisruptions(mockData)
+      setError(null)
+    } catch (err) {
+      console.error('Failed to fetch disruptions:', err)
+      setError('Failed to load disruptions. Please try again.')
+    } finally {
+      setLoading(false)
     }
-  ]
+  }
 
   const getCongestionColor = (level) => {
     switch(level) {
@@ -60,13 +93,14 @@ export default function HomeMapWithSidebar() {
       case 'roadwork': return '🚧'
       case 'event': return '🎉'
       case 'accident': return '⚠️'
+      case 'weather': return '🌧️'
       default: return '📍'
     }
   }
 
   const handleViewOnMap = (lat, lng) => {
     // TODO: Zoom map to this location
-    alert(`Zooming to: ${lat}, ${lng}`)
+    console.log(`Zooming to: ${lat}, ${lng}`)
     setSidebarOpen(false)
   }
 
@@ -90,34 +124,40 @@ export default function HomeMapWithSidebar() {
         </div>
       </div>
 
-      {/* Sidebar Toggle Button - Floating Right */}
-    <button
+      {/* Sidebar Toggle Button */}
+      <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
         className={`fixed top-20 z-[1002] bg-white p-3 rounded-lg shadow-lg hover:bg-gray-50 transition-all duration-300 ${
-            sidebarOpen ? 'right-[25rem]' : 'right-4'
+          sidebarOpen ? 'right-[25rem]' : 'right-4'
         }`}
-         title="Toggle disruptions list"
+        title="Toggle disruptions list"
       >
         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
         </svg>
       </button>
 
-      {/* Sidebar - Slides from right */}
+      {/* Sidebar */}
       <div 
         className={`fixed top-0 right-0 h-full w-96 shadow-2xl z-[999] transition-transform duration-300 overflow-y-auto ${
-            sidebarOpen ? 'translate-x-0' : 'translate-x-full'
+          sidebarOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
         style={{
-            backgroundColor: 'rgba(255, 255, 255, 0.7)',
-            backdropFilter: 'blur(5px)',
-            WebkitBackdropFilter: 'blur(5px)'
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(10px)',
         }}
       >
         <div className="p-6">
           {/* Sidebar Header */}
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">Active Disruptions</h2>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800">Active Disruptions</h2>
+              {!loading && (
+                <p className="text-sm text-gray-600 mt-1">
+                  {disruptions.length} active {disruptions.length === 1 ? 'disruption' : 'disruptions'}
+                </p>
+              )}
+            </div>
             <button
               onClick={() => setSidebarOpen(false)}
               className="text-gray-500 hover:text-gray-700"
@@ -128,16 +168,41 @@ export default function HomeMapWithSidebar() {
             </button>
           </div>
 
-          {/* Disruptions List */}
-          {disruptions.length === 0 ? (
+          {/* Loading State */}
+          {loading && (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading disruptions...</p>
+            </div>
+          )}
+
+          {/* Error State */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+              <p className="text-red-700 text-sm">{error}</p>
+              <button
+                onClick={fetchDisruptions}
+                className="mt-2 text-red-600 text-sm font-semibold hover:underline"
+              >
+                Try again
+              </button>
+            </div>
+          )}
+
+          {/* Empty State */}
+          {!loading && !error && disruptions.length === 0 && (
             <div className="text-center py-12 text-gray-500">
-              <p className="text-lg">No active disruptions</p>
+              <div className="text-6xl mb-4">✅</div>
+              <p className="text-lg font-semibold">No active disruptions</p>
               <p className="text-sm mt-2">Traffic is flowing normally!</p>
             </div>
-          ) : (
+          )}
+
+          {/* Disruptions List */}
+          {!loading && !error && disruptions.length > 0 && (
             <div className="space-y-4">
               {disruptions.map((disruption) => (
-                <div key={disruption.id} className="border rounded-lg p-4 hover:shadow-md transition">
+                <div key={disruption.id} className="bg-white border rounded-lg p-4 hover:shadow-md transition">
                   {/* Title */}
                   <div className="flex items-start justify-between mb-2">
                     <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
@@ -152,7 +217,7 @@ export default function HomeMapWithSidebar() {
                   </p>
 
                   {/* Type & Status */}
-                  <div className="flex gap-2 mb-2">
+                  <div className="flex gap-2 mb-3">
                     <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded capitalize">
                       {disruption.type}
                     </span>
@@ -166,9 +231,21 @@ export default function HomeMapWithSidebar() {
                   </div>
 
                   {/* Expected Delay */}
-                  <p className="text-sm text-gray-700 mb-2">
-                    ⏱️ <strong>Expected Delay:</strong> {disruption.expected_delay}
-                  </p>
+                  <div className="bg-gray-50 rounded-lg p-3 mb-3">
+                    <p className="text-sm text-gray-700 flex items-center gap-2">
+                      <span className="text-lg">⏱️</span>
+                      <span>
+                        <strong>Expected Delay:</strong> +{disruption.expected_delay} minutes
+                      </span>
+                    </p>
+                  </div>
+
+                  {/* Description */}
+                  {disruption.description && (
+                    <p className="text-sm text-gray-600 mb-3 italic">
+                      "{disruption.description}"
+                    </p>
+                  )}
 
                   {/* Dates */}
                   <p className="text-xs text-gray-500 mb-3">
@@ -186,6 +263,16 @@ export default function HomeMapWithSidebar() {
               ))}
             </div>
           )}
+
+          {/* Refresh Button */}
+          {!loading && (
+            <button
+              onClick={fetchDisruptions}
+              className="w-full mt-6 bg-gray-100 text-gray-700 py-2 rounded-lg hover:bg-gray-200 transition text-sm font-semibold"
+            >
+              🔄 Refresh
+            </button>
+          )}
         </div>
       </div>
 
@@ -201,27 +288,33 @@ export default function HomeMapWithSidebar() {
           attribution="&copy; OpenStreetMap contributors"
         />
 
-        {/* Disruption Markers */}
+        {/* Disruption Markers and Circles */}
         {disruptions.map((d) => (
           <div key={d.id}>
             <Marker position={[d.latitude, d.longitude]}>
               <Popup>
                 <div className="p-2">
-                  <h3 className="font-bold">{d.title}</h3>
-                  <p className="text-sm">{d.location}</p>
-                  <p className="text-xs text-gray-600">Delay: {d.expected_delay}</p>
+                  <h3 className="font-bold text-lg">{d.title}</h3>
+                  <p className="text-sm text-gray-600">{d.location}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    <strong>Delay:</strong> +{d.expected_delay} min
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    <strong>Status:</strong> {d.congestion_level}
+                  </p>
                 </div>
               </Popup>
             </Marker>
 
-            {/* Congestion Circle */}
+            {/* Congestion Circle (Blob) */}
             <Circle
               center={[d.latitude, d.longitude]}
-              radius={300}
+              radius={500} // 500m radius
               pathOptions={{
                 color: getCongestionColor(d.congestion_level),
                 fillColor: getCongestionColor(d.congestion_level),
-                fillOpacity: 0.2
+                fillOpacity: 0.3,
+                weight: 2
               }}
             />
           </div>
