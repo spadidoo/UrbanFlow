@@ -1,42 +1,45 @@
+// frontend/app/simulation/page.jsx - COMPLETE VERSION
+
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import PlannerNavbar from "@/components/PlannerNavbar";
 import api from "@/services/api";
+import { getRoadInfoFromOSM, getRoadSegmentsInArea } from "@/services/osmService";
 
-// Import map component dynamically (Leaflet needs client-side)
-const MapWrapper = dynamic(() => import("@/components/MapWrapper"), {
+// Import map with drawing tools
+const SimulationMap = dynamic(() => import("@/components/SimulationMap"), {
   ssr: false,
   loading: () => (
-    <div className="h-[500px] bg-gray-200 flex items-center justify-center rounded-lg">
+    <div className="h-[400px] bg-gray-200 flex items-center justify-center rounded-lg">
       Loading map...
     </div>
   ),
 });
 
 export default function SimulationPage() {
-  // Form state
+  const [isMapExpanded, setIsMapExpanded] = useState(false);
+  const [drawMode, setDrawMode] = useState('point'); // 'point', 'line', 'polygon'
+  
   const [formData, setFormData] = useState({
-    area: "Bucal",
-    road_corridor: "Calamba_Pagsanjan",
-    disruption_type: "roadwork",
-    start_date: "",
-    start_time: "06:00",
-    end_date: "",
-    end_time: "18:00",
+    scenarioName: "",
+    disruptionType: "roadwork",
+    startDate: "",
+    startTime: "06:00",
+    endDate: "",
+    endTime: "18:00",
     description: "",
   });
 
-  // Map state
   const [selectedLocation, setSelectedLocation] = useState(null);
-
-  // Simulation state
-  const [simulating, setSimulating] = useState(false);
+  const [roadInfo, setRoadInfo] = useState(null);
+  const [loadingRoadInfo, setLoadingRoadInfo] = useState(false);
+  
   const [results, setResults] = useState(null);
+  const [simulating, setSimulating] = useState(false);
   const [error, setError] = useState(null);
 
-  // Handle form input changes
   const handleChange = (e) => {
     setFormData({
       ...formData,
@@ -45,585 +48,505 @@ export default function SimulationPage() {
     setError(null);
   };
 
-  // Handle map click
-  const handleMapClick = async (lat, lng) => {
+  // Handle point selection on map
+  const handlePointSelect = async (lat, lng) => {
+    setLoadingRoadInfo(true);
+    setError(null);
+
     try {
-      // Get road info from backend
-      const response = await api.getRoadInfo(lat, lng);
+      // Get road info from OSM
+      const osmData = await getRoadInfoFromOSM(lat, lng);
 
-      if (response.success) {
-        setSelectedLocation({
-          lat,
-          lng,
-          ...response,
-        });
+      if (!osmData.success) {
+        setError(osmData.message);
+        setLoadingRoadInfo(false);
+        return;
+      }
 
-        // Update form with road info
-        setFormData({
-          ...formData,
-          area: response.area,
-          road_corridor: response.road_corridor,
-        });
+      setSelectedLocation({
+        type: 'point',
+        coordinates: [{ lat, lng }],
+        center: { lat, lng },
+      });
 
-        setError(null);
+      // Process road info through backend
+      const response = await fetch('http://localhost:5000/api/process-road-info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(osmData),
+      });
+
+      const processedData = await response.json();
+
+      if (processedData.success) {
+        setRoadInfo(processedData.road_info);
       } else {
-        setError("Location not in covered area. Please select a different location.");
-        setSelectedLocation(null);
+        throw new Error('Failed to process road information');
       }
     } catch (err) {
-      console.error("Failed to get road info:", err);
-      setError("Failed to identify road. Please try again.");
+      console.error('Error fetching road info:', err);
+      setError('Failed to get road information. Please try another location.');
+    } finally {
+      setLoadingRoadInfo(false);
     }
   };
 
-  // Handle simulation submission
-  const handleSimulate = async (e) => {
-    e.preventDefault();
-    setSimulating(true);
+  // Handle line/polygon drawing
+  const handleAreaSelect = async (coordinates) => {
+    setLoadingRoadInfo(true);
     setError(null);
-    setResults(null);
 
     try {
-      // Validate dates
-      if (!formData.start_date || !formData.end_date) {
-        throw new Error("Please select start and end dates");
+      // Get all road segments in the drawn area
+      const osmData = await getRoadSegmentsInArea(coordinates);
+
+      if (!osmData.success || osmData.roads.length === 0) {
+        setError('No roads found in selected area');
+        setLoadingRoadInfo(false);
+        return;
       }
 
-      const startDateTime = new Date(`${formData.start_date}T${formData.start_time}`);
-      const endDateTime = new Date(`${formData.end_date}T${formData.end_time}`);
+      setSelectedLocation({
+        type: drawMode,
+        coordinates: coordinates,
+        center: {
+          lat: coordinates.reduce((sum, c) => sum + c.lat, 0) / coordinates.length,
+          lng: coordinates.reduce((sum, c) => sum + c.lng, 0) / coordinates.length,
+        },
+      });
 
-      if (endDateTime <= startDateTime) {
-        throw new Error("End date/time must be after start date/time");
-      }
+      // Aggregate road information (take primary road or average)
+      const mainRoad = osmData.roads[0]; // Primary road in area
+      
+      const response = await fetch('http://localhost:5000/api/process-road-info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...mainRoad,
+          total_roads_affected: osmData.roads.length,
+        }),
+      });
 
-      // Prepare simulation data
-      const simulationData = {
-        area: formData.area,
-        road_corridor: formData.road_corridor,
-        disruption_type: formData.disruption_type,
-        start_date: formData.start_date,
-        start_time: formData.start_time,
-        end_date: formData.end_date,
-        end_time: formData.end_time,
-        description: formData.description,
-        coordinates: selectedLocation
-          ? { lat: selectedLocation.lat, lon: selectedLocation.lng }
-          : null,
-      };
+      const processedData = await response.json();
 
-      // Call API
-      const response = await api.simulateDisruption(simulationData);
-
-      if (response.success) {
-        setResults(response);
-
-        // Scroll to results
-        document.getElementById("results-section")?.scrollIntoView({
-          behavior: "smooth",
+      if (processedData.success) {
+        setRoadInfo({
+          ...processedData.road_info,
+          affected_roads: osmData.roads.length,
         });
-      } else {
-        throw new Error(response.error || "Simulation failed");
       }
     } catch (err) {
-      console.error("Simulation error:", err);
-      setError(err.message || "Failed to run simulation. Please try again.");
+      console.error('Error fetching area road info:', err);
+      setError('Failed to analyze selected area. Please try again.');
+    } finally {
+      setLoadingRoadInfo(false);
+    }
+  };
+
+  const handleSimulate = async () => {
+    if (!selectedLocation || !roadInfo) {
+      setError('Please select a location on the map first');
+      return;
+    }
+
+    if (!formData.startDate || !formData.endDate) {
+      setError('Please select start and end dates');
+      return;
+    }
+
+    setSimulating(true);
+    setError(null);
+
+    try {
+      const simulationData = {
+        area: roadInfo.area,
+        road_corridor: roadInfo.road_name,
+        disruption_type: formData.disruptionType,
+        start_date: formData.startDate,
+        start_time: formData.startTime,
+        end_date: formData.endDate,
+        end_time: formData.endTime,
+        description: formData.description,
+        road_info: {
+          lanes: roadInfo.lanes,
+          length_km: roadInfo.length_km,
+          width_meters: roadInfo.width_meters,
+          max_speed: roadInfo.max_speed,
+          total_capacity: roadInfo.total_capacity,
+          free_flow_time_minutes: roadInfo.free_flow_time_minutes,
+          disruption_factors: roadInfo.disruption_factors,
+          road_type: roadInfo.road_type,
+        },
+        coordinates: selectedLocation.center,
+      };
+
+      const response = await fetch('http://localhost:5000/api/simulate-disruption', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(simulationData),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setResults(data);
+        document.getElementById('results-section')?.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        throw new Error(data.error || 'Simulation failed');
+      }
+    } catch (err) {
+      console.error('Simulation error:', err);
+      setError(err.message || 'Failed to run simulation');
     } finally {
       setSimulating(false);
     }
   };
 
-  // Get recommendations
-  const getRecommendations = async () => {
-    if (!results) return;
-
-    try {
-      const recResponse = await api.getRecommendations({
-        disruption_type: formData.disruption_type,
-        avg_severity: results.summary.avg_severity,
-        heavy_percentage: results.summary.heavy_percentage,
-        peak_hours_affected: true,
-      });
-
-      if (recResponse.success) {
-        setResults({
-          ...results,
-          recommendations: recResponse.recommendations,
-        });
-      }
-    } catch (err) {
-      console.error("Failed to get recommendations:", err);
-    }
-  };
-
-  // Auto-fetch recommendations when results available
-  useState(() => {
-    if (results && !results.recommendations) {
-      getRecommendations();
-    }
-  }, [results]);
-
   return (
     <div className="min-h-screen bg-gray-50">
       <PlannerNavbar />
 
-      <main className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            Traffic Disruption Simulation
-          </h1>
-          <p className="text-gray-600">
-            Predict traffic impact of planned disruptions using Random Forest ML model
+      <main className="container mx-auto px-4 py-6">
+        {/* Header */}
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-800">Traffic Disruption Simulation</h1>
+          <p className="text-gray-600 mt-2">
+            Select disruption area on the map and configure simulation parameters
           </p>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-8">
-          {/* Left Column: Form */}
-          <div className="space-y-6">
-            {/* Map Selection */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">
-                📍 Step 1: Select Location
-              </h2>
-              <p className="text-sm text-gray-600 mb-4">
-                Click on the map to select the disruption location
-              </p>
-
-              <MapWrapper onMapClick={handleMapClick} selectedLocation={selectedLocation} />
-
-              {selectedLocation && (
-                <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-3">
-                  <p className="text-sm text-green-800 font-semibold">
-                    ✓ Location Selected
-                  </p>
-                  <p className="text-xs text-green-700 mt-1">
-                    {selectedLocation.road_name} - {selectedLocation.area}
-                  </p>
-                  <p className="text-xs text-gray-600 mt-1">
-                    Coordinates: {selectedLocation.lat.toFixed(4)}, {selectedLocation.lng.toFixed(4)}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Form */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">
-                📝 Step 2: Disruption Details
-              </h2>
-
-              <form onSubmit={handleSimulate} className="space-y-4">
-                {/* Disruption Type */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Disruption Type *
-                  </label>
-                  <select
-                    name="disruption_type"
-                    value={formData.disruption_type}
-                    onChange={handleChange}
-                    required
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  >
-                    <option value="roadwork">🚧 Roadwork</option>
-                    <option value="event">🎉 Event</option>
-                    <option value="accident">⚠️ Accident</option>
-                    <option value="weather">🌧️ Weather</option>
-                    <option value="incident">🚨 Incident</option>
-                  </select>
-                </div>
-
-                {/* Start Date & Time */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Start Date *
-                    </label>
-                    <input
-                      type="date"
-                      name="start_date"
-                      value={formData.start_date}
-                      onChange={handleChange}
-                      required
-                      min={new Date().toISOString().split("T")[0]}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Start Time *
-                    </label>
-                    <input
-                      type="time"
-                      name="start_time"
-                      value={formData.start_time}
-                      onChange={handleChange}
-                      required
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                    />
-                  </div>
-                </div>
-
-                {/* End Date & Time */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      End Date *
-                    </label>
-                    <input
-                      type="date"
-                      name="end_date"
-                      value={formData.end_date}
-                      onChange={handleChange}
-                      required
-                      min={formData.start_date || new Date().toISOString().split("T")[0]}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      End Time *
-                    </label>
-                    <input
-                      type="time"
-                      name="end_time"
-                      value={formData.end_time}
-                      onChange={handleChange}
-                      required
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Description */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Description (Optional)
-                  </label>
-                  <textarea
-                    name="description"
-                    value={formData.description}
-                    onChange={handleChange}
-                    rows="3"
-                    placeholder="e.g., Road repair, Festival celebration, etc."
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  ></textarea>
-                </div>
-
-                {/* Error Message */}
-                {error && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                    <p className="text-sm text-red-700">{error}</p>
-                  </div>
-                )}
-
-                {/* Submit Button */}
+        <div className="grid lg:grid-cols-12 gap-6">
+          {/* Left Column - Map */}
+          <div className={`${isMapExpanded ? 'lg:col-span-12' : 'lg:col-span-7'} space-y-4`}>
+            {/* Drawing Mode Selector */}
+            <div className="bg-white rounded-lg shadow-md p-4">
+              <h3 className="font-semibold text-gray-800 mb-3">Selection Mode</h3>
+              <div className="flex gap-2">
                 <button
-                  type="submit"
-                  disabled={simulating || !selectedLocation}
-                  className={`w-full py-3 rounded-lg font-semibold text-white transition ${
-                    simulating || !selectedLocation
-                      ? "bg-gray-400 cursor-not-allowed"
-                      : "bg-orange-500 hover:bg-orange-600"
+                  onClick={() => setDrawMode('point')}
+                  className={`flex-1 px-4 py-2 rounded-lg font-semibold transition ${
+                    drawMode === 'point'
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  {simulating ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <svg
-                        className="animate-spin h-5 w-5"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        ></circle>
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        ></path>
-                      </svg>
-                      Running Simulation...
-                    </span>
-                  ) : (
-                    "🚀 Run Simulation"
-                  )}
+                  📍 Point
                 </button>
+                <button
+                  onClick={() => setDrawMode('line')}
+                  className={`flex-1 px-4 py-2 rounded-lg font-semibold transition ${
+                    drawMode === 'line'
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  ➖ Line
+                </button>
+                <button
+                  onClick={() => setDrawMode('polygon')}
+                  className={`flex-1 px-4 py-2 rounded-lg font-semibold transition ${
+                    drawMode === 'polygon'
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  ⬟ Area
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                {drawMode === 'point' && '• Click on the map to select a point'}
+                {drawMode === 'line' && '• Click multiple points to draw a line (double-click to finish)'}
+                {drawMode === 'polygon' && '• Click to draw an area boundary (double-click to close)'}
+              </p>
+            </div>
 
-                {!selectedLocation && (
-                  <p className="text-xs text-center text-gray-500">
-                    Please select a location on the map first
-                  </p>
-                )}
-              </form>
+            {/* Map */}
+            <SimulationMap
+              isExpanded={isMapExpanded}
+              onExpand={() => setIsMapExpanded(!isMapExpanded)}
+              drawMode={drawMode}
+              onPointSelect={handlePointSelect}
+              onAreaSelect={handleAreaSelect}
+              selectedLocation={selectedLocation}
+            />
+
+            {/* Road Information Display */}
+            {loadingRoadInfo && (
+              <div className="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                  <p className="text-blue-800 font-semibold">Fetching road information from OpenStreetMap...</p>
+                </div>
+              </div>
+            )}
+
+            {roadInfo && !loadingRoadInfo && (
+              <div className="bg-green-50 border-l-4 border-green-500 rounded-lg p-4">
+                <h3 className="font-bold text-green-800 mb-2">📍 Road Information</h3>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="text-gray-600">Name:</span>
+                    <span className="font-semibold text-gray-800 ml-2">{roadInfo.road_name}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Area:</span>
+                    <span className="font-semibold text-gray-800 ml-2">{roadInfo.area}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Type:</span>
+                    <span className="font-semibold text-gray-800 ml-2">{roadInfo.road_type}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Lanes:</span>
+                    <span className="font-semibold text-gray-800 ml-2">{roadInfo.lanes}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Length:</span>
+                    <span className="font-semibold text-gray-800 ml-2">{roadInfo.length_km} km</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Capacity:</span>
+                    <span className="font-semibold text-gray-800 ml-2">{roadInfo.total_capacity} veh/hr</span>
+                  </div>
+                  {roadInfo.affected_roads && (
+                    <div className="col-span-2">
+                      <span className="text-gray-600">Roads affected:</span>
+                      <span className="font-semibold text-gray-800 ml-2">{roadInfo.affected_roads}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <div className="bg-red-50 border-l-4 border-red-500 rounded-lg p-4">
+                <p className="text-red-700">{error}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Right Column - Form */}
+          {!isMapExpanded && (
+            <div className="lg:col-span-5">
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <h2 className="text-xl font-bold text-gray-800 mb-6">Simulation Details</h2>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Scenario Name
+                    </label>
+                    <input
+                      type="text"
+                      name="scenarioName"
+                      value={formData.scenarioName}
+                      onChange={handleChange}
+                      placeholder="Enter scenario name"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Disruption Type
+                    </label>
+                    <select
+                      name="disruptionType"
+                      value={formData.disruptionType}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    >
+                      <option value="roadwork">🚧 Roadwork</option>
+                      <option value="event">🎉 Event</option>
+                      <option value="accident">⚠️ Accident</option>
+                      <option value="weather">🌧️ Weather</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Start Date
+                      </label>
+                      <input
+                        type="date"
+                        name="startDate"
+                        value={formData.startDate}
+                        onChange={handleChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Start Time
+                      </label>
+                      <input
+                        type="time"
+                        name="startTime"
+                        value={formData.startTime}
+                        onChange={handleChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        End Date
+                      </label>
+                      <input
+                        type="date"
+                        name="endDate"
+                        value={formData.endDate}
+                        onChange={handleChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        End Time
+                      </label>
+                      <input
+                        type="time"
+                        name="endTime"
+                        value={formData.endTime}
+                        onChange={handleChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Description (Optional)
+                    </label>
+                    <textarea
+                      name="description"
+                      value={formData.description}
+                      onChange={handleChange}
+                      rows="3"
+                      placeholder="Describe the disruption..."
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    ></textarea>
+                  </div>
+
+                  {results && (
+                    <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                      <h3 className="font-bold text-gray-800 text-sm">Quick Results</h3>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span>Light</span>
+                          <span className="font-semibold text-green-600">
+                            {results.summary.light_percentage}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-green-500 h-2 rounded-full"
+                            style={{ width: `${results.summary.light_percentage}%` }}
+                          ></div>
+                        </div>
+
+                        <div className="flex justify-between text-xs">
+                          <span>Moderate</span>
+                          <span className="font-semibold text-yellow-600">
+                            {results.summary.moderate_percentage}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-yellow-500 h-2 rounded-full"
+                            style={{ width: `${results.summary.moderate_percentage}%` }}
+                          ></div>
+                        </div>
+
+                        <div className="flex justify-between text-xs">
+                          <span>Heavy</span>
+                          <span className="font-semibold text-red-600">
+                            {results.summary.heavy_percentage}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-red-500 h-2 rounded-full"
+                            style={{ width: `${results.summary.heavy_percentage}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      onClick={() => {
+                        setFormData({
+                          scenarioName: "",
+                          disruptionType: "roadwork",
+                          startDate: "",
+                          startTime: "06:00",
+                          endDate: "",
+                          endTime: "18:00",
+                          description: "",
+                        });
+                        setResults(null);
+                        setSelectedLocation(null);
+                        setRoadInfo(null);
+                      }}
+                      className="flex-1 px-4 py-2 bg-white border-2 border-orange-500 text-orange-600 rounded-lg font-semibold hover:bg-orange-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSimulate}
+                      disabled={simulating || !roadInfo}
+                      className={`flex-1 px-4 py-2 rounded-lg font-semibold text-white ${
+                        simulating || !roadInfo ? 'bg-gray-400' : 'bg-orange-500 hover:bg-orange-600'
+                      }`}
+                    >
+                      {simulating ? 'Simulating...' : 'Simulate'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Results Section */}
+        {results && !isMapExpanded && (
+          <div id="results-section" className="mt-6 bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Detailed Results</h2>
+            
+            <div className="grid md:grid-cols-4 gap-4 mb-6">
+              <div className="bg-gray-50 rounded-lg p-4 text-center">
+                <p className="text-sm text-gray-600 mb-1">Total Hours</p>
+                <p className="text-3xl font-bold text-gray-800">{results.summary.total_hours}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 text-center">
+                <p className="text-sm text-gray-600 mb-1">Avg Severity</p>
+                <p className="text-3xl font-bold text-orange-600">{results.summary.avg_severity}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 text-center">
+                <p className="text-sm text-gray-600 mb-1">Avg Delay</p>
+                <p className="text-3xl font-bold text-red-600">+{results.summary.avg_delay_minutes} min</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 text-center">
+                <p className="text-sm text-gray-600 mb-1">Assessment</p>
+                <p className="text-2xl font-bold text-yellow-600">{results.summary.avg_severity_label}</p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700">
+                💾 Save Scenario
+              </button>
+              <button className="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700">
+                ✅ Publish Results
+              </button>
             </div>
           </div>
-
-          {/* Right Column: Results */}
-          <div id="results-section" className="space-y-6">
-            {!results && !simulating && (
-              <div className="bg-white rounded-lg shadow-md p-12 text-center">
-                <div className="text-6xl mb-4">📊</div>
-                <h3 className="text-xl font-bold text-gray-800 mb-2">
-                  No Simulation Yet
-                </h3>
-                <p className="text-gray-600">
-                  Select a location and fill in the form to run your first simulation
-                </p>
-              </div>
-            )}
-
-            {simulating && (
-              <div className="bg-white rounded-lg shadow-md p-12 text-center">
-                <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-orange-500 mx-auto mb-4"></div>
-                <h3 className="text-xl font-bold text-gray-800 mb-2">
-                  Running Simulation...
-                </h3>
-                <p className="text-gray-600">
-                  Analyzing traffic patterns with Random Forest model
-                </p>
-              </div>
-            )}
-
-            {results && (
-              <>
-                {/* Summary Card */}
-                <div className="bg-white rounded-lg shadow-md p-6">
-                  <h2 className="text-xl font-bold text-gray-800 mb-4">
-                    📊 Simulation Results
-                  </h2>
-
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="bg-gray-50 rounded-lg p-4 text-center">
-                      <p className="text-sm text-gray-600 mb-1">Total Hours</p>
-                      <p className="text-2xl font-bold text-gray-800">
-                        {results.summary.total_hours}
-                      </p>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-4 text-center">
-                      <p className="text-sm text-gray-600 mb-1">Duration</p>
-                      <p className="text-2xl font-bold text-gray-800">
-                        {results.summary.duration_days} days
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Traffic Distribution */}
-                  <div className="space-y-2 mb-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-gray-700">Light Traffic</span>
-                      <span className="text-sm font-bold text-green-600">
-                        {results.summary.light_percentage}%
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-green-500 h-2 rounded-full"
-                        style={{ width: `${results.summary.light_percentage}%` }}
-                      ></div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-gray-700">Moderate Traffic</span>
-                      <span className="text-sm font-bold text-yellow-600">
-                        {results.summary.moderate_percentage}%
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-yellow-500 h-2 rounded-full"
-                        style={{ width: `${results.summary.moderate_percentage}%` }}
-                      ></div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-gray-700">Heavy Traffic</span>
-                      <span className="text-sm font-bold text-red-600">
-                        {results.summary.heavy_percentage}%
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-red-500 h-2 rounded-full"
-                        style={{ width: `${results.summary.heavy_percentage}%` }}
-                      ></div>
-                    </div>
-                  </div>
-
-                  {/* Average Severity */}
-                  <div className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-lg p-4 border border-orange-200">
-                    <p className="text-sm text-gray-700 mb-1">Overall Assessment</p>
-                    <p className={`text-2xl font-bold ${
-                      results.summary.avg_severity_label === 'Heavy' ? 'text-red-600' :
-                      results.summary.avg_severity_label === 'Moderate' ? 'text-yellow-600' :
-                      'text-green-600'
-                    }`}>
-                      {results.summary.avg_severity_label} Congestion
-                    </p>
-                    <p className="text-xs text-gray-600 mt-1">
-                      Average severity: {results.summary.avg_severity.toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Delay Statistics */}
-                {results.hourly_predictions && results.hourly_predictions[0].delay_info && (
-                  <div className="bg-white rounded-lg shadow-md p-6">
-                    <h3 className="text-lg font-bold text-gray-800 mb-4">⏱️ Delay Estimates</h3>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-blue-50 rounded-lg p-4">
-                        <p className="text-xs text-gray-600 mb-1">Average Delay</p>
-                        <p className="text-xl font-bold text-blue-600">
-                          +{(
-                            results.hourly_predictions.reduce(
-                              (sum, p) => sum + p.delay_info.additional_delay_min,
-                              0
-                            ) / results.hourly_predictions.length
-                          ).toFixed(1)}{" "}
-                          min
-                        </p>
-                      </div>
-
-                      <div className="bg-red-50 rounded-lg p-4">
-                        <p className="text-xs text-gray-600 mb-1">Maximum Delay</p>
-                        <p className="text-xl font-bold text-red-600">
-                          +{Math.max(
-                            ...results.hourly_predictions.map((p) => p.delay_info.additional_delay_min)
-                          ).toFixed(1)}{" "}
-                          min
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Hourly Breakdown */}
-                <div className="bg-white rounded-lg shadow-md p-6">
-                  <h3 className="text-lg font-bold text-gray-800 mb-4">
-                    🕐 Hourly Predictions
-                  </h3>
-
-                  <div className="max-h-96 overflow-y-auto space-y-2">
-                    {results.hourly_predictions.slice(0, 24).map((pred, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm font-mono text-gray-700">
-                            {pred.datetime}
-                          </span>
-                          <span
-                            className={`text-xs px-2 py-1 rounded font-semibold ${
-                              pred.severity_label === "Heavy"
-                                ? "bg-red-100 text-red-700"
-                                : pred.severity_label === "Moderate"
-                                ? "bg-yellow-100 text-yellow-700"
-                                : "bg-green-100 text-green-700"
-                            }`}
-                          >
-                            {pred.severity_label}
-                          </span>
-                        </div>
-                        {pred.delay_info && (
-                          <span className="text-sm text-gray-600">
-                            +{pred.delay_info.additional_delay_min} min
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  {results.hourly_predictions.length > 24 && (
-                    <p className="text-xs text-center text-gray-500 mt-3">
-                      Showing first 24 hours of {results.hourly_predictions.length} total hours
-                    </p>
-                  )}
-                </div>
-
-                {/* Recommendations */}
-                {results.recommendations && (
-                  <div className="bg-white rounded-lg shadow-md p-6">
-                    <h3 className="text-lg font-bold text-gray-800 mb-4">
-                      💡 Mitigation Recommendations
-                    </h3>
-
-                    <div className="space-y-3">
-                      {results.recommendations.map((rec, idx) => (
-                        <div
-                          key={idx}
-                          className={`border-l-4 rounded-lg p-4 ${
-                            rec.priority === "high"
-                              ? "bg-red-50 border-red-500"
-                              : rec.priority === "medium"
-                              ? "bg-yellow-50 border-yellow-500"
-                              : "bg-blue-50 border-blue-500"
-                          }`}
-                        >
-                          <div className="flex items-start justify-between mb-2">
-                            <span
-                              className={`text-xs font-bold px-2 py-1 rounded uppercase ${
-                                rec.priority === "high"
-                                  ? "bg-red-100 text-red-700"
-                                  : rec.priority === "medium"
-                                  ? "bg-yellow-100 text-yellow-700"
-                                  : "bg-blue-100 text-blue-700"
-                              }`}
-                            >
-                              {rec.priority}
-                            </span>
-                            <span className="text-xs bg-white px-2 py-1 rounded text-gray-600">
-                              {rec.category}
-                            </span>
-                          </div>
-                          <p className="font-semibold text-gray-800 mb-1">
-                            {rec.recommendation}
-                          </p>
-                          <p className="text-sm text-gray-600">{rec.reason}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Action Buttons */}
-                <div className="flex gap-4">
-                  <button
-                    onClick={() => {
-                      setResults(null);
-                      setSelectedLocation(null);
-                      setFormData({
-                        ...formData,
-                        description: "",
-                      });
-                    }}
-                    className="flex-1 bg-gray-500 text-white py-3 rounded-lg hover:bg-gray-600 transition font-semibold"
-                  >
-                    🔄 New Simulation
-                  </button>
-                  <button
-                    onClick={() => alert("Save functionality coming soon!")}
-                    className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-semibold"
-                  >
-                    💾 Save Draft
-                  </button>
-                  <button
-                    onClick={() => alert("Publish functionality coming soon!")}
-                    className="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition font-semibold"
-                  >
-                    ✅ Publish
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+        )}
       </main>
     </div>
   );
