@@ -1,3 +1,6 @@
+# backend/app.py - COMPLETE VERSION
+# Replace your entire app.py with this file
+
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 from models.predictor import TrafficPredictor
@@ -5,7 +8,6 @@ from datetime import datetime, timedelta
 import pandas as pd
 
 app = Flask(__name__)
-# CRITICAL: Configure CORS to allow Next.js (port 3000)
 CORS(app, resources={
     r"/api/*": {
         "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
@@ -14,7 +16,6 @@ CORS(app, resources={
     }
 })
 
-# Initialize the predictor (load model once when app starts)
 print("Loading trained model...")
 predictor = TrafficPredictor()
 print("✓ Model loaded and ready!")
@@ -29,7 +30,7 @@ def home():
     return render_template('index.html')
 
 # ============================================================
-# ROUTE 2: Health Check (Test if API is working)
+# ROUTE 2: Health Check
 # ============================================================
 
 @app.route('/api/health', methods=['GET'])
@@ -46,34 +47,18 @@ def health_check():
     })
 
 # ============================================================
-# ROUTE 3: Get Road Info from Coordinates
+# ROUTE 3: Get Road Info (KEEP THIS - It's still useful!)
 # ============================================================
 
 @app.route('/api/get-road-info', methods=['POST'])
 def get_road_info():
     """
-    Convert clicked lat/lon to road segment information
-    
-    Request JSON:
-    {
-        "lat": 14.189422,
-        "lon": 121.169146
-    }
-    
-    Returns:
-    {
-        "area": "Bucal",
-        "road_corridor": "Calamba_Pagsanjan",
-        "road_name": "Calamba-Pagsanjan Road"
-    }
+    Simple coordinate to area mapping (fallback if OSM fails)
+    KEEP THIS - Frontend uses it as backup
     """
-    
     data = request.get_json()
     lat = data.get('lat')
     lon = data.get('lon')
-    
-    # Simple mapping based on coordinates
-    # TODO: Replace with proper spatial matching using GeoPandas
     
     # Define approximate bounding boxes for each area
     areas = {
@@ -97,7 +82,6 @@ def get_road_info():
         }
     }
     
-    # Find matching area
     for area_name, area_info in areas.items():
         lat_min, lat_max = area_info['lat_range']
         lon_min, lon_max = area_info['lon_range']
@@ -111,7 +95,6 @@ def get_road_info():
                 'coordinates': {'lat': lat, 'lon': lon}
             })
     
-    # Default if not found
     return jsonify({
         'success': False,
         'message': 'Location not in covered area',
@@ -119,38 +102,116 @@ def get_road_info():
     })
 
 # ============================================================
-# ROUTE 4: Single Prediction (for testing)
+# ROUTE 4: NEW - Process Road Info from OSM
+# ============================================================
+
+@app.route('/api/process-road-info', methods=['POST'])
+def process_road_info():
+    """
+    NEW ENDPOINT - Process OSM road data and calculate capacities
+    """
+    try:
+        data = request.get_json()
+        
+        # Extract road parameters
+        lanes = data.get('lanes', 2)
+        length_km = float(data.get('length_km', 1.0))
+        width_meters = float(data.get('width_meters', 7.0))
+        max_speed = int(data.get('max_speed', 40))
+        road_type = data.get('road_type', 'tertiary')
+        
+        # Calculate road capacity (vehicles per hour)
+        lane_capacity = calculate_lane_capacity(road_type, max_speed)
+        total_capacity = lane_capacity * lanes
+        
+        # Calculate free-flow travel time (minutes)
+        free_flow_time = (length_km / max_speed) * 60
+        
+        # Estimate congestion thresholds
+        capacity_thresholds = {
+            'light': total_capacity * 0.4,
+            'moderate': total_capacity * 0.7,
+            'heavy': total_capacity * 1.0
+        }
+        
+        # Calculate disruption impact factors
+        disruption_factors = calculate_disruption_factors(
+            lanes=lanes,
+            length_km=length_km,
+            road_type=road_type
+        )
+        
+        return jsonify({
+            'success': True,
+            'road_info': {
+                **data,  # Include all original data from OSM
+                'lane_capacity': lane_capacity,
+                'total_capacity': total_capacity,
+                'free_flow_time_minutes': round(free_flow_time, 2),
+                'capacity_thresholds': capacity_thresholds,
+                'disruption_factors': disruption_factors,
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+def calculate_lane_capacity(road_type, max_speed):
+    """Calculate per-lane capacity"""
+    base_capacities = {
+        'motorway': 2400,
+        'trunk': 2200,
+        'primary': 2000,
+        'secondary': 1800,
+        'tertiary': 1500,
+        'residential': 1200,
+    }
+    base = base_capacities.get(road_type, 1500)
+    speed_factor = min(max_speed / 60, 1.0)
+    return int(base * speed_factor)
+
+
+def calculate_disruption_factors(lanes, length_km, road_type):
+    """Calculate how disruptions affect this specific road"""
+    base_impacts = {
+        'roadwork': 0.6,
+        'accident': 0.4,
+        'event': 0.7,
+        'weather': 0.8,
+    }
+    
+    lane_factor = 1.0 - (lanes - 2) * 0.1
+    lane_factor = max(lane_factor, 0.5)
+    
+    length_factor = 1.0 if length_km < 1.0 else 0.9
+    
+    importance = {
+        'motorway': 1.2,
+        'trunk': 1.1,
+        'primary': 1.0,
+        'secondary': 0.9,
+        'tertiary': 0.8,
+    }.get(road_type, 0.9)
+    
+    return {
+        disruption: round(impact * lane_factor * length_factor * importance, 2)
+        for disruption, impact in base_impacts.items()
+    }
+
+# ============================================================
+# ROUTE 5: Single Prediction (Keep for testing)
 # ============================================================
 
 @app.route('/api/predict', methods=['POST'])
 def predict_single():
-    """
-    Make a single prediction
-    
-    Request JSON:
-    {
-        "date": "2025-01-13",
-        "hour": 8,
-        "area": "Bucal",
-        "road_corridor": "Calamba_Pagsanjan",
-        "has_disruption": 1,
-        "disruption_type": "roadwork",
-        "total_volume": 0
-    }
-    
-    Returns:
-    {
-        "severity": 2,
-        "severity_label": "Heavy",
-        "confidence": 0.85,
-        "probabilities": {...}
-    }
-    """
-    
+    """Single prediction endpoint - KEEP THIS"""
     try:
         data = request.get_json()
         
-        # Validate required fields
         required_fields = ['date', 'hour', 'area', 'road_corridor']
         for field in required_fields:
             if field not in data:
@@ -159,10 +220,8 @@ def predict_single():
                     'error': f'Missing required field: {field}'
                 }), 400
         
-        # Make prediction
         result = predictor.predict(data)
 
-        # ADD THIS (after the prediction):
         # Calculate delay estimate
         delay_info = predictor.estimate_delay(
             severity=result['severity'],
@@ -182,72 +241,23 @@ def predict_single():
             'success': False,
             'error': str(e)
         }), 500
-   
+
 # ============================================================
-# ROUTE 5: Simulate Disruption (Main Feature!)
+# ROUTE 6: UPDATED - Simulate Disruption with Road Info
 # ============================================================
 
 @app.route('/api/simulate-disruption', methods=['POST'])
 def simulate_disruption():
     """
-    Simulate traffic for a disruption over its entire duration
-    
-    Request JSON:
-    {
-        "area": "Bucal",
-        "road_corridor": "Calamba_Pagsanjan",
-        "disruption_type": "roadwork",
-        "start_date": "2025-01-13",
-        "start_time": "06:00",
-        "end_date": "2025-01-15",
-        "end_time": "18:00",
-        "description": "Road repair",
-        "coordinates": {"lat": 14.189, "lon": 121.169}
-    }
-    
-    Returns:
-    {
-        "success": true,
-        "simulation_id": "sim_20250113_083045",
-        "summary": {
-            "total_hours": 36,
-            "light_hours": 10,
-            "moderate_hours": 15,
-            "heavy_hours": 11,
-            "avg_severity": 1.5
-        },
-        "hourly_predictions": [
-            {
-                "datetime": "2025-01-13 06:00",
-                "hour": 6,
-                "severity": 1,
-                "severity_label": "Moderate",
-                "confidence": 0.82
-            },
-            ...
-        ],
-        "time_segments": {
-            "morning": {"light": 3, "moderate": 5, "heavy": 4},
-            "afternoon": {...},
-            "night": {...}
-        }
-    }
+    UPDATED VERSION - Now accepts road_info from OSM
     """
-    
     try:
         data = request.get_json()
         
-        # Validate required fields
-        required_fields = ['area', 'road_corridor', 'disruption_type', 
-                          'start_date', 'start_time', 'end_date', 'end_time']
-        for field in required_fields:
-            if field not in data:
-                return jsonify({
-                    'success': False,
-                    'error': f'Missing required field: {field}'
-                }), 400
-        
-        # Parse dates and times
+        # Extract basic disruption parameters
+        area = data.get('area', 'Unknown')
+        road_corridor = data.get('road_corridor', 'Unknown')
+        disruption_type = data.get('disruption_type')
         start_datetime = datetime.strptime(
             f"{data['start_date']} {data['start_time']}", 
             "%Y-%m-%d %H:%M"
@@ -257,25 +267,44 @@ def simulate_disruption():
             "%Y-%m-%d %H:%M"
         )
         
-        # Generate hourly predictions for entire duration
+        # NEW: Get road information (from OSM)
+        road_info = data.get('road_info', {})
+        lanes = road_info.get('lanes', 2)
+        length_km = float(road_info.get('length_km', 1.0))
+        total_capacity = road_info.get('total_capacity', 3000)
+        free_flow_time = road_info.get('free_flow_time_minutes', 10)
+        disruption_factors = road_info.get('disruption_factors', {})
+        
+        # Get disruption impact factor
+        impact_factor = disruption_factors.get(disruption_type, 0.6)
+        
+        # Generate hourly predictions
         hourly_predictions = []
         current_datetime = start_datetime
         
         while current_datetime <= end_datetime:
-            # Prepare input for this hour
+            # Prepare input
             hour_input = {
                 'date': current_datetime.strftime('%Y-%m-%d'),
                 'hour': current_datetime.hour,
-                'area': data['area'],
-                'road_corridor': data['road_corridor'],
+                'area': area,
+                'road_corridor': road_corridor,
                 'has_disruption': 1,
-                'disruption_type': data['disruption_type'],
+                'disruption_type': disruption_type,
                 'total_volume': data.get('total_volume', 0),
-                'has_real_status': 0  # Since this is a simulation
+                'has_real_status': 0
             }
             
             # Make prediction
             prediction = predictor.predict(hour_input)
+            
+            # IMPORTANT: Calculate delay with road-specific info
+            delay_info = predictor.estimate_delay(
+                severity=prediction['severity'],
+                base_travel_time_minutes=free_flow_time,
+                road_length_km=length_km,
+                impact_factor=impact_factor
+            )
             
             # Add to results
             hourly_predictions.append({
@@ -286,12 +315,12 @@ def simulate_disruption():
                 'severity': prediction['severity'],
                 'severity_label': prediction['severity_label'],
                 'confidence': round(prediction['confidence'], 3),
+                'delay_info': delay_info,  # ← THIS IS THE KEY LINE
                 'probabilities': {
                     k: round(v, 3) for k, v in prediction['probabilities'].items()
                 }
             })
             
-            # Move to next hour
             current_datetime += timedelta(hours=1)
         
         # Calculate summary statistics
@@ -300,8 +329,9 @@ def simulate_disruption():
         moderate_hours = sum(1 for p in hourly_predictions if p['severity'] == 1)
         heavy_hours = sum(1 for p in hourly_predictions if p['severity'] == 2)
         avg_severity = sum(p['severity'] for p in hourly_predictions) / total_hours
+        avg_delay = sum(p['delay_info']['additional_delay_min'] for p in hourly_predictions) / total_hours
         
-        # Calculate time segment breakdown
+        # Time segment breakdown
         time_segments = {
             'morning': {'light': 0, 'moderate': 0, 'heavy': 0},
             'afternoon': {'light': 0, 'moderate': 0, 'heavy': 0},
@@ -319,31 +349,20 @@ def simulate_disruption():
             else:
                 time_segments['night'][severity_label] += 1
         
-        # Add this to app.py in the simulate_disruption route
-        # After making prediction, calculate delay
-        for pred in hourly_predictions:
-            delay_info = predictor.estimate_delay(
-                severity=pred['severity'],
-                base_travel_time_minutes=10,  # Can be customized per road
-                road_length_km=5
-            )
-            pred['delay_info'] = delay_info
-
-        # Generate simulation ID
         simulation_id = f"sim_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
-        # Prepare response
-        response = {
+        return jsonify({
             'success': True,
             'simulation_id': simulation_id,
             'input': {
-                'area': data['area'],
-                'road_corridor': data['road_corridor'],
-                'disruption_type': data['disruption_type'],
+                'area': area,
+                'road_corridor': road_corridor,
+                'disruption_type': disruption_type,
                 'start': start_datetime.strftime('%Y-%m-%d %H:%M'),
                 'end': end_datetime.strftime('%Y-%m-%d %H:%M'),
                 'description': data.get('description', ''),
-                'coordinates': data.get('coordinates', {})
+                'coordinates': data.get('coordinates', {}),
+                'road_info': road_info
             },
             'summary': {
                 'total_hours': total_hours,
@@ -355,13 +374,13 @@ def simulate_disruption():
                 'moderate_percentage': round(moderate_hours / total_hours * 100, 1),
                 'heavy_percentage': round(heavy_hours / total_hours * 100, 1),
                 'avg_severity': round(avg_severity, 2),
-                'avg_severity_label': 'Light' if avg_severity < 0.5 else ('Moderate' if avg_severity < 1.5 else 'Heavy')
+                'avg_severity_label': 'Light' if avg_severity < 0.5 else ('Moderate' if avg_severity < 1.5 else 'Heavy'),
+                'avg_delay_minutes': round(avg_delay, 1),
+                'total_delay_hours': round(sum(p['delay_info']['additional_delay_min'] for p in hourly_predictions) / 60, 1)
             },
             'hourly_predictions': hourly_predictions,
             'time_segments': time_segments
-        }
-        
-        return jsonify(response)
+        })
         
     except Exception as e:
         import traceback
@@ -372,25 +391,12 @@ def simulate_disruption():
         }), 500
 
 # ============================================================
-# ROUTE 6: Get Mitigation Recommendations
+# ROUTE 7: Get Recommendations (Keep this)
 # ============================================================
 
 @app.route('/api/get-recommendations', methods=['POST'])
 def get_recommendations():
-    """
-    Get mitigation recommendations based on simulation results
-    
-    Request JSON:
-    {
-        "disruption_type": "roadwork",
-        "avg_severity": 1.8,
-        "heavy_percentage": 45,
-        "peak_hours_affected": true
-    }
-    
-    Returns recommendations
-    """
-    
+    """Get mitigation recommendations"""
     data = request.get_json()
     disruption_type = data.get('disruption_type', 'roadwork')
     avg_severity = data.get('avg_severity', 1.0)
@@ -398,7 +404,6 @@ def get_recommendations():
     
     recommendations = []
     
-    # General recommendations
     if avg_severity > 1.5:
         recommendations.append({
             'priority': 'high',
@@ -415,7 +420,6 @@ def get_recommendations():
             'reason': f'{heavy_percentage}% of hours will have heavy congestion'
         })
     
-    # Disruption-specific recommendations
     if disruption_type == 'roadwork':
         recommendations.append({
             'priority': 'medium',
@@ -424,13 +428,6 @@ def get_recommendations():
             'reason': 'Allow commuters to plan alternate routes'
         })
         
-        recommendations.append({
-            'priority': 'medium',
-            'category': 'infrastructure',
-            'recommendation': 'Set up clear detour signage',
-            'reason': 'Guide drivers to alternate routes'
-        })
-    
     elif disruption_type == 'event':
         recommendations.append({
             'priority': 'high',

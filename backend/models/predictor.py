@@ -230,50 +230,82 @@ class TrafficPredictor:
         
         return results
     
-    def estimate_delay(self, severity, base_travel_time_minutes=10, road_length_km=5):
+    # backend/models/predictor.py
+# ADD THIS METHOD to your TrafficPredictor class
+
+    def estimate_delay(self, severity, base_travel_time_minutes, road_length_km, impact_factor=0.6):
         """
-        Estimate delay in minutes based on congestion severity
+        Enhanced delay estimation with road characteristics
         
-        Args:
-            severity (int): 0=Light, 1=Moderate, 2=Heavy
-            base_travel_time_minutes (float): Normal travel time without traffic
-            road_length_km (float): Length of affected road segment
+        Parameters:
+        -----------
+        severity : int
+            Traffic severity level (0=Light, 1=Moderate, 2=Heavy)
+        base_travel_time_minutes : float
+            Normal free-flow travel time in minutes
+        road_length_km : float
+            Length of the affected road segment
+        impact_factor : float
+            Disruption impact multiplier (0-1), from disruption_factors
         
         Returns:
-            dict: Delay information
+        --------
+        dict : Delay information including travel times, delays, and speeds
+        
+        Example:
+        --------
+        >>> delay_info = predictor.estimate_delay(
+        ...     severity=2,  # Heavy
+        ...     base_travel_time_minutes=10,
+        ...     road_length_km=5,
+        ...     impact_factor=0.6
+        ... )
+        >>> print(delay_info['additional_delay_min'])
+        15.0
         """
-    
-        # Delay factors based on congestion severity
-        delay_factors = {
-            0: 1.0,   # Light: No additional delay (100% of normal speed)
-            1: 1.5,   # Moderate: 50% slower (1.5x normal time)
-            2: 2.5    # Heavy: 150% slower (2.5x normal time)
+        
+        # Delay multipliers by severity level
+        delay_multipliers = {
+            0: 1.1,   # Light: 10% increase
+            1: 1.5,   # Moderate: 50% increase
+            2: 2.5,   # Heavy: 150% increase
         }
         
-        factor = delay_factors.get(severity, 1.0)
+        # Get multiplier for this severity level
+        multiplier = delay_multipliers.get(severity, 1.5)
         
-        # Calculate travel time with congestion
-        congested_travel_time = base_travel_time_minutes * factor
+        # Apply impact factor (from road characteristics)
+        # impact_factor reduces the effect based on road resilience
+        adjusted_multiplier = 1 + (multiplier - 1) * impact_factor
         
-        # Additional delay
-        additional_delay = congested_travel_time - base_travel_time_minutes
+        # Calculate expected travel time with disruption
+        expected_travel_time = base_travel_time_minutes * adjusted_multiplier
         
-        # Calculate speed reduction
-        normal_speed_kmh = (road_length_km / base_travel_time_minutes) * 60
-        congested_speed_kmh = (road_length_km / congested_travel_time) * 60
-        speed_reduction_percent = ((normal_speed_kmh - congested_speed_kmh) / normal_speed_kmh) * 100
+        # Calculate additional delay
+        additional_delay = expected_travel_time - base_travel_time_minutes
+        
+        # Calculate speeds (km/h)
+        # Normal speed = distance / time (convert minutes to hours)
+        normal_speed = (road_length_km / base_travel_time_minutes) * 60  # km/h
+        
+        # Reduced speed with disruption
+        reduced_speed = (road_length_km / expected_travel_time) * 60  # km/h
+        
+        # Speed reduction
+        speed_reduction = normal_speed - reduced_speed
         
         return {
-            'severity': severity,
-            'severity_label': ['Light', 'Moderate', 'Heavy'][severity],
             'base_travel_time_min': round(base_travel_time_minutes, 1),
-            'congested_travel_time_min': round(congested_travel_time, 1),
+            'expected_travel_time_min': round(expected_travel_time, 1),
             'additional_delay_min': round(additional_delay, 1),
-            'delay_factor': factor,
-            'normal_speed_kmh': round(normal_speed_kmh, 1),
-            'congested_speed_kmh': round(congested_speed_kmh, 1),
-            'speed_reduction_percent': round(speed_reduction_percent, 1)
+            'delay_percentage': round((additional_delay / base_travel_time_minutes) * 100, 1),
+            'normal_speed_kmh': round(normal_speed, 1),
+            'reduced_speed_kmh': round(reduced_speed, 1),
+            'speed_reduction_kmh': round(speed_reduction, 1),
         }
+
+
+    
 
 
 # ============================================================
