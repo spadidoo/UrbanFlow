@@ -5,65 +5,70 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROCESSED_DIR = os.path.join(PROJECT_ROOT, 'data', 'processed')
 
 print("="*60)
-print("EXAMINING CLEANED DATASETS")
+print("STEP 1: MERGING POSO + DPWH (KEEP ALL COLUMNS)")
 print("="*60)
 
-# 1. POSO Data
-print("\n1. POSO DATA")
-print("-"*60)
-poso_path = os.path.join(PROCESSED_DIR, 'Final_fixed_POSO_Data.csv')
-poso_df = pd.read_csv(poso_path)
-print(f"Shape: {poso_df.shape}")
-print(f"Columns: {poso_df.columns.tolist()}")
-print(f"\nFirst 3 rows:")
-print(poso_df.head(3))
-print(f"\nDate range: {poso_df['timestamp'].min()} to {poso_df['timestamp'].max()}" if 'timestamp' in poso_df.columns else "No timestamp column")
-print(f"Unique road corridors: {poso_df['road_corridor'].unique()}")
-print(f"Records per corridor:")
-for corridor in poso_df['road_corridor'].unique():
-    count = len(poso_df[poso_df['road_corridor'] == corridor])
-    print(f"  {corridor}: {count}")
+# Load data
+print("\nLoading datasets...")
+poso_df = pd.read_csv(os.path.join(PROCESSED_DIR, 'Final_fixed_POSO_Data.csv'))
+dpwh_df = pd.read_csv(os.path.join(PROCESSED_DIR, 'Final_fixed_DPWH_Data.csv'))
 
-# 2. DPWH Data
-print("\n2. DPWH HOURLY VOLUME DATA")
-print("-"*60)
-dpwh_path = os.path.join(PROCESSED_DIR, 'Final_fixed_DPWH_Data.csv')
-dpwh_df = pd.read_csv(dpwh_path)
-print(f"Shape: {dpwh_df.shape}")
-print(f"Columns: {dpwh_df.columns.tolist()}")
-print(f"\nFirst 3 rows:")
-print(dpwh_df.head(3))
-print(f"\nDate range: {dpwh_df['date'].min()} to {dpwh_df['date'].max()}" if 'date' in dpwh_df.columns else "No date column")
-print(f"Unique road corridors: {dpwh_df['road_corridor'].unique()}")
-print(f"Records per corridor:")
-for corridor in dpwh_df['road_corridor'].unique():
-    count = len(dpwh_df[dpwh_df['road_corridor'] == corridor])
-    print(f"  {corridor}: {count}")
+print(f"POSO records: {len(poso_df)}")
+print(f"POSO columns: {poso_df.columns.tolist()}")
 
-# 3. Disruptions Data
-print("\n3. DISRUPTIONS DATA")
-print("-"*60)
-disruption_path = os.path.join(PROCESSED_DIR, 'Final_fixed_Disruptions_Data.csv')
-disruption_df = pd.read_csv(disruption_path)
-print(f"Shape: {disruption_df.shape}")
-print(f"Columns: {disruption_df.columns.tolist()}")
-print(f"\nFirst 3 rows:")
-print(disruption_df.head(3))
-print(f"\nDate range: {disruption_df['date_start'].min()} to {disruption_df['date_end'].max()}")
-print(f"Unique road corridors: {disruption_df['road_corridor'].unique()}")
-print(f"Records per corridor:")
-for corridor in disruption_df['road_corridor'].unique():
-    count = len(disruption_df[disruption_df['road_corridor'] == corridor])
-    print(f"  {corridor}: {count}")
-print(f"\nDisruption types:")
-for dtype in disruption_df['disruption_type'].unique():
-    count = len(disruption_df[disruption_df['disruption_type'] == dtype])
-    print(f"  {dtype}: {count}")
+print(f"\nDPWH records: {len(dpwh_df)}")
+print(f"DPWH columns: {dpwh_df.columns.tolist()}")
+
+# DPWH has multiple lanes per hour - we need to aggregate
+print("\nAggregating DPWH data (summing volumes across all lanes)...")
+dpwh_agg = dpwh_df.groupby(['date', 'hour', 'road_corridor', 'location']).agg({
+    'total_volume': 'sum',  # Sum all lanes
+    'direction': 'first',   # Keep first direction
+    'day_of_week': 'first',
+    'is_peak_am_time': 'first',
+    'is_peak_pm_time': 'first'
+}).reset_index()
+
+print(f"DPWH after aggregation: {len(dpwh_agg)} records")
+
+# Rename DPWH columns to avoid conflicts with POSO
+dpwh_agg = dpwh_agg.rename(columns={
+    'location': 'dpwh_location',
+    'direction': 'dpwh_direction',
+    'day_of_week': 'dpwh_day_of_week'
+})
+
+# Merge on: date + hour + road_corridor
+print("\nMerging POSO + DPWH (keeping ALL columns)...")
+merged_df = poso_df.merge(
+    dpwh_agg,
+    on=['date', 'hour', 'road_corridor'],
+    how='left'  # Keep all POSO records, add DPWH data where available
+)
+
+print(f"\nMerged records: {len(merged_df)}")
+print(f"Records with DPWH data: {merged_df['total_volume'].notna().sum()}")
+print(f"Records without DPWH data: {merged_df['total_volume'].isna().sum()}")
+
+# Show what columns we now have
+print(f"\nAll columns after merge:")
+for i, col in enumerate(merged_df.columns, 1):
+    null_count = merged_df[col].isna().sum()
+    print(f"  {i}. {col:25} - {null_count} nulls")
+
+# Save WITHOUT filling nulls (keep them as-is)
+output_path = os.path.join(PROCESSED_DIR, 'poso_dpwh_merged.csv')
+merged_df.to_csv(output_path, index=False)
+
+print(f"\n✓ Saved to: {output_path}")
+
+print("\nSample of merged data (showing key columns):")
+sample_cols = ['date', 'hour', 'area', 'status', 'total_volume', 'dpwh_location', 'road_corridor']
+print(merged_df[sample_cols].head(10))
 
 print("\n" + "="*60)
-print("SUMMARY")
+print("STEP 1 COMPLETE!")
 print("="*60)
-print(f"POSO records: {len(poso_df)}")
-print(f"DPWH records: {len(dpwh_df)}")
-print(f"Disruption records: {len(disruption_df)}")
-print("\nReady to merge!")
+print("✓ All POSO columns kept")
+print("✓ All DPWH columns added (with 'dpwh_' prefix to avoid conflicts)")
+print("✓ Nulls preserved where data doesn't align")

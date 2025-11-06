@@ -1,0 +1,267 @@
+import pandas as pd
+import os
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROCESSED_DIR = os.path.join(PROJECT_ROOT, 'data', 'processed')
+
+print("="*60)
+print("FIXING IMPUTED DATA (SMART VERSION)")
+print("="*60)
+
+# Load full merged data
+print("\nLoading data...")
+df = pd.read_csv(os.path.join(PROCESSED_DIR, 'full_merged_data.csv'))
+df['date'] = pd.to_datetime(df['date'])
+
+print(f"Total records: {len(df)}")
+imputed_count = (df['data_source'] == 'Imputed').sum()
+print(f"Imputed records: {imputed_count}")
+
+# Reset status to 'light' for all imputed (start fresh)
+print("\nResetting all imputed data to 'light' first...")
+df.loc[df['data_source'] == 'Imputed', 'status'] = 'light'
+
+# ============================================================
+# HELPER FUNCTIONS
+# ============================================================
+
+def get_day_type(date):
+    """Determine if it's a weekday, Friday, or weekend"""
+    day = date.dayofweek
+    if day == 4:  # Friday
+        return 'friday'
+    elif day in [5, 6]:  # Saturday, Sunday
+        return 'weekend'
+    else:
+        return 'weekday'
+
+def get_rush_hour_severity(hour, day_type):
+    """
+    Determine rush hour severity based on time and day
+    Returns: 'none', 'moderate_rush', 'peak_rush', 'extended_rush'
+    """
+    if day_type == 'weekday':
+        # Morning rush: 6-9 AM (peak 7-8)
+        if hour in [7, 8]:
+            return 'peak_rush'
+        elif hour in [6, 9]:
+            return 'moderate_rush'
+        # Evening rush: 4-7 PM (peak 5-6)
+        elif hour in [17, 18]:
+            return 'peak_rush'
+        elif hour in [16, 19]:
+            return 'moderate_rush'
+        else:
+            return 'none'
+    
+    elif day_type == 'friday':
+        # Friday has longer/worse evening rush
+        if hour in [7, 8]:
+            return 'peak_rush'
+        elif hour in [6, 9]:
+            return 'moderate_rush'
+        # Extended evening rush: 3-8 PM
+        elif hour in [17, 18, 19]:
+            return 'peak_rush'
+        elif hour in [15, 16, 20]:
+            return 'moderate_rush'
+        else:
+            return 'none'
+    
+    else:  # weekend
+        # Weekends have lighter but longer congestion periods
+        if hour in [10, 11, 15, 16, 17]:
+            return 'moderate_rush'
+        else:
+            return 'none'
+
+# Add helper columns
+df['day_type'] = df['date'].apply(get_day_type)
+df['rush_severity'] = df.apply(lambda x: get_rush_hour_severity(x['hour'], x['day_type']), axis=1)
+
+# ============================================================
+# SMART CORRECTION RULES
+# ============================================================
+
+print("\nApplying smart correction rules...")
+
+# Create a copy to track changes
+df['new_status'] = df['status'].copy()
+
+# Process only imputed records
+imputed_mask = df['data_source'] == 'Imputed'
+
+# Rule 1: Base rush hour congestion (NO disruption)
+print("\nRule 1: Rush hour patterns (no disruption)...")
+mask = imputed_mask & (df['has_disruption'] == 0)
+
+# Peak rush → moderate
+df.loc[mask & (df['rush_severity'] == 'peak_rush'), 'new_status'] = 'moderate'
+
+# Moderate rush → light (but note it's busier than normal)
+df.loc[mask & (df['rush_severity'] == 'moderate_rush'), 'new_status'] = 'light'
+
+print(f"  ✓ Peak rush hours set to moderate")
+print(f"  ✓ Moderate rush hours remain light")
+
+# Rule 2: Incident/Weather disruptions
+print("\nRule 2: Incident/Weather disruptions...")
+incident_mask = imputed_mask & df['disruption_type'].isin(['incident', 'weather'])
+
+# No rush hour
+df.loc[incident_mask & (df['rush_severity'] == 'none'), 'new_status'] = 'moderate'
+
+# During moderate rush
+df.loc[incident_mask & (df['rush_severity'] == 'moderate_rush'), 'new_status'] = 'moderate'
+
+# During peak rush
+df.loc[incident_mask & (df['rush_severity'] == 'peak_rush'), 'new_status'] = 'heavy'
+
+print(f"  ✓ Incidents/weather handled based on time")
+
+# Rule 3: Roadwork disruptions (worse than incidents)
+print("\nRule 3: Roadwork disruptions...")
+roadwork_mask = imputed_mask & (df['disruption_type'] == 'roadwork')
+
+# No rush hour
+df.loc[roadwork_mask & (df['rush_severity'] == 'none'), 'new_status'] = 'moderate'
+
+# Moderate rush
+df.loc[roadwork_mask & (df['rush_severity'] == 'moderate_rush'), 'new_status'] = 'heavy'
+
+# Peak rush (WORST case)
+df.loc[roadwork_mask & (df['rush_severity'] == 'peak_rush'), 'new_status'] = 'heavy'
+
+print(f"  ✓ Roadwork disruptions handled")
+
+# Rule 4: Accident disruptions (VERY severe)
+print("\nRule 4: Accident disruptions...")
+accident_mask = imputed_mask & (df['disruption_type'] == 'accident')
+
+# Always at least moderate, heavy during any rush
+df.loc[accident_mask & (df['rush_severity'] == 'none'), 'new_status'] = 'moderate'
+df.loc[accident_mask & (df['rush_severity'].isin(['moderate_rush', 'peak_rush'])), 'new_status'] = 'heavy'
+
+print(f"  ✓ Accidents handled")
+
+# Rule 5: Event disruptions (variable)
+print("\nRule 5: Event disruptions...")
+event_mask = imputed_mask & (df['disruption_type'] == 'event')
+
+# Events usually cause moderate congestion
+df.loc[event_mask, 'new_status'] = 'moderate'
+
+# But if during peak rush, can be heavy
+df.loc[event_mask & (df['rush_severity'] == 'peak_rush'), 'new_status'] = 'heavy'
+
+print(f"  ✓ Events handled")
+
+# Rule 6: High volume override
+print("\nRule 6: High volume data override...")
+volume_mask = imputed_mask & (df['total_volume'] > 0)
+
+# If we have actual volume data, use it
+df.loc[volume_mask & (df['total_volume'] > 800), 'new_status'] = 'heavy'
+df.loc[volume_mask & (df['total_volume'] > 500) & (df['total_volume'] <= 800), 'new_status'] = 'moderate'
+
+print(f"  ✓ Volume-based adjustments made")
+
+# Apply the new status
+df['status'] = df['new_status']
+df = df.drop(columns=['new_status'])
+
+# ============================================================
+# ANALYSIS
+# ============================================================
+
+print("\n" + "="*60)
+print("DETAILED ANALYSIS")
+print("="*60)
+
+# Status distribution
+print("\nFinal status distribution (imputed records only):")
+imputed_df = df[df['data_source'] == 'Imputed']
+print(imputed_df['status'].value_counts())
+
+# By day type
+print("\nBy day type:")
+for day_type in ['weekday', 'friday', 'weekend']:
+    subset = imputed_df[imputed_df['day_type'] == day_type]
+    print(f"\n  {day_type.upper()}:")
+    print(f"    Light:    {(subset['status'] == 'light').sum()}")
+    print(f"    Moderate: {(subset['status'] == 'moderate').sum()}")
+    print(f"    Heavy:    {(subset['status'] == 'heavy').sum()}")
+
+# By rush hour severity
+print("\nBy rush hour severity:")
+for rush in ['none', 'moderate_rush', 'peak_rush']:
+    subset = imputed_df[imputed_df['rush_severity'] == rush]
+    if len(subset) > 0:
+        print(f"\n  {rush.upper()}:")
+        print(f"    Light:    {(subset['status'] == 'light').sum()}")
+        print(f"    Moderate: {(subset['status'] == 'moderate').sum()}")
+        print(f"    Heavy:    {(subset['status'] == 'heavy').sum()}")
+
+# With disruptions
+print("\nWith disruptions:")
+disrupted = imputed_df[imputed_df['has_disruption'] == 1]
+print(f"  Total disrupted records: {len(disrupted)}")
+for dtype in disrupted['disruption_type'].unique():
+    subset = disrupted[disrupted['disruption_type'] == dtype]
+    print(f"\n  {dtype.upper()}:")
+    print(f"    Light:    {(subset['status'] == 'light').sum()}")
+    print(f"    Moderate: {(subset['status'] == 'moderate').sum()}")
+    print(f"    Heavy:    {(subset['status'] == 'heavy').sum()}")
+
+# ============================================================
+# SAMPLE SCENARIOS
+# ============================================================
+
+print("\n" + "="*60)
+print("SAMPLE SCENARIOS")
+print("="*60)
+
+print("\n1. Weekday morning peak rush (7-8 AM) with roadwork:")
+sample = imputed_df[
+    (imputed_df['day_type'] == 'weekday') & 
+    (imputed_df['hour'].isin([7, 8])) &
+    (imputed_df['disruption_type'] == 'roadwork')
+][['date', 'hour', 'area', 'status', 'disruption_type', 'rush_severity']].head(3)
+print(sample)
+
+print("\n2. Friday evening extended rush (5-7 PM) without disruption:")
+sample = imputed_df[
+    (imputed_df['day_type'] == 'friday') & 
+    (imputed_df['hour'].isin([17, 18, 19])) &
+    (imputed_df['has_disruption'] == 0)
+][['date', 'hour', 'area', 'status', 'rush_severity']].head(3)
+print(sample)
+
+print("\n3. Weekend midday (no rush hour) with incident:")
+sample = imputed_df[
+    (imputed_df['day_type'] == 'weekend') & 
+    (imputed_df['hour'].isin([12, 13, 14])) &
+    (imputed_df['disruption_type'] == 'incident')
+][['date', 'hour', 'area', 'status', 'disruption_type', 'rush_severity']].head(3)
+print(sample)
+
+# ============================================================
+# SAVE
+# ============================================================
+
+# Drop helper columns before saving
+df = df.drop(columns=['day_type', 'rush_severity'])
+
+output_path = os.path.join(PROCESSED_DIR, 'full_merged_data.csv')
+df.to_csv(output_path, index=False)
+
+print(f"\n✓ Corrected data saved to: {output_path}")
+
+print("\n" + "="*60)
+print("SMART CORRECTION COMPLETE!")
+print("="*60)
+print("✓ Rush hour patterns realistic (peak 7-8 AM, 5-6 PM)")
+print("✓ Friday has extended evening rush")
+print("✓ Weekend patterns different from weekdays")
+print("✓ Disruptions scaled by severity and timing")
+print("\nReady for Step 3!")
