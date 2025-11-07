@@ -8,6 +8,17 @@ import PlannerNavbar from "@/components/PlannerNavbar";
 import api from "@/services/api";
 import { getRoadInfoFromOSM, getRoadSegmentsInArea } from "@/services/osmService";
 
+/*
+const RealisticResultsMap = dynamic(() => import("@/components/RealisticResultsMap"), {
+  ssr: false,
+  loading: () => <div className="h-[500px] bg-gray-200 flex it  ems-center justify-center rounded-lg">Loading map...</div>,
+});*/
+
+const SmartResultsMap = dynamic(() => import("@/components/SmartResultsMap"), {
+  ssr: false,
+  loading: () => <div className="h-[550px] bg-gray-200 flex items-center justify-center rounded-lg">Loading...</div>,
+});
+
 // Import map with drawing tools
 const SimulationMap = dynamic(() => import("@/components/SimulationMap"), {
   ssr: false,
@@ -17,6 +28,7 @@ const SimulationMap = dynamic(() => import("@/components/SimulationMap"), {
     </div>
   ),
 });
+
 
 export default function SimulationPage() {
   const [isMapExpanded, setIsMapExpanded] = useState(false);
@@ -52,6 +64,12 @@ export default function SimulationPage() {
   const handlePointSelect = async (lat, lng) => {
     setLoadingRoadInfo(true);
     setError(null);
+
+     setSelectedLocation({
+      type: 'point',
+      coordinates: [{ lat, lng }],
+      center: { lat, lng },
+    });
 
     try {
       // Get road info from OSM
@@ -219,7 +237,7 @@ export default function SimulationPage() {
           {/* Left Column - Map */}
           <div className={`${isMapExpanded ? 'lg:col-span-12' : 'lg:col-span-7'} space-y-4`}>
             {/* Drawing Mode Selector */}
-            <div className="bg-white rounded-lg shadow-md p-4">
+            <div className="bg-white rounded-lg shadow-md p-6">
               <h3 className="font-semibold text-gray-800 mb-3">Selection Mode</h3>
               <div className="flex gap-2">
                 <button
@@ -262,6 +280,7 @@ export default function SimulationPage() {
 
             {/* Map */}
             <SimulationMap
+              key="selection-map" // ← ADD THIS - prevents recreation
               isExpanded={isMapExpanded}
               onExpand={() => setIsMapExpanded(!isMapExpanded)}
               drawMode={drawMode}
@@ -513,36 +532,386 @@ export default function SimulationPage() {
           )}
         </div>
 
-        {/* Results Section */}
+        {/* Results Section - IMPROVED VERSION */}
         {results && !isMapExpanded && (
-          <div id="results-section" className="mt-6 bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Detailed Results</h2>
-            
-            <div className="grid md:grid-cols-4 gap-4 mb-6">
-              <div className="bg-gray-50 rounded-lg p-4 text-center">
-                <p className="text-sm text-gray-600 mb-1">Total Hours</p>
-                <p className="text-3xl font-bold text-gray-800">{results.summary.total_hours}</p>
+          <div id="results-section" className="mt-8 space-y-6">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg shadow-md p-6 text-white">
+              <h2 className="text-2xl font-bold mb-2">🎯 Simulation Results</h2>
+              <p className="text-orange-100">
+                Simulation ID: {results.simulation_id}
+              </p>
+              <p className="text-sm text-orange-100 mt-1">
+                Analysis completed for {results.input.area} - {results.input.disruption_type}
+              </p>
+            </div>
+
+             {/* Results Map */}
+             <div className="bg-white rounded-lg shadow-md p-6">
+              <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <span>🗺️</span>
+                <span>Predicted Congestion Map</span>
+              </h3>
+              <SmartResultsMap
+                simulationResults={results}
+                selectedLocation={selectedLocation}
+                roadInfo={roadInfo}
+              />
+              <p className="text-sm text-gray-600 mt-4 bg-blue-50 rounded-lg p-3">
+                💡 <strong>Map shows:</strong> Main impact zone (large circle) and time-specific congestion 
+                (smaller circles for morning/afternoon/night). Click any area to see details.
+              </p>
+            </div>
+
+            {/* Key Metrics Cards */}
+            <div className="grid md:grid-cols-4 gap-4">
+              {/* Total Duration */}
+              <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold text-gray-600">Total Duration</span>
+                  <span className="text-2xl">🕐</span>
+                </div>
+                <p className="text-3xl font-bold text-gray-800">{results.summary.total_hours}h</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {results.summary.duration_days} days
+                </p>
+                <p className="text-xs text-gray-600 mt-2">
+                  How long the disruption will last
+                </p>
               </div>
-              <div className="bg-gray-50 rounded-lg p-4 text-center">
-                <p className="text-sm text-gray-600 mb-1">Avg Severity</p>
-                <p className="text-3xl font-bold text-orange-600">{results.summary.avg_severity}</p>
+
+              {/* Average Severity */}
+              <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-orange-500">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold text-gray-600">Avg Severity</span>
+                  <span className="text-2xl">📊</span>
+                </div>
+                <p className="text-3xl font-bold text-orange-600">
+                  {results.summary.avg_severity.toFixed(1)}
+                </p>
+                <p className={`text-sm font-semibold mt-1 ${
+                  results.summary.avg_severity_label === 'Heavy' ? 'text-red-600' :
+                  results.summary.avg_severity_label === 'Moderate' ? 'text-yellow-600' :
+                  'text-green-600'
+                }`}>
+                  {results.summary.avg_severity_label}
+                </p>
+                <p className="text-xs text-gray-600 mt-2">
+                  Overall congestion level
+                </p>
               </div>
-              <div className="bg-gray-50 rounded-lg p-4 text-center">
-                <p className="text-sm text-gray-600 mb-1">Avg Delay</p>
-                <p className="text-3xl font-bold text-red-600">+{results.summary.avg_delay_minutes} min</p>
+
+              {/* Average Delay */}
+              <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-red-500">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold text-gray-600">Avg Delay</span>
+                  <span className="text-2xl">⏱️</span>
+                </div>
+                <p className="text-3xl font-bold text-red-600">
+                  +{results.summary.avg_delay_minutes} min
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Per trip through this area
+                </p>
+                <p className="text-xs text-gray-600 mt-2">
+                  Extra time drivers will spend
+                </p>
               </div>
-              <div className="bg-gray-50 rounded-lg p-4 text-center">
-                <p className="text-sm text-gray-600 mb-1">Assessment</p>
-                <p className="text-2xl font-bold text-yellow-600">{results.summary.avg_severity_label}</p>
+
+              {/* Peak Hours - REPLACED PEAK IMPACT */}
+              <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-purple-500">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold text-gray-600">Worst Hours</span>
+                  <span className="text-2xl">🚨</span>
+                </div>
+                <p className="text-lg font-bold text-purple-600">
+                  {(() => {
+                    // Find hours with Heavy congestion
+                    const heavyHours = results.hourly_predictions
+                      .filter(p => p.severity_label === 'Heavy')
+                      .map(p => p.hour);
+                    
+                    if (heavyHours.length === 0) return 'None';
+                    
+                    // Group consecutive hours
+                    const ranges = [];
+                    let start = heavyHours[0];
+                    let prev = heavyHours[0];
+                    
+                    for (let i = 1; i <= heavyHours.length; i++) {
+                      if (i === heavyHours.length || heavyHours[i] !== prev + 1) {
+                        if (start === prev) {
+                          ranges.push(`${start}:00`);
+                        } else {
+                          ranges.push(`${start}:00-${prev}:00`);
+                        }
+                        if (i < heavyHours.length) {
+                          start = heavyHours[i];
+                        }
+                      }
+                      prev = heavyHours[i];
+                    }
+                    
+                    return ranges.slice(0, 2).join(', ');
+                  })()}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {results.summary.heavy_hours} hours with heavy traffic
+                </p>
+                <p className="text-xs text-gray-600 mt-2">
+                  Avoid these times if possible
+                </p>
               </div>
             </div>
 
-            <div className="flex gap-3">
-              <button className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700">
+            {/* Time of Day Section - CLARIFIED */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h3 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">
+                <span>⏰</span>
+                <span>When is Traffic Worst?</span>
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                This shows how many hours of <strong>Light</strong>, <strong>Moderate</strong>, 
+                and <strong>Heavy</strong> traffic occur during different times of day.
+              </p>
+              
+              <div className="grid md:grid-cols-3 gap-4">
+                {/* Morning */}
+                <div className="border-2 rounded-lg p-4 bg-gradient-to-br from-yellow-50 to-orange-50">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-2xl">🌅</span>
+                    <div>
+                      <h4 className="font-bold text-gray-800">Morning</h4>
+                      <p className="text-xs text-gray-600">6 AM - 12 PM</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">🟢 Light:</span>
+                      <span className="font-semibold text-green-600">
+                        {results.time_segments.morning.light} hours
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">🟡 Moderate:</span>
+                      <span className="font-semibold text-yellow-600">
+                        {results.time_segments.morning.moderate} hours
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">🔴 Heavy:</span>
+                      <span className="font-semibold text-red-600">
+                        {results.time_segments.morning.heavy} hours
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <p className="text-xs text-gray-700">
+                      {results.time_segments.morning.heavy > 2 ? (
+                        <span className="text-red-600 font-semibold">⚠️ Expect delays during morning rush (7-9 AM)</span>
+                      ) : results.time_segments.morning.moderate > 2 ? (
+                        <span className="text-yellow-600 font-semibold">⚠️ Some slowdowns expected</span>
+                      ) : (
+                        <span className="text-green-600 font-semibold">✓ Generally clear mornings</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Afternoon */}
+                <div className="border-2 rounded-lg p-4 bg-gradient-to-br from-blue-50 to-indigo-50">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-2xl">☀️</span>
+                    <div>
+                      <h4 className="font-bold text-gray-800">Afternoon</h4>
+                      <p className="text-xs text-gray-600">12 PM - 6 PM</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">🟢 Light:</span>
+                      <span className="font-semibold text-green-600">
+                        {results.time_segments.afternoon.light} hours
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">🟡 Moderate:</span>
+                      <span className="font-semibold text-yellow-600">
+                        {results.time_segments.afternoon.moderate} hours
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">🔴 Heavy:</span>
+                      <span className="font-semibold text-red-600">
+                        {results.time_segments.afternoon.heavy} hours
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <p className="text-xs text-gray-700">
+                      {results.time_segments.afternoon.heavy > 2 ? (
+                        <span className="text-red-600 font-semibold">⚠️ Expect delays during evening rush (5-7 PM)</span>
+                      ) : results.time_segments.afternoon.moderate > 2 ? (
+                        <span className="text-yellow-600 font-semibold">⚠️ Some slowdowns expected</span>
+                      ) : (
+                        <span className="text-green-600 font-semibold">✓ Generally clear afternoons</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Night */}
+                <div className="border-2 rounded-lg p-4 bg-gradient-to-br from-indigo-50 to-purple-50">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-2xl">🌙</span>
+                    <div>
+                      <h4 className="font-bold text-gray-800">Night</h4>
+                      <p className="text-xs text-gray-600">6 PM - 6 AM</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">🟢 Light:</span>
+                      <span className="font-semibold text-green-600">
+                        {results.time_segments.night.light} hours
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">🟡 Moderate:</span>
+                      <span className="font-semibold text-yellow-600">
+                        {results.time_segments.night.moderate} hours
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">🔴 Heavy:</span>
+                      <span className="font-semibold text-red-600">
+                        {results.time_segments.night.heavy} hours
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <p className="text-xs text-gray-700">
+                      {results.time_segments.night.heavy > 2 ? (
+                        <span className="text-red-600 font-semibold">⚠️ Delays even at night</span>
+                      ) : results.time_segments.night.moderate > 2 ? (
+                        <span className="text-yellow-600 font-semibold">⚠️ Some slowdowns</span>
+                      ) : (
+                        <span className="text-green-600 font-semibold">✓ Clear at night - best time to travel</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-4 bg-blue-50 rounded-lg p-4">
+                <p className="text-sm text-gray-700">
+                  <strong>💡 What this means:</strong> Schedule your trip during times with more 
+                  <span className="text-green-600 font-semibold"> Green (Light)</span> hours to avoid delays.
+                </p>
+              </div>
+            </div>
+
+            {/* Hourly Breakdown (Collapsible) */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <details className="group">
+                <summary className="cursor-pointer list-none">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                      <span>📅</span>
+                      <span>Hour-by-Hour Breakdown</span>
+                    </h3>
+                    <svg 
+                      className="w-5 h-5 text-gray-600 transition-transform group-open:rotate-180" 
+                      fill="none" 
+                      viewBox="0 0 24 24" 
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </summary>
+
+                <div className="mt-4 max-h-96 overflow-y-auto">
+                  <div className="space-y-2">
+                    {results.hourly_predictions.map((pred, idx) => (
+                      <div
+                        key={idx}
+                        className={`flex items-center justify-between p-3 rounded-lg transition hover:shadow-md ${
+                          pred.severity_label === 'Heavy' ? 'bg-red-50 border-l-4 border-red-500' :
+                          pred.severity_label === 'Moderate' ? 'bg-yellow-50 border-l-4 border-yellow-500' :
+                          'bg-green-50 border-l-4 border-green-500'
+                        }`}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="text-sm font-mono text-gray-700">
+                            {pred.datetime}
+                          </div>
+                          <div className="text-xs text-gray-600">
+                            {pred.day_of_week}
+                          </div>
+                          <span className={`text-xs px-3 py-1 rounded-full font-semibold ${
+                            pred.severity_label === 'Heavy' ? 'bg-red-100 text-red-700' :
+                            pred.severity_label === 'Moderate' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-green-100 text-green-700'
+                          }`}>
+                            {pred.severity_label}
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center gap-4">
+                          {pred.delay_info && (
+                            <div className="text-right">
+                              <p className="text-sm font-semibold text-gray-800">
+                                +{pred.delay_info.additional_delay_min} min
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {pred.delay_info.reduced_speed_kmh} km/h
+                              </p>
+                            </div>
+                          )}
+                          <div className="text-xs text-gray-600">
+                            {(pred.confidence * 100).toFixed(0)}% confident
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </details>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-4">
+              <button
+                onClick={() => {
+                  setResults(null);
+                  setSelectedLocation(null);
+                  setRoadInfo(null);
+                  setFormData({
+                    scenarioName: "",
+                    disruptionType: "roadwork",
+                    startDate: "",
+                    startTime: "06:00",
+                    endDate: "",
+                    endTime: "18:00",
+                    description: "",
+                  });
+                }}
+                className="flex-1 bg-gray-500 text-white py-3 rounded-lg font-semibold hover:bg-gray-600 transition"
+              >
+                🔄 New Simulation
+              </button>
+              <button
+                onClick={() => alert("Save functionality coming soon!")}
+                className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition"
+              >
                 💾 Save Scenario
               </button>
-              <button className="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700">
-                ✅ Publish Results
+              <button
+                onClick={() => alert("Publish functionality coming soon!")}
+                className="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition"
+              >
+                ✅ Publish to Map
               </button>
             </div>
           </div>
