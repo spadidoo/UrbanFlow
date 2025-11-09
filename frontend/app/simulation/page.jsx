@@ -198,7 +198,7 @@ export default function SimulationPage() {
         coordinates: selectedLocation.center,
       };
 
-      const response = await fetch('http://localhost:5000/api/simulate-disruption', {
+      const response = await fetch('http://localhost:5000/api/simulate-disruption-realtime', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(simulationData),
@@ -531,6 +531,21 @@ export default function SimulationPage() {
             </div>
           )}
         </div>
+
+          {/* Real-Time Integration Badge */}
+        {results && results.realtime_integration?.enabled && (
+          <div className="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-4 flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+              <span className="font-semibold text-blue-800">Live Traffic Integrated</span>
+            </div>
+            <div className="text-sm text-blue-700">
+              Current speed: {results.realtime_integration.current_speed} km/h • 
+              Congestion: {results.realtime_integration.current_congestion === 0 ? 'Light' : 
+                          results.realtime_integration.current_congestion === 1 ? 'Moderate' : 'Heavy'}
+            </div>
+          </div>
+        )}
 
         {/* Results Section - IMPROVED VERSION */}
         {results && !isMapExpanded && (
