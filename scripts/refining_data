@@ -1,0 +1,150 @@
+import pandas as pd
+import os
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROCESSED_DIR = os.path.join(PROJECT_ROOT, 'data', 'processed')
+
+print("="*60)
+print("ADDING DATA QUALITY FLAGS")
+print("="*60)
+
+# Load data
+df = pd.read_csv(os.path.join(PROCESSED_DIR, 'full_merged_data.csv'))
+
+print(f"\nTotal records: {len(df)}")
+
+# ============================================================
+# CREATE DATA QUALITY FLAGS
+# ============================================================
+
+print("\nCreating data quality indicators...")
+
+# 1. Status source flag (already exists, just rename for clarity)
+df['has_real_status'] = (df['data_source'] == 'Real').astype(int)
+df['has_imputed_status'] = (df['data_source'] == 'Imputed').astype(int)
+
+# 2. Volume data availability flag
+df['has_volume_data'] = (df['total_volume'].notna() & (df['total_volume'] > 0)).astype(int)
+
+# 3. Disruption data flag (already exists as 'has_disruption')
+# Just verify it exists
+if 'has_disruption' not in df.columns:
+    print("⚠️  Warning: has_disruption column missing!")
+    df['has_disruption'] = 0
+
+print("✓ Quality flags created")
+
+# ============================================================
+# ANALYSIS
+# ============================================================
+
+print("\n" + "="*60)
+print("DATA QUALITY SUMMARY")
+print("="*60)
+
+print("\n1. Traffic Status Source:")
+print(f"   Real (scraped):  {df['has_real_status'].sum():,} records ({df['has_real_status'].sum()/len(df)*100:.1f}%)")
+print(f"   Imputed:         {df['has_imputed_status'].sum():,} records ({df['has_imputed_status'].sum()/len(df)*100:.1f}%)")
+
+print("\n2. Volume Data Availability:")
+print(f"   Has volume data: {df['has_volume_data'].sum():,} records ({df['has_volume_data'].sum()/len(df)*100:.1f}%)")
+print(f"   No volume data:  {(df['has_volume_data']==0).sum():,} records ({(df['has_volume_data']==0).sum()/len(df)*100:.1f}%)")
+
+print("\n3. Disruption Data:")
+print(f"   Has disruption:  {df['has_disruption'].sum():,} records ({df['has_disruption'].sum()/len(df)*100:.1f}%)")
+print(f"   No disruption:   {(df['has_disruption']==0).sum():,} records ({(df['has_disruption']==0).sum()/len(df)*100:.1f}%)")
+
+# ============================================================
+# CROSS-TABULATION
+# ============================================================
+
+print("\n" + "="*60)
+print("DATA COMPLETENESS COMBINATIONS")
+print("="*60)
+
+print("\nHow many records have each combination?")
+
+combinations = df.groupby(['has_real_status', 'has_volume_data', 'has_disruption']).size().reset_index(name='count')
+combinations['percentage'] = (combinations['count'] / len(df) * 100).round(1)
+
+print("\n{:<15} {:<15} {:<15} {:<10} {:<10}".format(
+    "Real Status", "Volume Data", "Disruption", "Count", "Percent"
+))
+print("-" * 70)
+
+for _, row in combinations.iterrows():
+    real_status = "Yes" if row['has_real_status'] == 1 else "No"
+    volume_data = "Yes" if row['has_volume_data'] == 1 else "No"
+    disruption = "Yes" if row['has_disruption'] == 1 else "No"
+    
+    print("{:<15} {:<15} {:<15} {:<10,} {:<10}%".format(
+        real_status, volume_data, disruption, row['count'], row['percentage']
+    ))
+
+# ============================================================
+# MOST COMPLETE vs LEAST COMPLETE
+# ============================================================
+
+print("\n" + "="*60)
+print("DATA COMPLETENESS LEVELS")
+print("="*60)
+
+# Calculate completeness score (0-3)
+df['data_completeness_score'] = (
+    df['has_real_status'] + 
+    df['has_volume_data'] + 
+    df['has_disruption']
+)
+
+print("\nCompleteness Score Distribution:")
+print(df['data_completeness_score'].value_counts().sort_index())
+
+print("\n  Score 0: No real data (imputed status, no volume, no disruption)")
+print("  Score 1: One real data point")
+print("  Score 2: Two real data points")
+print("  Score 3: All real data (real status + volume + disruption)")
+
+# Most complete records
+most_complete = df[df['data_completeness_score'] == 3]
+print(f"\nMost complete records (score=3): {len(most_complete):,} ({len(most_complete)/len(df)*100:.1f}%)")
+
+# Least complete records
+least_complete = df[df['data_completeness_score'] == 0]
+print(f"Least complete records (score=0): {len(least_complete):,} ({len(least_complete)/len(df)*100:.1f}%)")
+
+# ============================================================
+# SAMPLE RECORDS
+# ============================================================
+
+print("\n" + "="*60)
+print("SAMPLE RECORDS")
+print("="*60)
+
+print("\nMost complete (score=3): Real status + Volume + Disruption")
+sample = most_complete[['date', 'hour', 'area', 'status', 'total_volume', 'disruption_type', 
+                        'has_real_status', 'has_volume_data', 'has_disruption']].head(3)
+print(sample)
+
+print("\nLeast complete (score=0): Imputed status, no volume, no disruption")
+sample = least_complete[['date', 'hour', 'area', 'status', 'total_volume', 'disruption_type',
+                         'has_real_status', 'has_volume_data', 'has_disruption']].head(3)
+print(sample)
+
+# ============================================================
+# SAVE
+# ============================================================
+
+output_path = os.path.join(PROCESSED_DIR, 'full_merged_data.csv')
+df.to_csv(output_path, index=False)
+
+print(f"\n✓ Data with quality flags saved to: {output_path}")
+
+print("\n" + "="*60)
+print("QUALITY FLAGS ADDED!")
+print("="*60)
+print("✓ has_real_status - indicates if traffic status is from real scraping")
+print("✓ has_imputed_status - indicates if traffic status was imputed")
+print("✓ has_volume_data - indicates if DPWH volume data is available")
+print("✓ has_disruption - indicates if disruption occurred")
+print("✓ data_completeness_score - overall data quality (0-3)")
+print("\nNow the model will know what data is available for each record!")

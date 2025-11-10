@@ -1,0 +1,1345 @@
+date,day_of_week,location,direction,lane,hour,total_volume,is_peak_am_time,is_peak_pm_time,road_corridor
+2024-09-02,Monday,Bagong Kalsada,North,1,11,509,yes,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,2,11,209,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,3,11,409,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,4,11,492,yes,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,1,12,237,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,2,12,415,yes,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,3,12,631,yes,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,4,12,478,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,1,13,678,no,yes,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,2,13,339,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,3,13,591,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,4,13,743,no,yes,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,1,14,216,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,2,14,522,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,3,14,358,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,4,14,616,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,1,15,444,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,2,15,428,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,3,15,582,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,4,15,238,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,1,16,335,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,2,16,311,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,3,16,334,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,4,16,313,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,1,17,358,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,2,17,425,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,3,17,364,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,4,17,655,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,1,18,443,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,2,18,267,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,3,18,608,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,4,18,582,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,1,19,393,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,2,19,343,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,3,19,361,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,4,19,250,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,1,20,402,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,2,20,578,no,yes,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,3,20,661,no,yes,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,4,20,470,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,1,21,258,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,2,21,509,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,3,21,650,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,4,21,234,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,1,22,162,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,2,22,293,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,3,22,262,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,4,22,521,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,1,23,593,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,2,23,190,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,3,23,573,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,4,23,416,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,1,24,346,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,North,2,24,455,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,3,24,334,no,no,Calamba_Pagsanjan
+2024-09-02,Monday,Bagong Kalsada,,4,24,545,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,1,342,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,1,521,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,1,718,yes,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,1,409,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,2,644,yes,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,2,261,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,2,562,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,2,282,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,3,232,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,3,421,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,3,145,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,3,383,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,4,185,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,4,226,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,4,579,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,4,365,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,5,394,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,5,276,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,5,539,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,5,646,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,6,459,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,6,460,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,6,565,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,6,311,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,7,620,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,7,312,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,7,427,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,7,357,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,8,510,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,8,179,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,8,563,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,8,662,yes,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,9,638,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,9,593,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,9,366,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,9,392,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,10,376,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,10,742,yes,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,10,464,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,10,600,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,11,395,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,11,169,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,11,436,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,11,258,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,12,246,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,12,434,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,12,504,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,12,388,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,13,659,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,13,564,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,13,249,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,13,699,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,14,674,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,14,468,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,14,471,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,14,520,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,15,762,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,15,575,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,15,502,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,15,626,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,16,216,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,16,598,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,16,487,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,16,363,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,17,586,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,17,588,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,17,672,no,yes,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,17,456,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,18,445,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,18,423,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,18,269,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,18,634,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,19,507,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,19,832,no,yes,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,19,290,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,19,559,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,20,767,no,yes,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,20,756,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,20,446,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,20,552,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,21,256,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,21,580,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,21,611,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,21,338,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,22,492,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,22,664,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,22,184,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,22,702,no,yes,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,23,219,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,23,775,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,23,547,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,23,424,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,1,24,398,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,North,2,24,235,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,3,24,423,no,no,Calamba_Pagsanjan
+2024-09-03,Tuesday,Bagong Kalsada,,4,24,352,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,1,86,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,1,263,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,1,646,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,1,849,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,2,643,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,2,337,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,2,478,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,2,682,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,3,861,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,3,538,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,3,288,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,3,730,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,4,577,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,4,525,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,4,549,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,4,351,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,5,289,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,5,504,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,5,676,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,5,368,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,6,533,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,6,333,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,6,830,yes,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,6,692,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,7,643,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,7,384,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,7,655,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,7,297,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,8,495,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,8,227,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,8,503,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,8,445,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,9,907,yes,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,9,260,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,9,371,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,9,893,yes,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,10,773,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,10,446,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,10,159,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,10,176,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,11,495,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,11,775,yes,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,11,806,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,11,436,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,12,484,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,12,720,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,12,789,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,12,422,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,13,543,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,13,650,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,13,819,no,yes,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,13,403,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,14,556,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,14,679,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,14,789,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,14,422,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,15,580,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,15,754,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,15,770,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,15,449,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,16,614,no,yes,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,16,805,no,yes,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,16,785,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,16,548,no,yes,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,17,209,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,17,478,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,17,546,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,17,274,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,18,243,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,18,532,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,18,504,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,18,248,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,19,217,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,19,452,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,19,406,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,19,162,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,20,124,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,20,386,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,20,311,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,20,84,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,21,135,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,21,404,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,21,264,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,21,48,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,22,114,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,22,373,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,22,192,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,22,44,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,23,55,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,23,228,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,23,135,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,23,18,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,1,24,25,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,North,2,24,165,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,3,24,98,no,no,Calamba_Pagsanjan
+2024-09-04,Wednesday,Bagong Kalsada,,4,24,17,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,1,13,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,1,194,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,1,77,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,1,10,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,2,17,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,2,104,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,2,71,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,2,36,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,3,55,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,3,156,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,3,82,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,3,81,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,4,77,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,4,101,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,4,124,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,4,80,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,5,49,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,5,242,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,5,283,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,5,113,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,6,105,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,6,250,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,6,338,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,6,146,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,7,176,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,7,436,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,7,391,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,7,200,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,8,184,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,8,476,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,8,451,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,8,250,yes,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,9,228,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,9,516,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,9,494,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,9,226,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,10,248,yes,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,10,572,yes,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,10,529,yes,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,10,249,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,11,234,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,11,518,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,11,512,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,11,207,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,12,223,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,12,525,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,12,480,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,12,224,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,13,254,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,13,500,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,13,506,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,13,228,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,14,218,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,14,467,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,14,548,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,14,228,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,15,216,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,15,482,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,15,614,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,15,267,no,yes,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,16,221,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,16,499,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,16,618,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,16,256,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,17,241,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,17,532,no,yes,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,17,622,no,yes,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,17,252,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,18,261,no,yes,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,18,510,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,18,589,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,18,242,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,19,164,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,19,390,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,19,451,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,19,161,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,20,133,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,20,367,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,20,363,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,20,108,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,21,147,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,21,386,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,21,323,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,21,74,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,22,91,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,22,337,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,22,224,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,22,35,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,23,56,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,23,197,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,23,158,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,23,31,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,1,24,39,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,North,2,24,143,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,3,24,111,no,no,Calamba_Pagsanjan
+2024-09-05,Thursday,Bagong Kalsada,,4,24,21,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,1,14,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,1,116,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,1,73,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,1,20,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,2,15,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,2,84,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,2,83,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,2,13,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,3,25,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,3,75,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,3,77,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,3,12,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,4,19,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,4,97,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,4,115,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,4,20,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,5,74,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,5,180,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,5,215,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,5,74,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,6,127,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,6,248,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,6,293,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,6,131,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,7,195,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,7,461,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,7,301,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,7,142,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,8,216,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,8,529,yes,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,8,382,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,8,212,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,9,216,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,9,521,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,9,419,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,9,240,yes,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,10,219,yes,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,10,503,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,10,460,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,10,219,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,11,212,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,11,466,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,11,490,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,11,240,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,12,195,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,12,447,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,12,518,yes,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,12,209,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,13,216,no,yes,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,13,418,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,13,552,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,13,214,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,14,197,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,14,416,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,14,713,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,14,303,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,15,184,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,15,386,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,15,770,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,15,340,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,16,194,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,16,440,no,yes,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,16,740,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,16,342,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,17,207,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,17,397,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,17,781,no,yes,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,17,364,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,18,212,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,18,411,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,18,733,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,18,299,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,19,160,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,19,302,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,19,572,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,19,210,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,20,118,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,20,288,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,20,487,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,20,147,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,21,73,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,21,256,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,21,388,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,21,114,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,22,74,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,22,211,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,22,275,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,22,76,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,23,35,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,23,144,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,23,197,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,23,36,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,1,24,29,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,North,2,24,114,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,3,24,69,no,no,Calamba_Pagsanjan
+2024-09-06,Friday,Bagong Kalsada,,4,24,445,no,yes,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,1,632,yes,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,1,151,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,1,247,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,1,186,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,2,443,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,2,247,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,2,304,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,2,291,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,3,540,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,3,156,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,3,294,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,3,512,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,4,348,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,4,459,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,4,257,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,4,461,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,5,269,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,5,137,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,5,593,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,5,175,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,6,192,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,6,543,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,6,113,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,6,377,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,7,573,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,7,308,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,7,422,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,7,633,yes,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,8,117,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,8,173,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,8,689,yes,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,8,346,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,9,223,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,9,582,yes,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,9,485,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,9,258,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,10,184,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,10,451,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,10,452,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,10,201,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,11,189,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,11,450,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,11,489,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,11,217,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,12,185,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,12,387,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,12,472,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,12,239,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,13,170,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,13,488,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,13,436,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,13,187,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,14,126,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,14,259,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,14,449,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,14,269,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,15,152,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,15,78,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,15,518,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,15,464,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,16,281,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,16,231,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,16,229,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,16,410,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,17,432,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,17,608,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,17,261,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,17,222,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,18,198,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,18,307,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,18,462,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,18,675,no,yes,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,19,699,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,19,260,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,19,501,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,19,425,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,20,853,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,20,488,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,20,650,no,yes,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,20,534,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,21,219,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,21,514,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,21,448,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,21,621,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,22,943,no,yes,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,22,751,no,yes,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,22,439,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,22,660,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,23,608,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,23,741,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,23,437,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,23,551,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,1,24,588,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,North,2,24,646,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,3,24,86,no,no,Calamba_Pagsanjan
+2024-09-07,Saturday,Bagong Kalsada,,4,24,415,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,1,378,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,1,480,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,1,511,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,1,514,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,2,592,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,2,598,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,2,515,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,2,599,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,3,378,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,3,327,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,3,442,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,3,377,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,4,505,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,4,392,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,4,569,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,4,798,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,5,342,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,5,301,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,5,338,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,5,566,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,6,460,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,6,362,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,6,586,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,6,552,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,7,574,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,7,578,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,7,777,yes,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,7,432,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,8,798,yes,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,8,531,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,8,601,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,8,630,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,9,199,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,9,491,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,9,368,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,9,309,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,10,159,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,10,763,yes,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,10,359,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,10,819,yes,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,11,493,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,11,167,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,11,707,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,11,112,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,12,289,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,12,528,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,12,609,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,12,603,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,13,415,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,13,545,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,13,683,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,13,135,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,14,131,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,14,279,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,14,396,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,14,159,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,15,371,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,15,219,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,15,371,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,15,94,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,16,895,no,yes,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,16,667,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,16,566,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,16,217,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,17,466,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,17,596,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,17,231,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,17,360,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,18,696,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,18,873,no,yes,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,18,701,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,18,399,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,19,486,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,19,312,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,19,829,no,yes,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,19,473,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,20,589,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,20,456,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,20,450,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,20,183,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,21,800,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,21,147,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,21,185,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,21,453,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,22,300,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,22,472,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,22,295,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,22,180,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,23,531,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,23,249,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,23,296,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,23,430,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,1,24,508,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,North,2,24,525,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,3,24,612,no,no,Calamba_Pagsanjan
+2024-09-08,Sunday,Bagong Kalsada,,4,24,573,no,yes,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,North,1,1,333,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,North,2,1,590,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,,3,1,615,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,,4,1,320,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,North,1,2,538,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,North,2,2,652,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,,3,2,288,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,,4,2,387,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,North,1,3,479,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,North,2,3,436,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,,3,3,224,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,,4,3,263,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,North,1,4,561,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,North,2,4,512,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,,3,4,440,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,,4,4,936,yes,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,North,1,5,852,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,North,2,5,613,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,,3,5,830,yes,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,,4,5,250,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,North,1,6,325,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,North,2,6,407,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,,3,6,592,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,,4,6,591,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,North,1,7,840,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,North,2,7,632,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,,3,7,320,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,,4,7,594,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,North,1,8,378,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,North,2,8,414,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,,3,8,348,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,,4,8,212,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,North,1,9,868,yes,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,North,2,9,809,yes,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,,3,9,524,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,,4,9,468,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,North,1,10,508,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,North,2,10,429,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,,3,10,264,no,no,Calamba_Pagsanjan
+2024-09-09,Monday,Bagong Kalsada,,4,10,468,no,no,Calamba_Pagsanjan
+2024-09-12,Thursday,Makiling,South,1,11,1267,yes,no,Maharlika_Turbina
+2024-09-12,Thursday,Makiling,North,2,11,1191,yes,no,Maharlika_Turbina
+2024-09-12,Thursday,Parian,South,1,11,643,yes,no,Maharlika_Parian
+2024-09-12,Thursday,Parian,North,2,11,658,no,no,Maharlika_Parian
+2024-09-12,Thursday,Makiling,South,1,12,1130,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Makiling,North,2,12,1172,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Parian,South,1,12,583,no,no,Maharlika_Parian
+2024-09-12,Thursday,Parian,North,2,12,663,yes,no,Maharlika_Parian
+2024-09-12,Thursday,Makiling,South,1,13,1082,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Makiling,North,2,13,1106,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Parian,South,1,13,553,no,no,Maharlika_Parian
+2024-09-12,Thursday,Parian,North,2,13,691,no,no,Maharlika_Parian
+2024-09-12,Thursday,Makiling,South,1,14,1096,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Makiling,North,2,14,1144,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Parian,South,1,14,656,no,no,Maharlika_Parian
+2024-09-12,Thursday,Parian,North,2,14,655,no,no,Maharlika_Parian
+2024-09-12,Thursday,Makiling,South,1,15,1196,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Makiling,North,2,15,1271,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Parian,South,1,15,635,no,no,Maharlika_Parian
+2024-09-12,Thursday,Parian,North,2,15,693,no,no,Maharlika_Parian
+2024-09-12,Thursday,Makiling,South,1,16,1191,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Makiling,North,2,16,1220,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Parian,South,1,16,628,no,no,Maharlika_Parian
+2024-09-12,Thursday,Parian,North,2,16,716,no,no,Maharlika_Parian
+2024-09-12,Thursday,Makiling,South,1,17,1240,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Makiling,North,2,17,1359,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Parian,South,1,17,688,no,no,Maharlika_Parian
+2024-09-12,Thursday,Parian,North,2,17,720,no,no,Maharlika_Parian
+2024-09-12,Thursday,Makiling,South,1,18,1460,no,yes,Maharlika_Turbina
+2024-09-12,Thursday,Makiling,North,2,18,1544,no,yes,Maharlika_Turbina
+2024-09-12,Thursday,Parian,South,1,18,684,no,no,Maharlika_Parian
+2024-09-12,Thursday,Parian,North,2,18,800,no,no,Maharlika_Parian
+2024-09-12,Thursday,Makiling,South,1,19,1107,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Makiling,North,2,19,1361,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Parian,South,1,19,537,no,no,Maharlika_Parian
+2024-09-12,Thursday,Parian,North,2,19,753,no,no,Maharlika_Parian
+2024-09-12,Thursday,Makiling,South,1,20,678,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Makiling,North,2,20,1099,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Parian,South,1,20,987,no,yes,Maharlika_Parian
+2024-09-12,Thursday,Parian,North,2,20,1285,no,yes,Maharlika_Parian
+2024-09-12,Thursday,Makiling,South,1,21,940,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Makiling,North,2,21,1212,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Parian,South,1,21,835,no,no,Maharlika_Parian
+2024-09-12,Thursday,Parian,North,2,21,788,no,no,Maharlika_Parian
+2024-09-12,Thursday,Makiling,South,1,22,918,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Makiling,North,2,22,1085,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Parian,South,1,22,663,no,no,Maharlika_Parian
+2024-09-12,Thursday,Parian,North,2,22,689,no,no,Maharlika_Parian
+2024-09-12,Thursday,Makiling,South,1,23,749,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Makiling,North,2,23,946,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Parian,South,1,23,649,no,no,Maharlika_Parian
+2024-09-12,Thursday,Parian,North,2,23,533,no,no,Maharlika_Parian
+2024-09-12,Thursday,Makiling,South,1,24,457,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Makiling,North,2,24,330,no,no,Maharlika_Turbina
+2024-09-12,Thursday,Parian,South,1,24,431,no,no,Maharlika_Parian
+2024-09-12,Thursday,Parian,North,2,24,438,no,no,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,1,374,no,no,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,1,347,no,no,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,1,375,no,no,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,1,361,no,no,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,2,310,no,no,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,2,301,no,no,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,2,334,no,no,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,2,313,no,no,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,3,316,no,no,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,3,321,no,no,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,3,405,no,no,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,3,391,no,no,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,4,372,no,no,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,4,336,no,no,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,4,409,no,no,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,4,412,no,no,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,5,620,no,no,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,5,491,no,no,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,5,542,no,no,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,5,532,no,no,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,6,923,no,no,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,6,953,no,no,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,6,699,no,no,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,6,613,no,no,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,7,1315,no,no,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,7,1247,no,no,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,7,832,no,no,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,7,948,no,no,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,8,1348,yes,no,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,8,1548,yes,no,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,8,1351,yes,no,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,8,1166,no,no,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,9,1229,no,no,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,9,1304,no,no,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,9,1145,no,no,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,9,1119,no,no,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,10,1310,no,no,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,10,1191,no,no,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,10,1104,no,no,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,10,1204,yes,no,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,11,1255,no,no,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,11,1220,no,no,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,11,1134,no,no,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,11,1157,no,no,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,12,1250,no,no,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,12,1167,no,no,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,12,691,no,no,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,12,821,no,no,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,13,1162,no,no,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,13,1125,no,no,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,13,851,no,no,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,13,908,no,no,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,14,1245,no,no,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,14,1202,no,no,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,14,671,no,no,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,14,666,no,no,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,15,1380,no,no,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,15,1220,no,no,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,15,786,no,no,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,15,551,no,no,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,16,1319,no,no,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,16,1214,no,no,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,16,639,no,no,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,16,651,no,no,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,17,1482,no,yes,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,17,1100,no,no,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,17,1206,no,no,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,17,1421,no,no,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,18,1261,no,no,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,18,1015,no,no,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,18,1376,no,yes,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,18,1422,no,yes,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,19,1369,no,no,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,19,1145,no,no,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,19,1242,no,no,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,19,1386,no,no,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,20,896,no,no,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,20,1255,no,yes,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,20,1059,no,no,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,20,1151,no,no,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,21,1006,no,no,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,21,1196,no,no,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,21,940,no,no,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,21,1161,no,no,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,22,931,no,no,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,22,1114,no,no,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,22,849,no,no,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,22,949,no,no,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,23,746,no,no,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,23,962,no,no,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,23,733,no,no,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,23,732,no,no,Maharlika_Parian
+2024-09-13,Friday,Makiling,South,1,24,582,no,no,Maharlika_Turbina
+2024-09-13,Friday,Makiling,North,2,24,724,no,no,Maharlika_Turbina
+2024-09-13,Friday,Parian,South,1,24,585,no,no,Maharlika_Parian
+2024-09-13,Friday,Parian,North,2,24,660,no,no,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,1,118,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,1,139,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,1,271,no,no,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,1,244,no,no,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,2,99,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,2,136,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,2,195,no,no,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,2,278,no,no,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,3,96,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,3,126,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,3,180,no,no,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,3,188,no,no,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,4,158,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,4,128,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,4,209,no,no,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,4,229,no,no,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,5,326,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,5,228,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,5,350,no,no,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,5,406,no,no,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,6,563,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,6,397,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,6,281,no,no,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,6,431,no,no,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,7,650,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,7,537,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,7,375,no,no,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,7,563,no,no,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,8,825,yes,no,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,8,646,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,8,435,no,no,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,8,605,no,no,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,9,762,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,9,673,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,9,461,no,no,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,9,681,no,no,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,10,733,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,10,673,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,10,545,no,no,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,10,618,no,no,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,11,797,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,11,724,yes,no,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,11,625,no,no,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,11,963,no,no,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,12,699,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,12,675,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,12,1118,yes,no,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,12,1158,yes,no,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,13,758,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,13,761,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,13,1072,no,no,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,13,1094,no,no,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,14,810,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,14,702,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,14,1085,no,no,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,14,1128,no,no,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,15,857,no,yes,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,15,767,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,15,1175,no,no,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,15,1261,no,no,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,16,808,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,16,899,no,yes,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,16,1123,no,no,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,16,1299,no,no,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,17,821,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,17,765,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,17,1170,no,no,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,17,1371,no,no,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,18,665,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,18,847,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,18,1414,no,yes,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,18,1524,no,yes,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,19,645,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,19,765,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,19,876,no,no,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,19,1292,no,no,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,20,548,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,20,783,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,20,896,no,no,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,20,1255,no,no,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,21,455,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,21,666,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,21,1006,no,no,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,21,1196,no,no,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,22,333,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,22,481,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,22,931,no,no,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,22,1114,no,no,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,23,219,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,23,343,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,23,746,no,no,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,23,962,no,no,Maharlika_Parian
+2024-09-14,Saturday,Makiling,South,1,24,188,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Makiling,North,2,24,332,no,no,Maharlika_Turbina
+2024-09-14,Saturday,Parian,South,1,24,584,no,no,Maharlika_Parian
+2024-09-14,Saturday,Parian,North,2,24,724,no,no,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,1,302,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,1,289,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,1,202,no,no,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,1,177,no,no,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,2,294,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,2,248,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,2,128,no,no,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,2,113,no,no,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,3,289,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,3,316,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,3,153,no,no,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,3,82,no,no,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,4,366,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,4,343,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,4,151,no,no,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,4,119,no,no,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,5,612,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,5,564,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,5,306,no,no,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,5,218,no,no,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,6,917,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,6,995,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,6,431,no,no,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,6,381,no,no,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,7,1319,yes,no,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,7,1213,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,7,782,yes,no,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,7,578,no,no,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,8,1258,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,8,1335,yes,no,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,8,761,no,no,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,8,768,no,no,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,9,1292,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,9,1285,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,9,705,no,no,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,9,804,yes,no,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,10,876,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,10,978,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,10,737,no,no,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,10,778,no,no,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,11,966,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,11,1041,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,11,619,no,no,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,11,745,no,no,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,12,1088,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,12,1128,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,12,645,no,no,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,12,738,no,no,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,13,1107,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,13,1135,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,13,648,no,no,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,13,684,no,no,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,14,1163,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,14,1201,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,14,672,no,no,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,14,694,no,no,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,15,1118,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,15,1203,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,15,784,no,no,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,15,682,no,no,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,16,1365,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,16,1357,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,16,812,no,no,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,16,789,no,no,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,17,1521,no,yes,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,17,1427,no,yes,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,17,891,no,yes,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,17,832,no,yes,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,18,1209,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,18,1303,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,18,713,no,no,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,18,761,no,no,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,19,1250,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,19,1200,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,19,581,no,no,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,19,762,no,no,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,20,1026,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,20,1056,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,20,492,no,no,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,20,594,no,no,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,21,830,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,21,782,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,21,500,no,no,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,21,485,no,no,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,22,639,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,22,673,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,22,262,no,no,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,22,296,no,no,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,23,623,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,23,528,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,23,172,no,no,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,23,226,no,no,Maharlika_Parian
+2024-09-15,Sunday,Makiling,South,1,24,427,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Makiling,North,2,24,426,no,no,Maharlika_Turbina
+2024-09-15,Sunday,Parian,South,1,24,166,no,no,Maharlika_Parian
+2024-09-15,Sunday,Parian,North,2,24,212,no,no,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,1,440,no,no,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,1,520,no,no,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,1,131,no,no,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,1,139,no,no,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,2,368,no,no,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,2,405,no,no,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,2,118,no,no,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,2,151,no,no,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,3,422,no,no,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,3,362,no,no,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,3,119,no,no,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,3,146,no,no,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,4,534,no,no,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,4,484,no,no,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,4,161,no,no,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,4,138,no,no,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,5,871,no,no,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,5,829,no,no,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,5,331,no,no,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,5,224,no,no,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,6,1238,no,no,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,6,1136,no,no,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,6,468,no,no,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,6,376,no,no,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,7,1314,yes,no,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,7,1243,no,no,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,7,570,no,no,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,7,537,no,no,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,8,1239,no,no,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,8,1227,no,no,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,8,803,yes,no,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,8,646,no,no,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,9,1203,no,no,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,9,1246,yes,no,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,9,762,no,no,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,9,673,no,no,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,10,1170,no,no,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,10,1152,no,no,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,10,733,no,no,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,10,673,no,no,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,11,1184,no,no,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,11,1181,no,no,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,11,697,no,no,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,11,624,no,no,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,12,948,no,no,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,12,1059,no,no,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,12,699,no,no,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,12,675,yes,no,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,13,1028,no,no,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,13,1085,no,no,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,13,758,no,no,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,13,461,no,no,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,14,1123,no,no,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,14,1184,no,no,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,14,610,no,no,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,14,602,no,no,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,15,1161,no,yes,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,15,1311,no,yes,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,15,657,no,no,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,15,667,no,no,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,16,1123,no,no,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,16,1299,no,no,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,16,708,no,no,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,16,699,no,no,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,17,677,no,no,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,17,1059,no,no,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,17,821,no,yes,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,17,765,no,no,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,18,637,no,no,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,18,868,no,no,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,18,665,no,no,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,18,847,no,yes,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,19,530,no,no,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,19,827,no,no,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,19,645,no,no,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,19,765,no,no,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,20,548,no,no,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,20,741,no,no,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,20,748,no,no,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,20,783,no,no,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,21,416,no,no,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,21,810,no,no,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,21,455,no,no,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,21,666,no,no,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,22,410,no,no,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,22,754,no,no,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,22,333,no,no,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,22,481,no,no,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,23,746,no,no,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,23,962,no,no,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,23,219,no,no,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,23,353,no,no,Maharlika_Parian
+2024-09-16,Monday,Makiling,South,1,24,582,no,no,Maharlika_Turbina
+2024-09-16,Monday,Makiling,North,2,24,724,no,no,Maharlika_Turbina
+2024-09-16,Monday,Parian,South,1,24,188,no,no,Maharlika_Parian
+2024-09-16,Monday,Parian,North,2,24,242,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,1,246,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,1,39,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,1,316,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,1,539,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,2,205,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,2,28,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,2,310,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,2,396,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,3,246,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,3,29,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,3,284,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,3,399,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,4,244,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,4,38,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,4,450,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,4,603,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,5,374,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,5,71,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,5,734,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,5,783,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,6,1256,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,6,1061,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,6,1099,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,6,1181,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,7,1391,yes,no,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,7,1297,yes,no,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,7,923,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,7,1053,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,8,1214,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,8,1062,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,8,947,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,8,1213,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,9,1223,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,9,1077,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,9,1231,yes,no,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,9,1270,yes,no,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,10,1172,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,10,1097,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,10,1151,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,10,1196,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,11,1188,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,11,1074,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,11,1136,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,11,1209,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,12,1098,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,12,1157,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,12,988,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,12,1174,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,13,1067,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,13,1153,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,13,963,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,13,961,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,14,1098,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,14,1205,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,14,727,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,14,913,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,15,1213,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,15,1351,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,15,761,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,15,646,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,16,1194,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,16,1310,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,16,828,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,16,947,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,17,1141,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,17,1353,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,17,1285,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,17,1347,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,18,1341,no,yes,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,18,1471,no,yes,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,18,1311,no,yes,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,18,1441,no,yes,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,19,899,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,19,322,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,19,1108,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,19,1258,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,20,749,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,20,242,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,20,592,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,20,585,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,21,659,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,21,78,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,21,683,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,21,721,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,22,556,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,22,94,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,22,609,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,22,738,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,23,417,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,23,78,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,23,700,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,23,834,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Makiling,South,1,24,285,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Makiling,North,2,24,28,no,no,Maharlika_Turbina
+2024-09-17,Tuesday,Parian,South,1,24,597,no,no,Maharlika_Parian
+2024-09-17,Tuesday,Parian,North,2,24,664,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,1,221,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,1,33,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,1,456,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,1,405,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,2,236,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,2,36,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,2,449,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,2,391,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,3,257,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,3,21,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,3,420,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,3,437,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,4,443,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,4,18,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,4,450,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,4,400,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,5,934,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,5,1083,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,5,691,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,5,628,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,6,1297,yes,no,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,6,1364,yes,no,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,6,1138,yes,no,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,6,806,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,7,920,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,7,1250,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,7,903,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,7,1123,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,8,942,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,8,1192,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,8,713,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,8,1072,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,9,1228,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,9,1268,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,9,694,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,9,1053,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,10,681,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,10,229,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,10,706,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,10,996,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,11,376,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,11,262,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,11,628,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,11,935,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,12,341,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,12,418,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,12,1015,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,12,1160,yes,no,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,13,1176,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,13,1088,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,13,777,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,13,771,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,14,1225,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,14,1156,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,14,592,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,14,635,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,15,1282,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,15,1212,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,15,763,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,15,736,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,16,1300,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,16,1205,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,16,754,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,16,814,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,17,1543,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,17,1274,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,17,835,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,17,1154,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,18,1573,no,yes,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,18,1372,no,yes,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,18,1453,no,yes,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,18,1536,no,yes,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,19,962,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,19,943,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,19,1093,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,19,1346,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,20,893,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,20,820,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,20,665,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,20,1088,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,21,748,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,21,661,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,21,939,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,21,1199,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,22,639,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,22,470,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,22,905,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,22,1079,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,23,534,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,23,378,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,23,737,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,23,935,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Makiling,South,1,24,438,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Makiling,North,2,24,313,no,no,Maharlika_Turbina
+2024-09-18,Wednesday,Parian,South,1,24,525,no,no,Maharlika_Parian
+2024-09-18,Wednesday,Parian,North,2,24,673,no,no,Maharlika_Parian
+2024-09-19,Thursday,Makiling,South,1,1,320,no,no,Maharlika_Turbina
+2024-09-19,Thursday,Makiling,North,2,1,269,no,no,Maharlika_Turbina
+2024-09-19,Thursday,Parian,South,1,1,236,no,no,Maharlika_Parian
+2024-09-19,Thursday,Parian,North,2,1,66,no,no,Maharlika_Parian
+2024-09-19,Thursday,Makiling,South,1,2,328,no,no,Maharlika_Turbina
+2024-09-19,Thursday,Makiling,North,2,2,252,no,no,Maharlika_Turbina
+2024-09-19,Thursday,Parian,South,1,2,281,no,no,Maharlika_Parian
+2024-09-19,Thursday,Parian,North,2,2,82,no,no,Maharlika_Parian
+2024-09-19,Thursday,Makiling,South,1,3,307,no,no,Maharlika_Turbina
+2024-09-19,Thursday,Makiling,North,2,3,304,no,no,Maharlika_Turbina
+2024-09-19,Thursday,Parian,South,1,3,260,no,no,Maharlika_Parian
+2024-09-19,Thursday,Parian,North,2,3,82,no,no,Maharlika_Parian
+2024-09-19,Thursday,Makiling,South,1,4,362,no,no,Maharlika_Turbina
+2024-09-19,Thursday,Makiling,North,2,4,307,no,no,Maharlika_Turbina
+2024-09-19,Thursday,Parian,South,1,4,447,no,no,Maharlika_Parian
+2024-09-19,Thursday,Parian,North,2,4,59,no,no,Maharlika_Parian
+2024-09-19,Thursday,Makiling,South,1,5,697,no,no,Maharlika_Turbina
+2024-09-19,Thursday,Makiling,North,2,5,492,no,no,Maharlika_Turbina
+2024-09-19,Thursday,Parian,South,1,5,668,no,no,Maharlika_Parian
+2024-09-19,Thursday,Parian,North,2,5,257,no,no,Maharlika_Parian
+2024-09-19,Thursday,Makiling,South,1,6,1049,no,no,Maharlika_Turbina
+2024-09-19,Thursday,Makiling,North,2,6,1025,no,no,Maharlika_Turbina
+2024-09-19,Thursday,Parian,South,1,6,905,no,no,Maharlika_Parian
+2024-09-19,Thursday,Parian,North,2,6,356,no,no,Maharlika_Parian
+2024-09-19,Thursday,Makiling,South,1,7,1410,yes,no,Maharlika_Turbina
+2024-09-19,Thursday,Makiling,North,2,7,1274,no,no,Maharlika_Turbina
+2024-09-19,Thursday,Parian,South,1,7,979,yes,no,Maharlika_Parian
+2024-09-19,Thursday,Parian,North,2,7,454,yes,no,Maharlika_Parian
+2024-09-19,Thursday,Makiling,South,1,8,1305,no,no,Maharlika_Turbina
+2024-09-19,Thursday,Makiling,North,2,8,1424,yes,no,Maharlika_Turbina
+2024-09-19,Thursday,Parian,South,1,8,793,no,no,Maharlika_Parian
+2024-09-19,Thursday,Parian,North,2,8,429,no,no,Maharlika_Parian
+2024-09-19,Thursday,Makiling,South,1,9,1254,no,no,Maharlika_Turbina
+2024-09-19,Thursday,Makiling,North,2,9,1310,no,no,Maharlika_Turbina
+2024-09-19,Thursday,Parian,South,1,9,711,no,no,Maharlika_Parian
+2024-09-19,Thursday,Parian,North,2,9,405,no,no,Maharlika_Parian
+2024-09-19,Thursday,Makiling,South,1,10,1235,no,no,Maharlika_Turbina
+2024-09-19,Thursday,Makiling,North,2,10,1310,no,no,Maharlika_Turbina
+2024-09-19,Thursday,Parian,South,1,10,684,no,no,Maharlika_Parian
+2024-09-19,Thursday,Parian,North,2,10,405,no,no,Maharlika_Parian

@@ -1,0 +1,31 @@
+import pandas as pd
+import os
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROCESSED_DIR = os.path.join(PROJECT_ROOT, 'data', 'processed')
+
+print("Checking data_source column across all files...")
+
+print("\n1. POSO with corridors:")
+poso = pd.read_csv(os.path.join(PROCESSED_DIR, 'Final_fixed_POSO_Data.csv'))
+print(f"   Total: {len(poso)}")
+if 'data_source' in poso.columns:
+    print(f"   data_source values: {poso['data_source'].value_counts().to_dict()}")
+else:
+    print("   ❌ No data_source column!")
+
+print("\n2. DPWH with corridors:")
+dpwh = pd.read_csv(os.path.join(PROCESSED_DIR, 'Final_fixed_DPWH_Data.csv'))
+print(f"   Total: {len(dpwh)}")
+if 'data_source' in dpwh.columns:
+    print(f"   data_source values: {dpwh['data_source'].value_counts().to_dict()}")
+else:
+    print("   ❌ No data_source column!")
+
+print("\n3. Full merged:")
+merged = pd.read_csv(os.path.join(PROCESSED_DIR, 'full_merged_data.csv'))
+print(f"   Total: {len(merged)}")
+if 'data_source' in merged.columns:
+    print(f"   data_source values: {merged['data_source'].value_counts().to_dict()}")
+else:
+    print("   ❌ No data_source column!")

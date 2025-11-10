@@ -1,0 +1,119 @@
+import pandas as pd
+import os
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROCESSED_DIR = os.path.join(PROJECT_ROOT, 'data', 'processed')
+
+print("="*60)
+print("STEP 2: ADDING DISRUPTIONS TO MERGED DATA")
+print("="*60)
+
+# Load merged POSO+DPWH data
+print("\nLoading merged data...")
+merged_df = pd.read_csv(os.path.join(PROCESSED_DIR, 'poso_dpwh_merged.csv'))
+print(f"Merged records: {len(merged_df)}")
+
+# Load disruptions
+print("\nLoading disruptions...")
+disruption_df = pd.read_csv(os.path.join(PROCESSED_DIR, 'Final_fixed_Disruptions_Data.csv'))
+print(f"Disruption records: {len(disruption_df)}")
+print(f"Disruption columns: {disruption_df.columns.tolist()}")
+
+# Convert dates to datetime for comparison
+merged_df['date'] = pd.to_datetime(merged_df['date'])
+disruption_df['date_start'] = pd.to_datetime(disruption_df['date_start'])
+disruption_df['date_end'] = pd.to_datetime(disruption_df['date_end'])
+
+# Initialize disruption columns in merged data
+merged_df['has_disruption'] = 0
+merged_df['disruption_id'] = None
+merged_df['disruption_type'] = None
+merged_df['disruption_area'] = None
+merged_df['disruption_description'] = None
+merged_df['disruption_start'] = None
+merged_df['disruption_end'] = None
+
+print("\nMatching disruptions to traffic records...")
+print("(This checks if each traffic record falls within a disruption period)")
+
+matched_count = 0
+
+# For each disruption, find all traffic records that fall within its date range
+for idx, disruption in disruption_df.iterrows():
+    if (idx + 1) % 20 == 0:
+        print(f"  Processing disruption {idx + 1}/{len(disruption_df)}...")
+    
+    # Find records that match:
+    # 1. Same road corridor
+    # 2. Date is between disruption start and end
+    # 3. Same area OR same road corridor (since disruptions affect the whole corridor)
+    
+    mask = (
+        (merged_df['road_corridor'] == disruption['road_corridor']) &
+        (merged_df['date'] >= disruption['date_start']) &
+        (merged_df['date'] <= disruption['date_end']) &
+        (merged_df['area'] == disruption['area'])  # Match specific area
+    )
+    
+    affected_records = mask.sum()
+    
+    if affected_records > 0:
+        matched_count += affected_records
+        
+        # Mark these records as having a disruption
+        merged_df.loc[mask, 'has_disruption'] = 1
+        merged_df.loc[mask, 'disruption_id'] = disruption['roadwork_id']
+        merged_df.loc[mask, 'disruption_type'] = disruption['disruption_type']
+        merged_df.loc[mask, 'disruption_area'] = disruption['area']
+        merged_df.loc[mask, 'disruption_description'] = disruption['description']
+        merged_df.loc[mask, 'disruption_start'] = disruption['date_start'].strftime('%Y-%m-%d')
+        merged_df.loc[mask, 'disruption_end'] = disruption['date_end'].strftime('%Y-%m-%d')
+
+print(f"\n✓ Matching complete!")
+print(f"Traffic records affected by disruptions: {matched_count}")
+print(f"Traffic records with NO disruptions: {len(merged_df) - matched_count}")
+
+# Convert date back to string format
+merged_df['date'] = merged_df['date'].dt.strftime('%Y-%m-%d')
+
+# Show all columns
+print(f"\nAll columns after adding disruptions:")
+for i, col in enumerate(merged_df.columns, 1):
+    null_count = merged_df[col].isna().sum()
+    print(f"  {i}. {col:30} - {null_count} nulls")
+
+# Save
+output_path = os.path.join(PROCESSED_DIR, 'full_merged_data.csv')
+merged_df.to_csv(output_path, index=False)
+
+print(f"\n✓ Saved to: {output_path}")
+
+# Show sample with disruptions
+print("\nSample records WITH disruptions:")
+sample_with = merged_df[merged_df['has_disruption'] == 1][
+    ['date', 'hour', 'area', 'status', 'has_disruption', 'disruption_type', 'disruption_description']
+].head(5)
+print(sample_with)
+
+print("\nSample records WITHOUT disruptions:")
+sample_without = merged_df[merged_df['has_disruption'] == 0][
+    ['date', 'hour', 'area', 'status', 'has_disruption', 'disruption_type']
+].head(5)
+print(sample_without)
+
+print("\nDisruption statistics:")
+print(f"Total records: {len(merged_df)}")
+print(f"Records with disruptions: {merged_df['has_disruption'].sum()}")
+print(f"Records without disruptions: {(merged_df['has_disruption'] == 0).sum()}")
+
+print("\nRecords by disruption type:")
+for dtype in merged_df['disruption_type'].dropna().unique():
+    count = len(merged_df[merged_df['disruption_type'] == dtype])
+    print(f"  {dtype:15}: {count} records")
+
+print("\n" + "="*60)
+print("STEP 2 COMPLETE!")
+print("="*60)
+print("✓ Disruption data added")
+print("✓ All columns preserved")
+print("✓ Nulls kept where no disruption exists")
