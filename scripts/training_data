@@ -1,0 +1,290 @@
+import pandas as pd
+import numpy as np
+import os
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROCESSED_DIR = os.path.join(PROJECT_ROOT, 'data', 'processed')
+FINAL_DIR = os.path.join(PROJECT_ROOT, 'data', 'final')
+
+# Create final directory if it doesn't exist
+os.makedirs(FINAL_DIR, exist_ok=True)
+
+print("="*60)
+print("STEP 3: PREPARING TRAINING DATA FOR RANDOM FOREST")
+print("="*60)
+
+# Load full merged data
+print("\nLoading full merged data...")
+df = pd.read_csv(os.path.join(PROCESSED_DIR, 'full_merged_data.csv'))
+print(f"Total records: {len(df)}")
+
+# Convert date to datetime
+df['date'] = pd.to_datetime(df['date'])
+
+print("\nCurrent columns:")
+for i, col in enumerate(df.columns, 1):
+    print(f"  {i}. {col}")
+
+# ============================================================
+# FEATURE ENGINEERING
+# ============================================================
+
+print("\n" + "="*60)
+print("FEATURE ENGINEERING")
+print("="*60)
+
+# 1. Temporal features
+print("\n1. Creating temporal features...")
+df['month'] = df['date'].dt.month
+df['day_of_month'] = df['date'].dt.day
+df['day_of_week_num'] = df['date'].dt.dayofweek  # 0=Monday, 6=Sunday
+df['is_weekend'] = df['date'].dt.dayofweek.isin([5, 6]).astype(int)
+df['is_friday'] = (df['date'].dt.dayofweek == 4).astype(int)
+
+# 2. Rush hour features
+print("2. Creating rush hour features...")
+df['is_rush_hour'] = (
+    ((df['hour'] >= 6) & (df['hour'] <= 9)) |   # Morning rush
+    ((df['hour'] >= 16) & (df['hour'] <= 19))   # Evening rush
+).astype(int)
+
+df['is_peak_rush'] = (
+    df['hour'].isin([7, 8, 17, 18])  # Peak hours
+).astype(int)
+
+# 3. Cyclical encoding for hour (helps model understand 23:00 is close to 00:00)
+print("3. Creating cyclical time features...")
+df['hour_sin'] = np.sin(2 * np.pi * df['hour'] / 24)
+df['hour_cos'] = np.cos(2 * np.pi * df['hour'] / 24)
+
+# 4. Time segment (morning/afternoon/night)
+print("4. Creating time segments...")
+def get_time_segment(hour):
+    if 6 <= hour <= 11:
+        return 'morning'
+    elif 12 <= hour <= 17:
+        return 'afternoon'
+    else:
+        return 'night'
+
+df['time_segment'] = df['hour'].apply(get_time_segment)
+
+# 5. Philippine holidays (2024-2025)
+print("5. Marking holidays...")
+holidays = [
+    '2024-01-01', '2024-04-09', '2024-05-01', '2024-06-12', 
+    '2024-08-26', '2024-11-01', '2024-11-30', '2024-12-25', '2024-12-30',
+    '2025-01-01', '2025-04-18', '2025-05-01', '2025-06-12',
+    '2025-08-25', '2025-11-01', '2025-11-30', '2025-12-25', '2025-12-30'
+]
+df['is_holiday'] = df['date'].dt.strftime('%Y-%m-%d').isin(holidays).astype(int)
+
+# 6. Handle volume data (fill NaN with 0)
+print("6. Handling volume data...")
+df['total_volume'] = df['total_volume'].fillna(0)
+print(f"   Volume data available: {(df['total_volume'] > 0).sum()} records")
+
+# 7. Create disruption type binary features
+print("7. Creating disruption type features...")
+df['has_roadwork'] = (df['disruption_type'] == 'roadwork').astype(int)
+df['has_incident'] = (df['disruption_type'] == 'incident').astype(int)
+df['has_accident'] = (df['disruption_type'] == 'accident').astype(int)
+df['has_weather'] = (df['disruption_type'] == 'weather').astype(int)
+df['has_event'] = (df['disruption_type'] == 'event').astype(int)
+
+print("✓ All features created")
+
+# ============================================================
+# ENCODE CATEGORICAL VARIABLES
+# ============================================================
+
+print("\n" + "="*60)
+print("ENCODING CATEGORICAL VARIABLES")
+print("="*60)
+
+# One-hot encode road_corridor
+print("\n1. Encoding road corridors...")
+road_dummies = pd.get_dummies(df['road_corridor'], prefix='road', dtype=int)
+df = pd.concat([df, road_dummies], axis=1)
+print(f"   Created {len(road_dummies.columns)} road corridor features")
+
+# One-hot encode time_segment
+print("2. Encoding time segments...")
+time_dummies = pd.get_dummies(df['time_segment'], prefix='time', dtype=int)
+df = pd.concat([df, time_dummies], axis=1)
+print(f"   Created {len(time_dummies.columns)} time segment features")
+
+# One-hot encode area
+print("3. Encoding areas...")
+area_dummies = pd.get_dummies(df['area'], prefix='area', dtype=int)
+df = pd.concat([df, area_dummies], axis=1)
+print(f"   Created {len(area_dummies.columns)} area features")
+
+print("✓ Categorical encoding complete")
+
+# ============================================================
+# CREATE TARGET VARIABLE
+# ============================================================
+
+print("\n" + "="*60)
+print("CREATING TARGET VARIABLE")
+print("="*60)
+
+# Map status to numeric severity
+severity_map = {
+    'light': 0,
+    'moderate': 1,
+    'heavy': 2
+}
+
+df['congestion_severity'] = df['status'].map(severity_map)
+
+# Check for unmapped values
+unmapped = df[df['congestion_severity'].isna()]
+if len(unmapped) > 0:
+    print(f"\n⚠️  Warning: {len(unmapped)} records have unmapped status values:")
+    print(unmapped['status'].unique())
+    df = df.dropna(subset=['congestion_severity'])
+
+print(f"\n✓ Target variable created: 'congestion_severity'")
+print(f"\nTarget distribution:")
+print(f"  Light (0):    {(df['congestion_severity'] == 0).sum():,} records ({(df['congestion_severity'] == 0).sum()/len(df)*100:.1f}%)")
+print(f"  Moderate (1): {(df['congestion_severity'] == 1).sum():,} records ({(df['congestion_severity'] == 1).sum()/len(df)*100:.1f}%)")
+print(f"  Heavy (2):    {(df['congestion_severity'] == 2).sum():,} records ({(df['congestion_severity'] == 2).sum()/len(df)*100:.1f}%)")
+
+# ============================================================
+# SELECT FEATURES FOR MODEL
+# ============================================================
+
+print("\n" + "="*60)
+print("SELECTING FEATURES FOR TRAINING")
+print("="*60)
+
+# Define feature groups
+temporal_features = [
+    'hour', 'hour_sin', 'hour_cos', 
+    'month', 'day_of_month', 'day_of_week_num',
+    'is_weekend', 'is_friday', 'is_holiday', 
+    'is_rush_hour', 'is_peak_rush'
+]
+
+traffic_features = [
+    'total_volume'
+]
+
+disruption_features = [
+    'has_disruption', 'has_roadwork', 'has_incident', 
+    'has_accident', 'has_weather', 'has_event'
+]
+
+quality_features = [
+    'has_real_status', 'has_imputed_status', 
+    'has_volume_data', 'data_completeness_score'
+]
+
+# Get one-hot encoded column names
+road_features = [col for col in df.columns if col.startswith('road_')]
+time_segment_features = [col for col in df.columns if col.startswith('time_')]
+area_features = [col for col in df.columns if col.startswith('area_')]
+
+# Combine all features
+feature_columns = (
+    temporal_features + 
+    traffic_features + 
+    disruption_features + 
+    quality_features +
+    road_features + 
+    time_segment_features + 
+    area_features
+)
+
+print(f"\nTotal features selected: {len(feature_columns)}")
+print(f"  Temporal features: {len(temporal_features)}")
+print(f"  Traffic features: {len(traffic_features)}")
+print(f"  Disruption features: {len(disruption_features)}")
+print(f"  Data quality features: {len(quality_features)}")
+print(f"  Road corridor features: {len(road_features)}")
+print(f"  Time segment features: {len(time_segment_features)}")
+print(f"  Area features: {len(area_features)}")
+
+# Target variable
+target_column = 'congestion_severity'
+
+# ============================================================
+# CREATE FINAL DATASETS
+# ============================================================
+
+print("\n" + "="*60)
+print("CREATING FINAL DATASETS")
+print("="*60)
+
+# 1. Save FULL dataset (with all original columns + engineered features)
+print("\n1. Saving full dataset (all columns)...")
+output_full = os.path.join(FINAL_DIR, 'training_data_full.csv')
+df.to_csv(output_full, index=False)
+print(f"   ✓ Saved: {output_full}")
+print(f"   Shape: {df.shape}")
+
+# 2. Create MODEL-READY dataset (only selected features + target)
+print("\n2. Creating model-ready dataset (selected features only)...")
+model_df = df[feature_columns + [target_column]].copy()
+
+# Check for missing values in features
+print(f"\n   Checking for missing values...")
+missing = model_df.isnull().sum()
+if missing.sum() > 0:
+    print(f"   Found {missing.sum()} total missing values")
+    print(f"\n   Columns with missing values:")
+    for col in missing[missing > 0].index:
+        print(f"     {col}: {missing[col]} nulls")
+    
+    # Fill remaining NaNs with 0 (for features, not target)
+    print(f"\n   Filling missing feature values with 0...")
+    feature_nulls = model_df[feature_columns].isnull().sum().sum()
+    model_df[feature_columns] = model_df[feature_columns].fillna(0)
+    print(f"   ✓ Filled {feature_nulls} missing values")
+else:
+    print("   ✓ No missing values found!")
+
+# Save model-ready dataset
+output_model = os.path.join(FINAL_DIR, 'model_training_data.csv')
+model_df.to_csv(output_model, index=False)
+print(f"\n   ✓ Saved: {output_model}")
+print(f"   Shape: {model_df.shape}")
+
+# ============================================================
+# SUMMARY
+# ============================================================
+
+print("\n" + "="*60)
+print("SUMMARY")
+print("="*60)
+
+print(f"\n📊 Dataset Statistics:")
+print(f"   Total records: {len(model_df):,}")
+print(f"   Total features: {len(feature_columns)}")
+print(f"   Target variable: {target_column}")
+
+print(f"\n📈 Class Balance:")
+for i, label in enumerate(['Light', 'Moderate', 'Heavy']):
+    count = (model_df[target_column] == i).sum()
+    pct = count / len(model_df) * 100
+    print(f"   {label:10} ({i}): {count:,} ({pct:.1f}%)")
+
+print(f"\n📁 Output Files:")
+print(f"   1. {output_full}")
+print(f"      - Contains ALL columns (original + engineered)")
+print(f"      - Use for analysis and reference")
+print(f"   2. {output_model}")
+print(f"      - Contains ONLY model features + target")
+print(f"      - Use for Random Forest training")
+
+print("\n" + "="*60)
+print("✓ STEP 3 COMPLETE!")
+print("="*60)
+print("\n🎉 Your training data is ready for Random Forest!")
+print("\nNext steps:")
+print("  1. Train Random Forest model using 'model_training_data.csv'")
+print("  2. Split into train/test sets (80/20)")
+print("  3. Tune hyperparameters")
+print("  4. Evaluate model performance")

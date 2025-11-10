@@ -1,0 +1,245 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import (
+    classification_report, 
+    confusion_matrix, 
+    accuracy_score,
+    mean_absolute_error
+)
+import joblib
+import os
+
+# ============================================================
+# SETUP
+# ============================================================
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FINAL_DIR = os.path.join(PROJECT_ROOT, 'data', 'final')
+MODELS_DIR = os.path.join(PROJECT_ROOT, 'models')
+
+# Create models directory
+os.makedirs(MODELS_DIR, exist_ok=True)
+
+print("="*70)
+print("RANDOM FOREST TRAINING FOR URBANFLOW")
+print("="*70)
+
+# ============================================================
+# STEP 1: LOAD DATA
+# ============================================================
+
+print("\n📂 STEP 1: Loading training data...")
+
+# Load the model-ready dataset
+data_path = os.path.join(FINAL_DIR, 'model_training_data.csv')
+df = pd.read_csv(data_path)
+
+print(f"   ✓ Loaded {len(df):,} records")
+print(f"   ✓ Features: {df.shape[1] - 1}")  # -1 for target column
+
+# Separate features (X) and target (y)
+X = df.drop('congestion_severity', axis=1)  # Features
+y = df['congestion_severity']                # Target
+
+print(f"\n   Features (X): {X.shape}")
+print(f"   Target (y): {y.shape}")
+
+print(f"\n   Target distribution:")
+print(f"      Light (0):    {(y == 0).sum():,} ({(y == 0).sum()/len(y)*100:.1f}%)")
+print(f"      Moderate (1): {(y == 1).sum():,} ({(y == 1).sum()/len(y)*100:.1f}%)")
+print(f"      Heavy (2):    {(y == 2).sum():,} ({(y == 2).sum()/len(y)*100:.1f}%)")
+
+# ============================================================
+# STEP 2: SPLIT DATA (80% train, 20% test)
+# ============================================================
+
+print("\n" + "="*70)
+print("📊 STEP 2: Splitting data into train and test sets...")
+
+# stratify=y ensures each set has same class distribution
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, 
+    test_size=0.20,      # 20% for testing
+    random_state=42,     # For reproducibility
+    stratify=y           # Keep class balance in both sets
+)
+
+print(f"\n   Training set: {len(X_train):,} records ({len(X_train)/len(X)*100:.0f}%)")
+print(f"   Testing set:  {len(X_test):,} records ({len(X_test)/len(X)*100:.0f}%)")
+
+print(f"\n   Training set class distribution:")
+print(f"      Light:    {(y_train == 0).sum():,} ({(y_train == 0).sum()/len(y_train)*100:.1f}%)")
+print(f"      Moderate: {(y_train == 1).sum():,} ({(y_train == 1).sum()/len(y_train)*100:.1f}%)")
+print(f"      Heavy:    {(y_train == 2).sum():,} ({(y_train == 2).sum()/len(y_train)*100:.1f}%)")
+
+print(f"\n   Testing set class distribution:")
+print(f"      Light:    {(y_test == 0).sum():,} ({(y_test == 0).sum()/len(y_test)*100:.1f}%)")
+print(f"      Moderate: {(y_test == 1).sum():,} ({(y_test == 1).sum()/len(y_test)*100:.1f}%)")
+print(f"      Heavy:    {(y_test == 2).sum():,} ({(y_test == 2).sum()/len(y_test)*100:.1f}%)")
+
+# ============================================================
+# STEP 3: TRAIN THE MODEL
+# ============================================================
+
+print("\n" + "="*70)
+print("🌲 STEP 3: Training Random Forest model...")
+
+# Create the model with optimized hyperparameters
+model = RandomForestClassifier(
+    n_estimators=200,           # Number of trees (more = better, but slower)
+    max_depth=20,               # Max depth of each tree (prevents overfitting)
+    min_samples_split=5,        # Min samples needed to split a node
+    min_samples_leaf=2,         # Min samples in each leaf
+    max_features='sqrt',        # Number of features per split
+    class_weight='balanced',    # Handle imbalanced classes
+    random_state=42,            # For reproducibility
+    n_jobs=-1,                  # Use all CPU cores
+    verbose=1                   # Show progress
+)
+
+print(f"\n   Model configuration:")
+print(f"      Trees: {model.n_estimators}")
+print(f"      Max depth: {model.max_depth}")
+print(f"      Min samples split: {model.min_samples_split}")
+print(f"      Class weight: {model.class_weight}")
+
+print(f"\n   Training started... (this may take 1-2 minutes)")
+
+# Train the model
+model.fit(X_train, y_train)
+
+print(f"\n   ✓ Training complete!")
+
+# ============================================================
+# STEP 4: MAKE PREDICTIONS
+# ============================================================
+
+print("\n" + "="*70)
+print("🔮 STEP 4: Making predictions on test set...")
+
+# Predict on test data (data the model has never seen)
+y_pred = model.predict(X_test)
+
+print(f"   ✓ Predictions made for {len(y_pred):,} records")
+
+# ============================================================
+# STEP 5: EVALUATE THE MODEL
+# ============================================================
+
+print("\n" + "="*70)
+print("📈 STEP 5: Evaluating model performance...")
+
+# 1. Overall Accuracy
+accuracy = accuracy_score(y_test, y_pred)
+print(f"\n   Overall Accuracy: {accuracy*100:.2f}%")
+print(f"      (Model got {accuracy*100:.1f} out of 100 predictions right)")
+
+# 2. Mean Absolute Error (for your thesis)
+mae = mean_absolute_error(y_test, y_pred)
+print(f"\n   Mean Absolute Error (MAE): {mae:.4f}")
+print(f"      (Average prediction error in severity levels)")
+
+# 3. Confusion Matrix
+print(f"\n   Confusion Matrix:")
+print(f"   (Shows where model makes mistakes)")
+cm = confusion_matrix(y_test, y_pred)
+print(f"\n                Predicted")
+print(f"              Light  Moderate  Heavy")
+print(f"   Actual  L  {cm[0][0]:5d}     {cm[0][1]:5d}  {cm[0][2]:5d}")
+print(f"           M  {cm[1][0]:5d}     {cm[1][1]:5d}  {cm[1][2]:5d}")
+print(f"           H  {cm[2][0]:5d}     {cm[2][1]:5d}  {cm[2][2]:5d}")
+
+# 4. Classification Report (detailed metrics per class)
+print(f"\n   Classification Report:")
+print(f"   (Precision, Recall, F1-Score for each class)")
+print("\n" + classification_report(
+    y_test, y_pred, 
+    target_names=['Light', 'Moderate', 'Heavy'],
+    digits=4
+))
+
+# ============================================================
+# STEP 6: FEATURE IMPORTANCE
+# ============================================================
+
+print("\n" + "="*70)
+print("🔍 STEP 6: Feature Importance Analysis...")
+print("   (Which features matter most for predictions?)")
+
+# Get feature importances
+importances = model.feature_importances_
+feature_names = X.columns
+
+# Create dataframe and sort
+importance_df = pd.DataFrame({
+    'feature': feature_names,
+    'importance': importances
+}).sort_values('importance', ascending=False)
+
+print(f"\n   Top 15 Most Important Features:")
+for i, row in importance_df.head(15).iterrows():
+    print(f"      {row['feature']:30} {row['importance']:.4f}")
+
+# ============================================================
+# STEP 7: SAVE THE MODEL
+# ============================================================
+
+print("\n" + "="*70)
+print("💾 STEP 7: Saving trained model...")
+
+# Save the model
+model_path = os.path.join(MODELS_DIR, 'random_forest_model.pkl')
+joblib.dump(model, model_path)
+
+print(f"   ✓ Model saved to: {model_path}")
+
+# Also save feature names (needed for predictions later)
+feature_path = os.path.join(MODELS_DIR, 'feature_names.pkl')
+joblib.dump(list(X.columns), feature_path)
+
+print(f"   ✓ Feature names saved to: {feature_path}")
+
+# Save model info
+info = {
+    'accuracy': accuracy,
+    'mae': mae,
+    'n_features': len(X.columns),
+    'n_estimators': model.n_estimators,
+    'max_depth': model.max_depth,
+    'training_samples': len(X_train),
+    'test_samples': len(X_test)
+}
+
+info_path = os.path.join(MODELS_DIR, 'model_info.pkl')
+joblib.dump(info, info_path)
+
+print(f"   ✓ Model info saved to: {info_path}")
+
+# ============================================================
+# SUMMARY
+# ============================================================
+
+print("\n" + "="*70)
+print("✅ TRAINING COMPLETE!")
+print("="*70)
+
+print(f"\n📊 Model Performance Summary:")
+print(f"   Accuracy: {accuracy*100:.2f}%")
+print(f"   MAE: {mae:.4f}")
+print(f"   Training samples: {len(X_train):,}")
+print(f"   Test samples: {len(X_test):,}")
+
+print(f"\n📁 Saved Files:")
+print(f"   1. {model_path}")
+print(f"   2. {feature_path}")
+print(f"   3. {info_path}")
+
+print(f"\n🎯 Next Steps:")
+print(f"   1. Review the metrics above")
+print(f"   2. If accuracy is good (>80%), proceed to deployment")
+print(f"   3. If not, try tuning hyperparameters")
+print(f"   4. Use the saved model in UrbanFlow for predictions")
+
+print("\n" + "="*70)

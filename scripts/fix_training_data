@@ -1,0 +1,48 @@
+import pandas as pd
+import os
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FINAL_DIR = os.path.join(PROJECT_ROOT, 'data', 'final')
+
+print("Checking for non-numeric columns...")
+
+# Load model training data
+df = pd.read_csv(os.path.join(FINAL_DIR, 'model_training_data.csv'))
+
+print(f"\nTotal columns: {len(df.columns)}")
+print(f"Total rows: {len(df)}")
+
+# Check data types
+print("\nColumn data types:")
+print(df.dtypes.value_counts())
+
+# Find non-numeric columns
+non_numeric = df.select_dtypes(include=['object']).columns.tolist()
+
+if non_numeric:
+    print(f"\n⚠️  Found {len(non_numeric)} non-numeric columns:")
+    for col in non_numeric:
+        print(f"   - {col}: {df[col].dtype}")
+        print(f"     Sample values: {df[col].unique()[:5]}")
+    
+    print(f"\n🔧 Removing non-numeric columns...")
+    df_clean = df.drop(columns=non_numeric)
+    
+    print(f"\n✓ Cleaned dataset:")
+    print(f"   Columns: {len(df_clean.columns)}")
+    print(f"   All numeric: {df_clean.select_dtypes(include=['number']).shape[1] == len(df_clean.columns)}")
+    
+    # Save cleaned version
+    output_path = os.path.join(FINAL_DIR, 'model_training_data.csv')
+    df_clean.to_csv(output_path, index=False)
+    
+    print(f"\n✓ Saved cleaned data to: {output_path}")
+    
+    print(f"\nRemoved columns:")
+    for col in non_numeric:
+        print(f"   - {col}")
+else:
+    print("\n✓ All columns are already numeric!")
+
+print("\n" + "="*60)
+print("You can now run the training script again!")
