@@ -29,6 +29,11 @@ const SimulationMap = dynamic(() => import("@/components/SimulationMap"), {
   ),
 });
 
+const AggregatedResultsMaps = dynamic(() => import("@/components/AggregatedResultsMaps"), {
+  ssr: false,
+  loading: () => <div>Loading maps...</div>,
+});
+
 
 export default function SimulationPage() {
   const [isMapExpanded, setIsMapExpanded] = useState(false);
@@ -650,21 +655,37 @@ export default function SimulationPage() {
               </p>
             </div>
 
-             {/* Results Map */}
-             <div className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <span>🗺️</span>
-                <span>Predicted Congestion Map</span>
-              </h3>
-              <SmartResultsMap
-                simulationResults={results}
-                selectedLocation={selectedLocation}
-                roadInfo={roadInfo}
-              />
-              <p className="text-sm text-gray-600 mt-4 bg-blue-50 rounded-lg p-3">
-                💡 <strong>Map shows:</strong> Main impact zone (large circle) and time-specific congestion 
-                (smaller circles for morning/afternoon/night). Click any area to see details.
-              </p>
+             {/* Results Map - Smart Multi-Map Display */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                  <span>🗺️</span>
+                  <span>Predicted Congestion Map</span>
+                </h3>
+                
+                {results.has_multiple_days && (
+                  <span className="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-semibold">
+                    {results.aggregated_view?.granularity === 'daily' ? 'Day-by-Day' :
+                    results.aggregated_view?.granularity === 'weekly' ? 'Week-by-Week' :
+                    'Hour-by-Hour'}
+                  </span>
+                )}
+              </div>
+
+              {results.aggregated_view ? (
+                <AggregatedResultsMaps
+                  aggregatedView={results.aggregated_view}
+                  selectedLocation={selectedLocation}
+                  roadInfo={roadInfo}
+                  simulationResults={results}
+                />
+              ) : (
+                <SmartResultsMap
+                  simulationResults={results}
+                  selectedLocation={selectedLocation}
+                  roadInfo={roadInfo}
+                />
+              )}
             </div>
 
             {/* Key Metrics Cards */}

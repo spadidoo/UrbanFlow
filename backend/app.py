@@ -309,6 +309,131 @@ def simulate_disruption_realtime():
             current_datetime += timedelta(hours=1)
         
         # ============================================================
+        # Smart Aggregation for Map Display
+        # ============================================================
+
+        def aggregate_predictions_smart(hourly_predictions, start_datetime, end_datetime):
+            """
+            Intelligently aggregate predictions based on duration
+            Returns appropriate time granularity for visualization
+            """
+            duration_days = (end_datetime - start_datetime).days
+            
+            if duration_days <= 1:
+                # Short disruption: Show hour-by-hour
+                return {
+                    'granularity': 'hourly',
+                    'display_label': 'Hour-by-Hour View',
+                    'map_data': hourly_predictions  # All hours
+                }
+            
+            elif duration_days <= 7:
+                # Medium disruption: Show day-by-day
+                daily_aggregates = []
+                current_date = start_datetime.date()
+                end_date = end_datetime.date()
+                
+                while current_date <= end_date:
+                    # Get all predictions for this day
+                    day_predictions = [
+                        p for p in hourly_predictions 
+                        if datetime.strptime(p['datetime'], '%Y-%m-%d %H:%M').date() == current_date
+                    ]
+                    
+                    if day_predictions:
+                        # Calculate daily averages
+                        avg_severity = sum(p['severity'] for p in day_predictions) / len(day_predictions)
+                        avg_delay = sum(p['delay_info']['additional_delay_min'] for p in day_predictions) / len(day_predictions)
+                        
+                        # Determine dominant severity
+                        severity_counts = {
+                            'Light': sum(1 for p in day_predictions if p['severity'] < 0.5),
+                            'Moderate': sum(1 for p in day_predictions if 0.5 <= p['severity'] < 1.5),
+                            'Heavy': sum(1 for p in day_predictions if p['severity'] >= 1.5)
+                        }
+                        dominant_severity = max(severity_counts, key=severity_counts.get)
+                        
+                        daily_aggregates.append({
+                            'date': current_date.strftime('%Y-%m-%d'),
+                            'day_name': current_date.strftime('%A'),
+                            'avg_severity': round(avg_severity, 2),
+                            'avg_severity_label': dominant_severity,
+                            'avg_delay_min': round(avg_delay),
+                            'hour_count': len(day_predictions),
+                            'severity_breakdown': severity_counts,
+                            'peak_hour': max(day_predictions, key=lambda x: x['severity'])['hour'],
+                            'peak_severity': max(p['severity'] for p in day_predictions)
+                        })
+                    
+                    current_date += timedelta(days=1)
+                
+                return {
+                    'granularity': 'daily',
+                    'display_label': 'Day-by-Day View',
+                    'map_data': daily_aggregates
+                }
+            
+            elif duration_days <= 30:
+                # Long disruption: Show week-by-week
+                weekly_aggregates = []
+                current_date = start_datetime.date()
+                end_date = end_datetime.date()
+                week_num = 1
+                
+                while current_date <= end_date:
+                    week_end = min(current_date + timedelta(days=6), end_date)
+                    
+                    # Get all predictions for this week
+                    week_predictions = [
+                        p for p in hourly_predictions 
+                        if current_date <= datetime.strptime(p['datetime'], '%Y-%m-%d %H:%M').date() <= week_end
+                    ]
+                    
+                    if week_predictions:
+                        avg_severity = sum(p['severity'] for p in week_predictions) / len(week_predictions)
+                        avg_delay = sum(p['delay_info']['additional_delay_min'] for p in week_predictions) / len(week_predictions)
+                        
+                        severity_counts = {
+                            'Light': sum(1 for p in week_predictions if p['severity'] < 0.5),
+                            'Moderate': sum(1 for p in week_predictions if 0.5 <= p['severity'] < 1.5),
+                            'Heavy': sum(1 for p in week_predictions if p['severity'] >= 1.5)
+                        }
+                        dominant_severity = max(severity_counts, key=severity_counts.get)
+                        
+                        weekly_aggregates.append({
+                            'week_number': week_num,
+                            'date_range': f"{current_date.strftime('%b %d')} - {week_end.strftime('%b %d')}",
+                            'start_date': current_date.strftime('%Y-%m-%d'),
+                            'end_date': week_end.strftime('%Y-%m-%d'),
+                            'avg_severity': round(avg_severity, 2),
+                            'avg_severity_label': dominant_severity,
+                            'avg_delay_min': round(avg_delay),
+                            'hour_count': len(week_predictions),
+                            'severity_breakdown': severity_counts
+                        })
+                    
+                    current_date = week_end + timedelta(days=1)
+                    week_num += 1
+                
+                return {
+                    'granularity': 'weekly',
+                    'display_label': 'Week-by-Week View',
+                    'map_data': weekly_aggregates
+                }
+            
+            else:
+                # Very long disruption: Monthly view
+                return {
+                    'granularity': 'monthly',
+                    'display_label': 'Month-by-Month View',
+                    'map_data': []  # Implement if needed
+                }
+
+
+        # ✅ ADD THIS AFTER CALCULATING hourly_predictions, BEFORE THE RETURN STATEMENT
+        aggregated_view = aggregate_predictions_smart(hourly_predictions, start_datetime, end_datetime)
+        
+        # ============================================================
         # Calculate Summary Statistics
         # ============================================================
         
@@ -400,9 +525,12 @@ def simulate_disruption_realtime():
                 'total_delay_hours': round(sum(p['delay_info']['additional_delay_min'] for p in hourly_predictions) / 60, 1)
             },
             'hourly_predictions': hourly_predictions,
-            'time_segments': time_segments
-        })
-        
+            'time_segments': time_segments,
+            'aggregated_view': aggregated_view,
+            'has_multiple_days': (end_datetime - start_datetime).days > 1
+            })
+
+
     except Exception as e:
         import traceback
         return jsonify({
