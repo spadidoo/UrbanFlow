@@ -122,15 +122,17 @@ def get_road_traffic():
 @app.route('/api/simulate-disruption-realtime', methods=['POST'])
 def simulate_disruption_realtime():
     """
-    Enhanced simulation that incorporates real-time traffic data
+    Smart simulation that uses real-time data ONLY for same-day disruptions (0-6 hours ahead)
+    Future disruptions use historical patterns only
     """
     try:
         data = request.get_json()
         
-        # Get basic simulation parameters
+        # Extract basic parameters
         area = data.get('area', 'Unknown')
         road_corridor = data.get('road_corridor', 'Unknown')
         disruption_type = data.get('disruption_type')
+        
         start_datetime = datetime.strptime(
             f"{data['start_date']} {data['start_time']}", 
             "%Y-%m-%d %H:%M"
@@ -139,27 +141,122 @@ def simulate_disruption_realtime():
             f"{data['end_date']} {data['end_time']}", 
             "%Y-%m-%d %H:%M"
         )
+
+        # ✅ VALIDATE DATES
+        if end_datetime <= start_datetime:
+            return jsonify({
+                'success': False,
+                'error': 'End date/time must be after start date/time'
+            }), 400
+        
+        duration_hours = (end_datetime - start_datetime).total_seconds() / 3600
+        
+        if duration_hours > 720:  # 30 days
+            return jsonify({
+                'success': False,
+                'error': 'Disruption duration cannot exceed 30 days'
+            }), 400
+        
+        if duration_hours < 1:
+            return jsonify({
+                'success': False,
+                'error': 'Disruption duration must be at least 1 hour'
+            }), 400
         
         road_info = data.get('road_info', {})
         coordinates = data.get('coordinates', {})
         
-        # ✅ FETCH REAL-TIME TRAFFIC
-        realtime_data = traffic_service.get_traffic_flow(
-            coordinates.get('lat'),
-            coordinates.get('lng')
+        # ✅ VALIDATE COORDINATES
+        if not coordinates.get('lat') or not coordinates.get('lng'):
+            return jsonify({
+                'success': False,
+                'error': 'Missing location coordinates'
+            }), 400
+
+        
+        road_info = data.get('road_info', {})
+        coordinates = data.get('coordinates', {})
+        
+        # ============================================================
+        # ✅ SMART DECISION: Should we use real-time data?
+        # ============================================================
+        
+        now = datetime.now()
+        today = now.date()
+        disruption_start_date = start_datetime.date()
+        
+        # Calculate hours until disruption starts
+        hours_until_disruption = (start_datetime - now).total_seconds() / 3600
+        
+        # ✅ USE REAL-TIME ONLY IF:
+        # 1. Disruption starts today
+        # 2. Within next 6 hours (or already started)
+        use_realtime = (
+            disruption_start_date == today and 
+            hours_until_disruption <= 6 and 
+            hours_until_disruption >= -24  # Allow up to 24h past start (ongoing disruption)
         )
         
-        # Extract current conditions
+        realtime_data = None
+        realtime_speed_factor = None
         current_congestion = 0
-        speed_factor = 1.0
         
-        if realtime_data.get('success'):
-            current_congestion = realtime_data.get('congestion_ratio', 0)
-            current_speed = realtime_data.get('current_speed', 40)
-            free_flow_speed = realtime_data.get('free_flow_speed', 40)
-            speed_factor = current_speed / free_flow_speed if free_flow_speed > 0 else 1.0
+        if use_realtime:
+            print("\n" + "="*60)
+            print("🌐 FETCHING REAL-TIME TRAFFIC DATA")
+            print("="*60)
+            print(f"📍 Location: {coordinates.get('lat')}, {coordinates.get('lng')}")
+            print(f"⏰ Current Time: {now.strftime('%Y-%m-%d %H:%M')}")
+            print(f"🚧 Disruption Start: {start_datetime.strftime('%Y-%m-%d %H:%M')}")
+            print(f"⏱️  Hours Until Start: {hours_until_disruption:.1f}h")
+            print(f"✅ USING REAL-TIME (disruption happening soon)")
+            
+            # Fetch real-time traffic
+            realtime_data = traffic_service.get_traffic_flow(
+                coordinates.get('lat'),
+                coordinates.get('lng')
+            )
+            
+            if realtime_data.get('success'):
+                current_speed = realtime_data.get('current_speed', 40)
+                free_flow_speed = realtime_data.get('free_flow_speed', 40)
+                current_congestion = realtime_data.get('congestion_ratio', 0)
+                
+                if free_flow_speed > 0:
+                    realtime_speed_factor = current_speed / free_flow_speed
+                
+                print(f"✅ Real-time API Success")
+                print(f"🚗 Current Speed: {current_speed} km/h")
+                print(f"🏁 Free Flow Speed: {free_flow_speed} km/h")
+                print(f"📊 Speed Factor: {realtime_speed_factor:.2f}")
+                print(f"📊 Congestion Level: {current_congestion} (0=light, 1=moderate, 2=heavy)")
+            else:
+                print(f"❌ Real-time API Failed: {realtime_data.get('error')}")
+                use_realtime = False  # Fall back to historical
+            
+            print("="*60 + "\n")
+            
+        else:
+            print("\n" + "="*60)
+            print("📅 FUTURE DISRUPTION - USING HISTORICAL PATTERNS")
+            print("="*60)
+            print(f"⏰ Current Time: {now.strftime('%Y-%m-%d %H:%M')}")
+            print(f"🚧 Disruption Start: {start_datetime.strftime('%Y-%m-%d %H:%M')}")
+            
+            if disruption_start_date > today:
+                days_away = (disruption_start_date - today).days
+                print(f"📆 Disruption is {days_away} day(s) away")
+            else:
+                print(f"⏱️  Disruption is {hours_until_disruption:.1f} hours away")
+            
+            print(f"✅ Using ML model trained on historical data")
+            print(f"📊 Real-time data not applicable for future predictions")
+            print("="*60 + "\n")
         
-        # Run simulation with ML model (existing code)
+        # ============================================================
+        # Generate Hourly Predictions
+        # ============================================================
+        
         hourly_predictions = []
         current_datetime = start_datetime
         
@@ -175,52 +272,64 @@ def simulate_disruption_realtime():
                 'has_real_status': 0
             }
             
-            # Make prediction
+            # Make prediction using ML model
             prediction = predictor.predict(hour_input)
             
-            # ✅ ADJUST PREDICTION BASED ON REAL-TIME CONDITIONS
-            # If current traffic is already bad, increase severity
-            adjusted_severity = prediction['severity']
-            if current_congestion > 0:
-                adjusted_severity = min(2, prediction['severity'] + (current_congestion * 0.3))
-            
-            # Calculate delay
-            delay_info = predictor.estimate_delay(
-                severity=adjusted_severity,
-                base_travel_time_minutes=road_info.get('free_flow_time_minutes', 10),
-                road_length_km=road_info.get('length_km', 1.0),
-                impact_factor=road_info.get('disruption_factors', {}).get(disruption_type, 0.6)
+            # ✅ ONLY apply real-time factor to predictions within next 6 hours
+            hours_until_this_prediction = (current_datetime - now).total_seconds() / 3600
+            apply_realtime_to_this_hour = (
+                use_realtime and 
+                -1 <= hours_until_this_prediction <= 6  # Current hour to 6 hours ahead
             )
             
-            # Apply real-time speed factor
-            delay_info['additional_delay_min'] = delay_info['additional_delay_min'] / speed_factor
+            # Calculate delay with optional real-time adjustment
+            delay_info = predictor.estimate_delay(
+                severity=prediction['severity'],
+                base_travel_time_minutes=road_info.get('free_flow_time_minutes', 10),
+                road_length_km=road_info.get('length_km', 1.0),
+                impact_factor=road_info.get('disruption_factors', {}).get(disruption_type, 0.6),
+                realtime_speed_factor=realtime_speed_factor if apply_realtime_to_this_hour else None
+            )
             
             hourly_predictions.append({
                 'datetime': current_datetime.strftime('%Y-%m-%d %H:%M'),
                 'date': current_datetime.strftime('%Y-%m-%d'),
                 'hour': current_datetime.hour,
                 'day_of_week': current_datetime.strftime('%A'),
-                'severity': adjusted_severity,
-                'severity_label': 'Light' if adjusted_severity < 0.5 else ('Moderate' if adjusted_severity < 1.5 else 'Heavy'),
-                'confidence': round(prediction['confidence'], 3),
+                'severity': round(prediction['severity'], 2),
+                'severity_label': prediction['severity_label'],
+                'confidence': round(prediction['confidence'], 2),
                 'delay_info': delay_info,
-                'realtime_adjusted': realtime_data.get('success', False),
+                'realtime_adjusted': delay_info.get('realtime_adjusted', False),
                 'probabilities': {
-                    k: round(v, 3) for k, v in prediction['probabilities'].items()
+                    k: round(v, 2) for k, v in prediction['probabilities'].items()
                 }
             })
             
             current_datetime += timedelta(hours=1)
         
-        # Calculate summary (existing code)
+        # ============================================================
+        # Calculate Summary Statistics
+        # ============================================================
+        
         total_hours = len(hourly_predictions)
+
+        # ✅ SAFETY CHECK - Prevent division by zero
+        if total_hours == 0:
+            return jsonify({
+                'success': False,
+                'error': 'No predictions generated. Check start and end dates.'
+            }), 400
+
         light_hours = sum(1 for p in hourly_predictions if p['severity'] < 0.5)
         moderate_hours = sum(1 for p in hourly_predictions if 0.5 <= p['severity'] < 1.5)
         heavy_hours = sum(1 for p in hourly_predictions if p['severity'] >= 1.5)
-        avg_severity = sum(p['severity'] for p in hourly_predictions) / total_hours
-        avg_delay = sum(p['delay_info']['additional_delay_min'] for p in hourly_predictions) / total_hours
         
-        # Time segments
+        # ✅ SAFE DIVISION
+        avg_severity = sum(p['severity'] for p in hourly_predictions) / max(total_hours, 1)
+        avg_delay = sum(p['delay_info']['additional_delay_min'] for p in hourly_predictions) / max(total_hours, 1)
+
+        # Time segment breakdown
         time_segments = {
             'morning': {'light': 0, 'moderate': 0, 'heavy': 0},
             'afternoon': {'light': 0, 'moderate': 0, 'heavy': 0},
@@ -245,14 +354,26 @@ def simulate_disruption_realtime():
         
         simulation_id = f"sim_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
+        # ============================================================
+        # Return Response
+        # ============================================================
+        
         return jsonify({
             'success': True,
             'simulation_id': simulation_id,
             'realtime_integration': {
-                'enabled': realtime_data.get('success', False),
+                'enabled': use_realtime and realtime_data and realtime_data.get('success', False),
+                'applicable': use_realtime,
+                'reason': (
+                    'Same-day disruption - adjusted for current traffic' if use_realtime 
+                    else f'Future disruption ({(disruption_start_date - today).days} days away) - using historical patterns'
+                ),
+                'current_speed': round(realtime_data.get('current_speed', 0), 1) if realtime_data else None,
+                'free_flow_speed': round(realtime_data.get('free_flow_speed', 0), 1) if realtime_data else None,
+                'speed_factor': round(realtime_speed_factor, 2) if realtime_speed_factor else None,
                 'current_congestion': current_congestion,
-                'current_speed': realtime_data.get('current_speed', 0),
-                'timestamp': realtime_data.get('timestamp')
+                'timestamp': realtime_data.get('timestamp') if realtime_data else None,
+                'hours_adjusted': sum(1 for p in hourly_predictions if p['realtime_adjusted'])
             },
             'input': {
                 'area': area,
@@ -260,6 +381,7 @@ def simulate_disruption_realtime():
                 'disruption_type': disruption_type,
                 'start': start_datetime.strftime('%Y-%m-%d %H:%M'),
                 'end': end_datetime.strftime('%Y-%m-%d %H:%M'),
+                'description': data.get('description', ''),
                 'coordinates': coordinates,
                 'road_info': road_info
             },
@@ -272,9 +394,9 @@ def simulate_disruption_realtime():
                 'light_percentage': round(light_hours / total_hours * 100, 1),
                 'moderate_percentage': round(moderate_hours / total_hours * 100, 1),
                 'heavy_percentage': round(heavy_hours / total_hours * 100, 1),
-                'avg_severity': round(avg_severity, 2),
+                'avg_severity': round(avg_severity, 1),
                 'avg_severity_label': 'Light' if avg_severity < 0.5 else ('Moderate' if avg_severity < 1.5 else 'Heavy'),
-                'avg_delay_minutes': round(avg_delay, 1),
+                'avg_delay_minutes': round(avg_delay),
                 'total_delay_hours': round(sum(p['delay_info']['additional_delay_min'] for p in hourly_predictions) / 60, 1)
             },
             'hourly_predictions': hourly_predictions,
@@ -288,7 +410,6 @@ def simulate_disruption_realtime():
             'error': str(e),
             'traceback': traceback.format_exc()
         }), 500
-
 # ============================================================
 # ROUTE 1: Home Page
 # ============================================================

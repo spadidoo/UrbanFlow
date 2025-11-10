@@ -231,15 +231,14 @@ class TrafficPredictor:
         return results
     
     # backend/models/predictor.py
-# ADD THIS METHOD to your TrafficPredictor class
-
-    def estimate_delay(self, severity, base_travel_time_minutes, road_length_km, impact_factor=0.6):
+    # ADD THIS METHOD to your TrafficPredictor class
+    def estimate_delay(self, severity, base_travel_time_minutes, road_length_km, impact_factor=0.6, realtime_speed_factor=None):
         """
-        Enhanced delay estimation with road characteristics
+        Enhanced delay estimation with road characteristics and real-time traffic integration
         
         Parameters:
         -----------
-        severity : int
+        severity : int or float
             Traffic severity level (0=Light, 1=Moderate, 2=Heavy)
         base_travel_time_minutes : float
             Normal free-flow travel time in minutes
@@ -247,6 +246,9 @@ class TrafficPredictor:
             Length of the affected road segment
         impact_factor : float
             Disruption impact multiplier (0-1), from disruption_factors
+        realtime_speed_factor : float, optional
+            Real-time speed adjustment (current_speed / free_flow_speed)
+            If provided, adjusts predictions based on current traffic conditions
         
         Returns:
         --------
@@ -254,16 +256,31 @@ class TrafficPredictor:
         
         Example:
         --------
+        >>> # Without real-time
         >>> delay_info = predictor.estimate_delay(
-        ...     severity=2,  # Heavy
+        ...     severity=2,
         ...     base_travel_time_minutes=10,
         ...     road_length_km=5,
         ...     impact_factor=0.6
         ... )
-        >>> print(delay_info['additional_delay_min'])
-        15.0
+        
+        >>> # With real-time adjustment
+        >>> delay_info = predictor.estimate_delay(
+        ...     severity=2,
+        ...     base_travel_time_minutes=10,
+        ...     road_length_km=5,
+        ...     impact_factor=0.6,
+        ...     realtime_speed_factor=0.75  # Current traffic 75% of normal speed
+        ... )
         """
         
+        # ✅ VALIDATE INPUTS
+        if base_travel_time_minutes <= 0:
+            base_travel_time_minutes = 10  # Default fallback
+        
+        if road_length_km <= 0:
+            road_length_km = 1.0  # Default fallback
+
         # Delay multipliers by severity level
         delay_multipliers = {
             0: 1.1,   # Light: 10% increase
@@ -271,12 +288,33 @@ class TrafficPredictor:
             2: 2.5,   # Heavy: 150% increase
         }
         
+        # Handle float severity (from ML model) by rounding to nearest category
+        if isinstance(severity, float):
+            if severity < 0.5:
+                severity_key = 0
+            elif severity < 1.5:
+                severity_key = 1
+            else:
+                severity_key = 2
+        else:
+            severity_key = severity
+        
         # Get multiplier for this severity level
-        multiplier = delay_multipliers.get(severity, 1.5)
+        multiplier = delay_multipliers.get(severity_key, 1.5)
         
         # Apply impact factor (from road characteristics)
-        # impact_factor reduces the effect based on road resilience
         adjusted_multiplier = 1 + (multiplier - 1) * impact_factor
+        
+        # ✅ APPLY REAL-TIME ADJUSTMENT
+        if realtime_speed_factor is not None:
+            # If current traffic is already slow, increase the delay
+            # If current traffic is fast, decrease the delay slightly
+            realtime_adjustment = 2 - realtime_speed_factor  # Inverse relationship
+            # Blend prediction with real-time (70% prediction, 30% real-time)
+            adjusted_multiplier = (adjusted_multiplier * 0.7) + (realtime_adjustment * 0.3)
+            
+            # Ensure multiplier stays within reasonable bounds
+            adjusted_multiplier = max(1.0, min(adjusted_multiplier, 3.0))
         
         # Calculate expected travel time with disruption
         expected_travel_time = base_travel_time_minutes * adjusted_multiplier
@@ -284,12 +322,35 @@ class TrafficPredictor:
         # Calculate additional delay
         additional_delay = expected_travel_time - base_travel_time_minutes
         
-        # Calculate speeds (km/h)
-        # Normal speed = distance / time (convert minutes to hours)
-        normal_speed = (road_length_km / base_travel_time_minutes) * 60  # km/h
+        # ✅ CLEAN ROUNDING FOR DELAY
+        # Round to nearest whole minute for cleaner display
+        additional_delay_rounded = round(additional_delay)
         
-        # Reduced speed with disruption
-        reduced_speed = (road_length_km / expected_travel_time) * 60  # km/h
+        # Ensure minimum delays based on severity
+        if severity_key == 0 and additional_delay_rounded < 1:
+            additional_delay_rounded = 1  # Light: at least 1 min
+        elif severity_key == 1 and additional_delay_rounded < 3:
+            additional_delay_rounded = 3  # Moderate: at least 3 mins
+        elif severity_key == 2 and additional_delay_rounded < 5:
+            additional_delay_rounded = 5  # Heavy: at least 5 mins
+        
+        # Calculate speeds (km/h)
+        # ✅ SAFE SPEED CALCULATIONS
+        if base_travel_time_minutes > 0:
+            normal_speed = (road_length_km / base_travel_time_minutes) * 60
+        else:
+            normal_speed = 50  # Default speed
+        
+        if expected_travel_time > 0:
+            reduced_speed = (road_length_km / expected_travel_time) * 60
+        else:
+            reduced_speed = normal_speed * 0.5
+        
+        # ✅ APPLY REAL-TIME SPEED ADJUSTMENT
+        if realtime_speed_factor is not None and realtime_speed_factor > 0:
+            # Adjust reduced speed based on current conditions
+            reduced_speed = reduced_speed * realtime_speed_factor
+            reduced_speed = max(5, reduced_speed)  # Minimum 5 km/h
         
         # Speed reduction
         speed_reduction = normal_speed - reduced_speed
@@ -297,14 +358,13 @@ class TrafficPredictor:
         return {
             'base_travel_time_min': round(base_travel_time_minutes, 1),
             'expected_travel_time_min': round(expected_travel_time, 1),
-            'additional_delay_min': round(additional_delay, 1),
+            'additional_delay_min': additional_delay_rounded,  # ✅ Clean integer
             'delay_percentage': round((additional_delay / base_travel_time_minutes) * 100, 1),
             'normal_speed_kmh': round(normal_speed, 1),
             'reduced_speed_kmh': round(reduced_speed, 1),
             'speed_reduction_kmh': round(speed_reduction, 1),
+            'realtime_adjusted': realtime_speed_factor is not None,  # ✅ Flag for UI
         }
-
-
     
 
 
