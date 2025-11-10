@@ -172,6 +172,27 @@ export default function SimulationPage() {
       return;
     }
 
+    // ✅ ADD DATE VALIDATION
+    const startDateTime = new Date(`${formData.startDate}T${formData.startTime}`);
+    const endDateTime = new Date(`${formData.endDate}T${formData.endTime}`);
+
+    if (endDateTime <= startDateTime) {
+        setError('End date/time must be after start date/time');
+        return;
+      }
+
+      const durationHours = (endDateTime - startDateTime) / (1000 * 60 * 60);
+
+      if (durationHours > 720) {
+        setError('Disruption duration cannot exceed 30 days');
+        return;
+      }
+
+      if (durationHours < 1) {
+        setError('Disruption duration must be at least 1 hour');
+        return;
+      }
+
     setSimulating(true);
     setError(null);
 
@@ -198,6 +219,8 @@ export default function SimulationPage() {
         coordinates: selectedLocation.center,
       };
 
+      console.log('🚀 Sending simulation request:', simulationData);
+
       const response = await fetch('http://localhost:5000/api/simulate-disruption-realtime', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -205,6 +228,8 @@ export default function SimulationPage() {
       });
 
       const data = await response.json();
+
+      console.log('📦 Received response:', data);
 
       if (data.success) {
         setResults(data);
@@ -532,17 +557,81 @@ export default function SimulationPage() {
           )}
         </div>
 
-          {/* Real-Time Integration Badge */}
-        {results && results.realtime_integration?.enabled && (
-          <div className="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-4 flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-              <span className="font-semibold text-blue-800">Live Traffic Integrated</span>
-            </div>
-            <div className="text-sm text-blue-700">
-              Current speed: {results.realtime_integration.current_speed} km/h • 
-              Congestion: {results.realtime_integration.current_congestion === 0 ? 'Light' : 
-                          results.realtime_integration.current_congestion === 1 ? 'Moderate' : 'Heavy'}
+        {/* Real-Time Integration Badge */}
+        {/* Smart Real-Time Integration Status */}
+        {results && results.realtime_integration && (
+          <div className={`border-l-4 rounded-lg p-4 ${
+            results.realtime_integration.enabled 
+              ? 'bg-blue-50 border-blue-500' 
+              : 'bg-gray-50 border-gray-400'
+          }`}>
+            <div className="flex items-start gap-3">
+              <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+                results.realtime_integration.enabled ? 'bg-blue-500' : 'bg-gray-400'
+              }`}>
+                {results.realtime_integration.enabled ? (
+                  <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
+                ) : (
+                  <span className="text-white text-lg">📅</span>
+                )}
+              </div>
+              
+              <div className="flex-1">
+                <h4 className={`font-bold mb-1 ${
+                  results.realtime_integration.enabled ? 'text-blue-900' : 'text-gray-700'
+                }`}>
+                  {results.realtime_integration.enabled ? '🌐 Live Traffic Integration Active' : '📊 Historical Pattern Analysis'}
+                </h4>
+                
+                <p className={`text-sm mb-2 ${
+                  results.realtime_integration.enabled ? 'text-blue-700' : 'text-gray-600'
+                }`}>
+                  {results.realtime_integration.reason}
+                </p>
+                
+                {results.realtime_integration.enabled ? (
+                  <div className="grid grid-cols-2 gap-3 mt-3">
+                    <div className="bg-white rounded p-2">
+                      <p className="text-xs text-gray-600">Current Speed</p>
+                      <p className="font-bold text-blue-900">
+                        {results.realtime_integration.current_speed} km/h
+                      </p>
+                    </div>
+                    <div className="bg-white rounded p-2">
+                      <p className="text-xs text-gray-600">Normal Speed</p>
+                      <p className="font-bold text-blue-900">
+                        {results.realtime_integration.free_flow_speed} km/h
+                      </p>
+                    </div>
+                    <div className="bg-white rounded p-2">
+                      <p className="text-xs text-gray-600">Traffic Status</p>
+                      <p className={`font-bold ${
+                        results.realtime_integration.current_congestion === 0 ? 'text-green-600' :
+                        results.realtime_integration.current_congestion === 1 ? 'text-yellow-600' :
+                        'text-red-600'
+                      }`}>
+                        {results.realtime_integration.current_congestion === 0 ? 'Light' :
+                        results.realtime_integration.current_congestion === 1 ? 'Moderate' : 'Heavy'}
+                      </p>
+                    </div>
+                    <div className="bg-white rounded p-2">
+                      <p className="text-xs text-gray-600">Hours Adjusted</p>
+                      <p className="font-bold text-blue-900">
+                        {results.realtime_integration.hours_adjusted} / {results.summary.total_hours}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-white rounded p-3 mt-2">
+                    <p className="text-xs text-gray-700">
+                      <strong>ℹ️ Why not using real-time?</strong><br/>
+                      Real-time traffic data reflects current conditions, which won't accurately 
+                      represent traffic patterns on {new Date(results.input.start).toLocaleDateString()}. 
+                      Using historical data for this date/time provides more accurate predictions.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -871,6 +960,13 @@ export default function SimulationPage() {
                           }`}>
                             {pred.severity_label}
                           </span>
+                                {/* ✅ Show if this specific hour was adjusted with real-time */}
+                          {pred.realtime_adjusted && (
+                            <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full font-semibold flex items-center gap-1">
+                              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                              Live
+                            </span>
+                          )}
                         </div>
                         
                         <div className="flex items-center gap-4">
