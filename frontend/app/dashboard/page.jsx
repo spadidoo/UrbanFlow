@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react"; 
 import PlannerNavbar from "@/components/PlannerNavbar";
 import { useRouter } from "next/navigation";
 import {
@@ -15,27 +16,96 @@ import {
 export default function DashboardPage() {
   const router = useRouter();
 
-  // Weekly trend data
-  const weeklyTrend = [
-    { day: "Mon", level: 1.5 },
-    { day: "Tue", level: 2.0 },
-    { day: "Wed", level: 2.3 },
-    { day: "Thu", level: 1.8 },
-    { day: "Fri", level: 2.5 },
-    { day: "Sat", level: 1.2 },
-    { day: "Sun", level: 1.0 },
-  ];
+// ✅ ADD THESE STATE VARIABLES
+  const [savedSimulations, setSavedSimulations] = useState([]);
+  const [publishedSimulations, setPublishedSimulations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [backendStatus, setBackendStatus] = useState({
+    ml_model: 'checking',
+    database: 'checking',
+    response_time: '...'
+  });
 
-  // Heatmap data: roads x time slots
-  const heatmapData = {
-    times: ["6AM", "9AM", "12PM", "3PM", "6PM", "9PM"],
-    roads: [
-      { name: "Bagong Kalsada", values: [1.2, 2.8, 1.8, 2.0, 2.9, 1.5] },
-      { name: "Parian Road", values: [1.0, 2.5, 1.6, 1.9, 2.7, 1.3] },
-      { name: "Makiling Road", values: [1.1, 2.2, 1.4, 1.7, 2.4, 1.2] },
-      { name: "Real Street", values: [1.3, 2.6, 1.7, 2.1, 2.8, 1.4] },
-    ],
+//stats from database
+  const [stats, setStats] = useState({
+    totalSaved: 0,
+    totalPublished: 0,
+    activeDisruptions: 0,
+    simulationsRun: 0,
+    avgCongestion: 'Loading...',
+    avgCongestionValue: 0
+  });
+
+  // ✅ ADD THIS useEffect - Fetch data when page loads
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Fetch user's saved simulations
+      const savedResponse = await fetch('http://localhost:5000/api/my-simulations?user_id=2');
+      const savedData = await savedResponse.json();
+
+      if (savedData.success) {
+        setSavedSimulations(savedData.simulations);
+        
+        // Calculate stats
+        const totalSaved = savedData.simulations.length;
+        const completed = savedData.simulations.filter(s => s.simulation_status === 'completed');
+        const published = savedData.simulations.filter(s => s.simulation_status === 'published');
+        
+        // Calculate average congestion from recent simulations
+        const avgSeverity = completed.length > 0
+          ? completed.reduce((sum, s) => sum + (s.average_delay_ratio || 0), 0) / completed.length
+          : 0;
+        
+        const avgLabel = avgSeverity < 1.5 ? 'Light' : avgSeverity < 2.5 ? 'Moderate' : 'Heavy';
+
+        setStats({
+          totalSaved: totalSaved,
+          totalPublished: published.length,
+          activeDisruptions: published.length,
+          avgCongestion: avgLabel
+        });
+      }
+
+      // Fetch published simulations
+      const publishedResponse = await fetch('http://localhost:5000/api/published-simulations');
+      const publishedData = await publishedResponse.json();
+
+      if (publishedData.success) {
+        setPublishedSimulations(publishedData.simulations);
+      }
+
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err);
+      setError('Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+    }
   };
+
+   // ✅ STATE: Weekly trend data (calculated from simulations)
+  const [weeklyTrend, setWeeklyTrend] = useState([
+    { day: "Mon", level: 0 },
+    { day: "Tue", level: 0 },
+    { day: "Wed", level: 0 },
+    { day: "Thu", level: 0 },
+    { day: "Fri", level: 0 },
+    { day: "Sat", level: 0 },
+    { day: "Sun", level: 0 },
+  ]);
+
+ // ✅ STATE: Heatmap data (calculated from recent simulations)
+  const [heatmapData, setHeatmapData] = useState({
+    times: ["6AM", "9AM", "12PM", "3PM", "6PM", "9PM"],
+    roads: []
+  });
 
   // Get color based on congestion level
   const getCongestionColor = (value) => {
@@ -89,7 +159,9 @@ export default function DashboardPage() {
                   </button>
                   <div className="mt-4 pt-4 border-t border-orange-400">
                     <p className="text-xs text-orange-100">Saved Scenarios</p>
-                    <p className="text-2xl font-bold">0</p>
+                    <p className="text-2xl font-bold">
+                      {loading ? '...' : stats.totalSaved}
+                    </p>
                   </div>
                 </div>
 
@@ -101,8 +173,11 @@ export default function DashboardPage() {
                   <p className="text-sm text-orange-100 mb-4">
                     Open and edit previously saved simulations or resume drafts.
                   </p>
-                  <button className="w-full bg-white text-orange-500 py-2 rounded-lg font-semibold hover:bg-orange-50 transition">
-                    Open
+                  <button 
+                    onClick={() => router.push('/planner/saved-scenarios')}
+                    className="w-full bg-white text-orange-500 py-2 rounded-lg font-semibold hover:bg-orange-50 transition"
+                  >
+                    Open ({stats.totalSaved})
                   </button>
                   <div className="mt-4 pt-4 border-t border-orange-400">
                     <p className="text-xs text-orange-100">Pending Review</p>
@@ -118,12 +193,17 @@ export default function DashboardPage() {
                   <p className="text-sm text-orange-100 mb-4">
                     View simulations already published to the public map.
                   </p>
-                  <button className="w-full bg-white text-orange-500 py-2 rounded-lg font-semibold hover:bg-orange-50 transition">
-                    View
+                  <button 
+                    onClick={() => router.push('/planner/published-results')}
+                    className="w-full bg-white text-orange-500 py-2 rounded-lg font-semibold hover:bg-orange-50 transition"
+                  >
+                    View ({stats.totalPublished})
                   </button>
                   <div className="mt-4 pt-4 border-t border-orange-400">
                     <p className="text-xs text-orange-100">Published</p>
-                    <p className="text-2xl font-bold">0</p>
+                    <p className="text-2xl font-bold">
+                      {loading ? '...' : stats.totalPublished}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -132,19 +212,31 @@ export default function DashboardPage() {
             {/* Stats */}
             <div className="grid grid-cols-4 gap-4 mb-6">
               <div className="bg-white rounded-lg shadow p-4 text-center">
-                <p className="text-2xl font-bold text-gray-800">2</p>
+                <p className="text-2xl font-bold text-gray-800">
+                  {loading ? '...' : stats.activeDisruptions}
+                </p>
                 <p className="text-xs text-gray-600">Active Disruptions</p>
               </div>
               <div className="bg-white rounded-lg shadow p-4 text-center">
-                <p className="text-2xl font-bold text-gray-800">15</p>
+                <p className="text-2xl font-bold text-gray-800">
+                  {loading ? '...' : stats.totalSaved}
+                </p>
                 <p className="text-xs text-gray-600">Simulations Run</p>
               </div>
               <div className="bg-white rounded-lg shadow p-4 text-center">
-                <p className="text-2xl font-bold text-yellow-600">Moderate</p>
+                <p className={`text-2xl font-bold ${
+                  stats.avgCongestion === 'Heavy' ? 'text-red-600' :
+                  stats.avgCongestion === 'Moderate' ? 'text-yellow-600' :
+                  'text-green-600'
+                }`}>
+                  {loading ? '...' : stats.avgCongestion}
+                </p>
                 <p className="text-xs text-gray-600">Avg Congestion</p>
               </div>
               <div className="bg-white rounded-lg shadow p-4 text-center">
-                <p className="text-2xl font-bold text-gray-800">8</p>
+                <p className="text-2xl font-bold text-gray-800">
+                  {loading ? '...' : stats.totalPublished}
+                </p>
                 <p className="text-xs text-gray-600">Reports Generated</p>
               </div>
             </div>
@@ -155,69 +247,75 @@ export default function DashboardPage() {
                 <h2 className="text-xl font-bold text-gray-800">
                   Recent Activity
                 </h2>
-                <button className="text-orange-500 text-sm font-semibold hover:underline">
+                <button 
+                  onClick={() => router.push('/planner/saved-scenarios')}
+                  className="text-orange-500 text-sm font-semibold hover:underline"
+                >
                   View all
                 </button>
               </div>
 
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
-                  <div className="flex-1">
-                    <p className="font-semibold text-gray-800">
-                      Bagong Kalsada — Roadworks
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      Published — 2025-10-15
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1 bg-yellow-100 text-yellow-700 text-xs font-semibold rounded">
-                      Moderate
-                    </span>
-                    <button className="px-4 py-1 bg-orange-500 text-white text-sm rounded hover:bg-orange-600 transition">
-                      Review
-                    </button>
-                  </div>
+              {loading ? (
+                <div className="flex items-center justify-center p-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
                 </div>
+              ) : error ? (
+                <div className="text-center p-4 text-red-600">
+                  {error}
+                </div>
+              ) : savedSimulations.length === 0 ? (
+                <div className="text-center p-8 text-gray-500">
+                  <p className="text-lg mb-2">📭</p>
+                  <p>No simulations yet. Create your first one!</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {savedSimulations.slice(0, 3).map((sim) => (
+                    <div 
+                      key={sim.simulation_id}
+                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition cursor-pointer"
+                      onClick={() => router.push(`/planner/simulation/${sim.simulation_id}`)}
+                    >
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-800">
+                          {sim.simulation_name || 'Unnamed Simulation'}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          {sim.simulation_status === 'published' ? 'Published' : 'Saved'} — {new Date(sim.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-3 py-1 text-xs font-semibold rounded ${
+                          sim.average_delay_ratio >= 2 ? 'bg-red-100 text-red-700' :
+                          sim.average_delay_ratio >= 1 ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-green-100 text-green-700'
+                        }`}>
+                          {sim.average_delay_ratio >= 2 ? 'Heavy' :
+                           sim.average_delay_ratio >= 1 ? 'Moderate' : 'Light'}
+                        </span>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/planner/simulation/${sim.simulation_id}`);
+                          }}
+                          className="px-4 py-1 bg-orange-500 text-white text-sm rounded hover:bg-orange-600 transition"
+                        >
+                          Review
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
-                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
-                  <div className="flex-1">
-                    <p className="font-semibold text-gray-800">
-                      Parian Festival — Event
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      Saved to drafts — 2025-10-08
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded">
-                      Light
-                    </span>
-                    <button className="px-4 py-1 bg-orange-500 text-white text-sm rounded hover:bg-orange-600 transition">
-                      Review
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
-                  <div className="flex-1">
-                    <p className="font-semibold text-gray-800">
-                      Real Street — Accident
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      For review — 2025-10-05
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1 bg-red-100 text-red-700 text-xs font-semibold rounded">
-                      Heavy
-                    </span>
-                    <button className="px-4 py-1 bg-orange-500 text-white text-sm rounded hover:bg-orange-600 transition">
-                      Review
-                    </button>
-                  </div>
-                </div>
-              </div>
+              {!loading && !error && savedSimulations.length > 3 && (
+                <button 
+                  onClick={() => router.push('/planner/saved-scenarios')}
+                  className="w-full mt-4 text-orange-500 text-sm font-semibold hover:underline"
+                >
+                  View all {savedSimulations.length} simulations →
+                </button>
+              )}
             </div>
 
             {/* Graphs */}

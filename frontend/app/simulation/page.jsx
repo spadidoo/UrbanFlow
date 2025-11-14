@@ -7,6 +7,8 @@ import dynamic from "next/dynamic";
 import PlannerNavbar from "@/components/PlannerNavbar";
 import api from "@/services/api";
 import { getRoadInfoFromOSM, getRoadSegmentsInArea } from "@/services/osmService";
+import SimulationActions from '@/components/SimulationActions';
+
 
 /*
 const RealisticResultsMap = dynamic(() => import("@/components/RealisticResultsMap"), {
@@ -56,6 +58,12 @@ export default function SimulationPage() {
   const [results, setResults] = useState(null);
   const [simulating, setSimulating] = useState(false);
   const [error, setError] = useState(null);
+
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [savedSimulationId, setSavedSimulationId] = useState(null);
+  const [publishing, setPublishing] = useState(false);
+  const [publishSuccess, setPublishSuccess] = useState(false);
 
   const handleChange = (e) => {
     setFormData({
@@ -247,6 +255,113 @@ export default function SimulationPage() {
       setError(err.message || 'Failed to run simulation');
     } finally {
       setSimulating(false);
+    }
+  };
+
+  const handleSaveSimulation = async () => {
+    setSaving(true);
+    setError(null);
+    setSaveSuccess(false);
+
+    try {
+      const savePayload = {
+        user_id: 2, // Default planner user - you'll replace this with actual auth later
+        simulation_data: {
+          scenario_name: formData.scenarioName || `Simulation ${new Date().toLocaleString()}`,
+          description: formData.description || 'No description provided',
+          disruption_type: formData.disruptionType,
+          area: roadInfo?.area || 'Unknown Area',
+          road_corridor: roadInfo?.road_name || 'Unknown Road',
+          start_datetime: `${formData.startDate}T${formData.startTime}:00`,
+          end_datetime: `${formData.endDate}T${formData.endTime}:00`,
+          disruption_location: `${roadInfo?.area || 'Unknown'} - ${roadInfo?.road_name || 'Unknown'}`,
+          coordinates: selectedLocation?.center || null,
+          severity_level: results.summary.avg_severity < 0.5 ? 'light' : 
+                        results.summary.avg_severity < 1.5 ? 'moderate' : 'severe'
+        },
+        results_data: {
+          summary: results.summary,
+          hourly_predictions: results.hourly_predictions,
+          aggregated_view: results.aggregated_view || null,
+          time_segments: results.time_segments
+        }
+      };
+
+      const response = await fetch('http://localhost:5000/api/save-simulation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(savePayload),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setSaveSuccess(true);
+        setSavedSimulationId(data.simulation_id);
+        alert(`✅ Simulation saved successfully!\nSimulation ID: ${data.simulation_id}`);
+      } else {
+        throw new Error(data.error || 'Failed to save simulation');
+      }
+    } catch (err) {
+      console.error('Error saving simulation:', err);
+      setError(`Failed to save simulation: ${err.message}`);
+      alert(`❌ Error: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePublishSimulation = async () => {
+    // Check if simulation is saved first
+    if (!savedSimulationId) {
+      alert('⚠️ Please save the simulation first before publishing!');
+      return;
+    }
+
+    setPublishing(true);
+    setError(null);
+    setPublishSuccess(false);
+
+    try {
+      const publishPayload = {
+        simulation_id: savedSimulationId,
+        user_id: 2, // Default planner user - will use auth later
+        title: formData.scenarioName || `Traffic Disruption - ${new Date().toLocaleDateString()}`,
+        public_description: formData.description || 
+          `${formData.disruptionType} disruption affecting ${roadInfo?.area || 'the area'}. ` +
+          `Expected ${results.summary.avg_severity_label} congestion with average delays of ` +
+          `${results.summary.avg_delay_minutes} minutes.`
+      };
+
+      const response = await fetch('http://localhost:5000/api/publish-simulation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(publishPayload),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setPublishSuccess(true);
+        alert(
+          `✅ Simulation published successfully!\n\n` +
+          `Public URL: ${data.public_url}\n` +
+          `Slug: ${data.slug}\n\n` +
+          `This simulation is now visible on the public map.`
+        );
+      } else {
+        throw new Error(data.error || 'Failed to publish simulation');
+      }
+    } catch (err) {
+      console.error('Error publishing simulation:', err);
+      setError(`Failed to publish simulation: ${err.message}`);
+      alert(`❌ Error: ${err.message}`);
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -561,6 +676,7 @@ export default function SimulationPage() {
             </div>
           )}
         </div>
+      
 
         {/* Real-Time Integration Badge */}
         {/* Smart Real-Time Integration Status */}
@@ -1011,40 +1127,88 @@ export default function SimulationPage() {
                 </div>
               </details>
             </div>
+            
 
-            {/* Action Buttons */}
-            <div className="flex gap-4">
+            {/* Save and Publish Buttons */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <span>💾</span>
+                <span>Save & Publish</span>
+              </h3>
+
+            <div className="flex gap-4 mt-6">
               <button
-                onClick={() => {
-                  setResults(null);
-                  setSelectedLocation(null);
-                  setRoadInfo(null);
-                  setFormData({
-                    scenarioName: "",
-                    disruptionType: "roadwork",
-                    startDate: "",
-                    startTime: "06:00",
-                    endDate: "",
-                    endTime: "18:00",
-                    description: "",
-                  });
-                }}
-                className="flex-1 bg-gray-500 text-white py-3 rounded-lg font-semibold hover:bg-gray-600 transition"
+                onClick={handleSaveSimulation}
+                disabled={saving || !results}
+                className={`flex-1 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
+                  saveSuccess 
+                    ? 'bg-green-600 text-white hover:bg-green-700' 
+                    : saving
+                    ? 'bg-gray-400 text-white cursor-not-allowed'
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
               >
-                🔄 New Simulation
+                {saving ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Saving...
+                  </>
+                ) : saveSuccess ? (
+                  <>
+                    ✅ Saved (ID: {savedSimulationId})
+                  </>
+                ) : (
+                  <>
+                    💾 Save Simulation
+                  </>
+                )}
               </button>
+            
+
               <button
-                onClick={() => alert("Save functionality coming soon!")}
-                className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition"
+                onClick={handlePublishSimulation}
+                disabled={publishing || !savedSimulationId || !results}
+                className={`flex-1 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
+                  publishSuccess
+                    ? 'bg-green-700 text-white'
+                    : publishing
+                    ? 'bg-gray-400 text-white cursor-not-allowed'
+                    : !savedSimulationId
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-green-600 text-white hover:bg-green-700'
+                }`}
               >
-                💾 Save Scenario
+                {publishing ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Publishing...
+                  </>
+                ) : publishSuccess ? (
+                  <>
+                    ✅ Published to Public Map
+                  </>
+                ) : !savedSimulationId ? (
+                  <>
+                    🔒 Save First to Publish
+                  </>
+                ) : (
+                  <>
+                    📢 Publish to Public Map
+                  </>
+                )}
               </button>
-              <button
-                onClick={() => alert("Publish functionality coming soon!")}
-                className="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition"
-              >
-                ✅ Publish to Map
-              </button>
+            </div>
+
+              {/* Help Text */}
+                <div className="mt-4 text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
+                  <p className="flex items-start gap-2">
+                    <span className="text-blue-600 font-bold">ℹ️</span>
+                    <span>
+                      <strong>First save</strong> your simulation to the database, 
+                      then <strong>publish</strong> it to make it visible on the public map.
+                    </span>
+                  </p>
+              </div>
             </div>
           </div>
         )}

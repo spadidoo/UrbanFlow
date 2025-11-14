@@ -8,6 +8,9 @@ from models.predictor import TrafficPredictor
 from datetime import datetime, timedelta
 import pandas as pd
 from services.traffic_api import TrafficAPIService
+from services.database import DatabaseService
+
+
 
 load_dotenv()
 
@@ -15,10 +18,11 @@ app = Flask(__name__)
 CORS(app, resources={
     r"/api/*": {
         "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type"]
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
     }
 })
+
 
 print("Loading trained model...")
 predictor = TrafficPredictor()
@@ -30,6 +34,335 @@ traffic_service = TrafficAPIService()
 print("Loading traffic API service...")
 traffic_service = TrafficAPIService()
 print("✓ Traffic API service ready!")
+
+print("Loading database service...")
+db = DatabaseService()
+print("✓ Database service ready!")
+
+
+# ============================================================
+# NEW ROUTE: Save Simulation to Database
+# ============================================================
+
+@app.route('/api/save-simulation', methods=['POST'])
+def save_simulation():
+    """
+    Save a completed simulation to the database
+    
+    Request body should contain:
+    {
+        "user_id": 1,  # ID of the user (temporary - will use auth later)
+        "simulation_data": {
+            "scenario_name": "Roadwork on Bagong Kalsada",
+            "description": "Road repair work",
+            "disruption_type": "roadwork",
+            "area": "Bucal",
+            "road_corridor": "Calamba_Pagsanjan",
+            "start_datetime": "2025-01-20T08:00:00",
+            "end_datetime": "2025-01-20T18:00:00",
+            "coordinates": {"lat": 14.1894, "lng": 121.1691}
+        },
+        "results_data": {
+            "summary": {...},
+            "hourly_predictions": [...],
+            "time_segments": {...}
+        }
+    }
+    """
+    try:
+        data = request.get_json()
+        
+        # Extract data
+        user_id = data.get('user_id', 2)  # Default to planner1 (id=2)
+        simulation_data = data.get('simulation_data', {})
+        results_data = data.get('results_data', {})
+        
+        # Validate required fields
+        required_fields = ['scenario_name', 'disruption_type', 'area', 'road_corridor']
+        missing_fields = [f for f in required_fields if f not in simulation_data]
+        
+        if missing_fields:
+            return jsonify({
+                'success': False,
+                'error': f'Missing required fields: {", ".join(missing_fields)}'
+            }), 400
+        
+        # Save to database
+        simulation_id = db.save_simulation_run(
+            user_id=user_id,
+            simulation_data=simulation_data,
+            results_data=results_data
+        )
+        
+        if simulation_id:
+            return jsonify({
+                'success': True,
+                'simulation_id': simulation_id,
+                'message': 'Simulation saved successfully'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to save simulation'
+            }), 500
+            
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+# ============================================================
+# NEW ROUTE: Get User's Simulations
+# ============================================================
+
+@app.route('/api/my-simulations', methods=['GET'])
+def get_my_simulations():
+    """
+    Get all simulations for the current user
+    
+    Query params:
+        - user_id: User ID (temporary - will use auth token later)
+    """
+    try:
+        user_id = request.args.get('user_id', 2, type=int)
+        
+        simulations = db.get_user_simulations(user_id)
+        
+        return jsonify({
+            'success': True,
+            'simulations': simulations,
+            'count': len(simulations)
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ============================================================
+# NEW ROUTE: Get Simulation Details
+# ============================================================
+
+@app.route('/api/simulation/<int:simulation_id>', methods=['GET'])
+def get_simulation(simulation_id):
+    """Get detailed information about a specific simulation"""
+    try:
+        simulation = db.get_simulation_by_id(simulation_id)
+        
+        if simulation:
+            return jsonify({
+                'success': True,
+                'simulation': simulation
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Simulation not found'
+            }), 404
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ============================================================
+# NEW ROUTE: Publish Simulation
+# ============================================================
+
+@app.route('/api/publish-simulation', methods=['POST'])
+def publish_simulation():
+    """
+    Publish a simulation to the public map
+    
+    Request body:
+    {
+        "simulation_id": 1,
+        "user_id": 2,
+        "title": "Roadwork in Bucal",
+        "public_description": "Road repair work causing moderate delays"
+    }
+    """
+    try:
+        data = request.get_json()
+        
+        simulation_id = data.get('simulation_id')
+        user_id = data.get('user_id', 2)
+        title = data.get('title')
+        public_description = data.get('public_description')
+        
+        if not simulation_id:
+            return jsonify({
+                'success': False,
+                'error': 'simulation_id is required'
+            }), 400
+        
+        slug = db.publish_simulation(
+            simulation_id=simulation_id,
+            published_by_user_id=user_id,
+            title=title,
+            public_description=public_description
+        )
+        
+        if slug:
+            return jsonify({
+                'success': True,
+                'slug': slug,
+                'message': 'Simulation published successfully',
+                'public_url': f'/disruptions/{slug}'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to publish simulation'
+            }), 500
+            
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+# ============================================================
+# NEW ROUTE: Unpublish Simulation
+# ============================================================
+
+@app.route('/api/unpublish-simulation', methods=['POST'])
+def unpublish_simulation():
+    """
+    Unpublish a simulation from the public map
+    
+    Request body:
+    {
+        "simulation_id": 1,
+        "user_id": 2
+    }
+    """
+    try:
+        data = request.get_json()
+        
+        simulation_id = data.get('simulation_id')
+        user_id = data.get('user_id', 2)
+        
+        if not simulation_id:
+            return jsonify({
+                'success': False,
+                'error': 'simulation_id is required'
+            }), 400
+        
+        success = db.unpublish_simulation(simulation_id, user_id)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Simulation unpublished successfully'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to unpublish simulation'
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ============================================================
+# NEW ROUTE: Get Published Simulations (For Public Map)
+# ============================================================
+
+@app.route('/api/published-disruptions', methods=['GET'])
+def get_published_disruptions():
+    """
+    Get all published simulations for the public map
+    This replaces the mock data in HomeMapWithSidebar.jsx
+    """
+    try:
+        simulations = db.get_published_simulations()
+        
+        # Transform to match frontend format
+        disruptions = []
+        for sim in simulations:
+            disruptions.append({
+                'id': sim['published_id'],
+                'simulation_id': sim['simulation_id'],
+                'title': sim['title'],
+                'description': sim['public_description'],
+                'location': sim['disruption_location'],
+                'type': sim['disruption_type'],
+                'status': 'Active',
+                'start_date': sim['start_time'].isoformat() if sim['start_time'] else None,
+                'end_date': sim['end_time'].isoformat() if sim['end_time'] else None,
+                'severity_level': sim['severity_level'],
+                'congestion_level': sim['severity_level'].capitalize(),
+                'avg_severity': float(sim['average_delay_ratio']) if sim['average_delay_ratio'] else 1.0,
+                'expected_delay': round(float(sim['average_delay_ratio']) * 10) if sim['average_delay_ratio'] else 10,
+                'published_at': sim['published_at'].isoformat() if sim['published_at'] else None,
+                'slug': sim['slug'],
+                'view_count': sim['view_count'],
+                'organization': sim['organization']
+            })
+        
+        return jsonify({
+            'success': True,
+            'disruptions': disruptions,
+            'count': len(disruptions)
+        })
+        
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+# ============================================================
+# NEW ROUTE: Delete Simulation
+# ============================================================
+
+@app.route('/api/delete-simulation/<int:simulation_id>', methods=['DELETE'])
+def delete_simulation(simulation_id):
+    """
+    Delete (soft delete) a simulation
+    
+    Query params:
+        - user_id: User ID (temporary - will use auth later)
+    """
+    try:
+        user_id = request.args.get('user_id', 2, type=int)
+        
+        success = db.delete_simulation(simulation_id, user_id)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Simulation deleted successfully'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to delete simulation or not authorized'
+            }), 403
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ============================================================
+# UPDATED ROUTE: Simulate Disruption (Save After Simulation)
+# ============================================================
+
 
 # ============================================================
 # NEW ROUTE: Get Real-Time Traffic for Location
