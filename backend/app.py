@@ -1,6 +1,6 @@
 # backend/app.py - COMPLETE VERSION
 # Replace your entire app.py with this file
-
+import os
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
@@ -9,7 +9,8 @@ from datetime import datetime, timedelta
 import pandas as pd
 from services.traffic_api import TrafficAPIService
 from services.database import DatabaseService
-
+from werkzeug.utils import secure_filename
+from flask import send_file
 
 
 load_dotenv()
@@ -22,7 +23,38 @@ CORS(app, resources={
         "allow_headers": ["Content-Type", "Authorization"]
     }
 })
+# ============================================================
+# File upload configuration
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), '..', 'data', 'processed')
+ALLOWED_EXTENSIONS = {'csv'}
 
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
+
+# Ensure folder exists
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def allowed_file(filename):
+    """Check if file has allowed extension"""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def get_csv_info(filepath):
+    """Get CSV file information (rows, columns)"""
+    try:
+        df = pd.read_csv(filepath)
+        return {
+            'rows': len(df),
+            'cols': len(df.columns)
+        }
+    except Exception as e:
+        print(f"Error reading CSV {filepath}: {e}")
+        return {
+            'rows': 0,
+            'cols': 0
+        }
+
+# ============================================================
 
 print("Loading trained model...")
 predictor = TrafficPredictor()
@@ -1291,6 +1323,323 @@ def get_recommendations():
         'success': True,
         'recommendations': recommendations
     })
+
+# ============================================================
+# (Data/Uploaded) ROUTE 1: List All Files
+# ============================================================
+
+@app.route('/api/files/list', methods=['GET'])
+def list_files():
+    """
+    Get list of all CSV files in data/final folder
+    Returns file metadata including name, size, rows, cols, last modified
+    """
+    try:
+        files = []
+        
+        if not os.path.exists(UPLOAD_FOLDER):
+            return jsonify({
+                'success': True,
+                'files': []
+            })
+        
+        for filename in os.listdir(UPLOAD_FOLDER):
+            if filename.endswith('.csv'):
+                filepath = os.path.join(UPLOAD_FOLDER, filename)
+                
+                # Get file stats
+                file_stats = os.stat(filepath)
+                file_size = file_stats.st_size
+                modified_time = datetime.fromtimestamp(file_stats.st_mtime)
+                
+                # Get CSV info (rows/cols)
+                csv_info = get_csv_info(filepath)
+                
+                files.append({
+                    'id': filename,  # Using filename as ID
+                    'name': filename,
+                    'size_bytes': file_size,
+                    'size_mb': round(file_size / (1024 * 1024), 2),
+                    'rows': csv_info['rows'],
+                    'cols': csv_info['cols'],
+                    'updated': modified_time.strftime('%Y-%m-%d'),
+                    'updated_full': modified_time.strftime('%Y-%m-%d %H:%M:%S')
+                })
+        
+        # Sort by most recent first
+        files.sort(key=lambda x: x['updated_full'], reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'files': files,
+            'count': len(files)
+        })
+        
+    except Exception as e:
+        print(f"Error listing files: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ============================================================
+# (Data/Uploaded) ROUTE 2: Upload File
+# ============================================================
+
+@app.route('/api/files/upload', methods=['POST'])
+def upload_file():
+    """
+    Upload a CSV file to data/final folder
+    """
+    try:
+        # Check if file is in request
+        if 'file' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': 'No file provided'
+            }), 400
+        
+        file = request.files['file']
+        
+        # Check if file was selected
+        if file.filename == '':
+            return jsonify({
+                'success': False,
+                'error': 'No file selected'
+            }), 400
+        
+        # Validate file type
+        if not allowed_file(file.filename):
+            return jsonify({
+                'success': False,
+                'error': 'Only CSV files are allowed'
+            }), 400
+        
+        # Secure the filename
+        filename = secure_filename(file.filename)
+        
+        # Check if file already exists
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        if os.path.exists(filepath):
+            return jsonify({
+                'success': False,
+                'error': f'File "{filename}" already exists. Please rename or delete the existing file first.'
+            }), 409
+        
+        # Save file
+        file.save(filepath)
+        
+        # Get file info
+        csv_info = get_csv_info(filepath)
+        file_stats = os.stat(filepath)
+        
+        return jsonify({
+            'success': True,
+            'message': f'File "{filename}" uploaded successfully',
+            'file': {
+                'name': filename,
+                'rows': csv_info['rows'],
+                'cols': csv_info['cols'],
+                'size_mb': round(file_stats.st_size / (1024 * 1024), 2),
+                'updated': datetime.fromtimestamp(file_stats.st_mtime).strftime('%Y-%m-%d')
+            }
+        })
+        
+    except Exception as e:
+        print(f"Error uploading file: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ============================================================
+# (Data/Uploaded) ROUTE 3: Download Single File
+# ============================================================
+
+@app.route('/api/files/download/<filename>', methods=['GET'])
+def download_file(filename):
+    """
+    Download a specific file
+    """
+    try:
+        # Secure the filename
+        filename = secure_filename(filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        # Check if file exists
+        if not os.path.exists(filepath):
+            return jsonify({
+                'success': False,
+                'error': 'File not found'
+            }), 404
+        
+        # Send file
+        return send_file(
+            filepath,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='text/csv'
+        )
+        
+    except Exception as e:
+        print(f"Error downloading file: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ============================================================
+# (Data/Uploaded) ROUTE 4: Download Multiple Files (as ZIP)
+# ============================================================
+
+@app.route('/api/files/download-multiple', methods=['POST'])
+def download_multiple_files():
+    """
+    Download multiple files as a ZIP archive
+    """
+    try:
+        import zipfile
+        import io
+        
+        data = request.get_json()
+        filenames = data.get('filenames', [])
+        
+        if not filenames:
+            return jsonify({
+                'success': False,
+                'error': 'No files selected'
+            }), 400
+        
+        # Create in-memory ZIP file
+        memory_file = io.BytesIO()
+        
+        with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for filename in filenames:
+                filename = secure_filename(filename)
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                
+                if os.path.exists(filepath):
+                    zf.write(filepath, arcname=filename)
+        
+        memory_file.seek(0)
+        
+        # Generate ZIP filename with timestamp
+        zip_filename = f'urbanflow_datasets_{datetime.now().strftime("%Y%m%d_%H%M%S")}.zip'
+        
+        return send_file(
+            memory_file,
+            as_attachment=True,
+            download_name=zip_filename,
+            mimetype='application/zip'
+        )
+        
+    except Exception as e:
+        print(f"Error creating ZIP: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ============================================================
+# (Data/Uploaded) ROUTE 5: Delete File(s)
+# ============================================================
+
+@app.route('/api/files/delete', methods=['POST'])
+def delete_files():
+    """
+    Delete one or more files
+    """
+    try:
+        data = request.get_json()
+        filenames = data.get('filenames', [])
+        
+        if not filenames:
+            return jsonify({
+                'success': False,
+                'error': 'No files selected for deletion'
+            }), 400
+        
+        deleted = []
+        failed = []
+        
+        for filename in filenames:
+            try:
+                filename = secure_filename(filename)
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+                    deleted.append(filename)
+                else:
+                    failed.append({
+                        'filename': filename,
+                        'reason': 'File not found'
+                    })
+            except Exception as e:
+                failed.append({
+                    'filename': filename,
+                    'reason': str(e)
+                })
+        
+        return jsonify({
+            'success': len(failed) == 0,
+            'deleted': deleted,
+            'failed': failed,
+            'message': f'Successfully deleted {len(deleted)} file(s)'
+        })
+        
+    except Exception as e:
+        print(f"Error deleting files: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ============================================================
+# (Data/Uploaded) ROUTE 6: Get File Preview (first 10 rows)
+# ============================================================
+
+@app.route('/api/files/preview/<filename>', methods=['GET'])
+def preview_file(filename):
+    """
+    Get preview of CSV file (first 10 rows)
+    """
+    try:
+        filename = secure_filename(filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        if not os.path.exists(filepath):
+            return jsonify({
+                'success': False,
+                'error': 'File not found'
+            }), 404
+        
+        # Read CSV
+        df = pd.read_csv(filepath)
+        
+        # Get first 10 rows
+        preview_data = df.head(10).to_dict('records')
+        columns = df.columns.tolist()
+        
+        return jsonify({
+            'success': True,
+            'filename': filename,
+            'columns': columns,
+            'preview': preview_data,
+            'total_rows': len(df)
+        })
+        
+    except Exception as e:
+        print(f"Error previewing file: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 # ============================================================
 # RUN APP
