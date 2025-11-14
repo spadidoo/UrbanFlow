@@ -32,44 +32,10 @@ export default function HomeMapWithSidebar() {
       // For now, use mock data but show structure
       
       // Mock data - Replace this with: const data = await api.getPublishedDisruptions()
-      const mockData = [
-        {
-          id: 1,
-          title: 'Bagong Kalsada Roadwork',
-          location: 'Bagong Kalsada',
-          area: 'Bucal',
-          latitude: 14.1894,
-          longitude: 121.1691,
-          road_corridor: 'Calamba_Pagsanjan',
-          type: 'roadwork',
-          status: 'Active',
-          expected_delay: 15, // minutes
-          start_date: '2025-01-13',
-          end_date: '2025-01-15',
-          congestion_level: 'Heavy',
-          avg_severity: 2.1,
-          description: 'Road repair work'
-        },
-        {
-          id: 2,
-          title: 'Parian Festival Event',
-          location: 'Parian Road',
-          area: 'Parian',
-          latitude: 14.2137,
-          longitude: 121.1510,
-          road_corridor: 'Maharlika_Parian',
-          type: 'event',
-          status: 'Active',
-          expected_delay: 8,
-          start_date: '2025-01-18',
-          end_date: '2025-01-18',
-          congestion_level: 'Moderate',
-          avg_severity: 1.3,
-          description: 'Annual town festival'
-        }
-      ]
-      
-      setDisruptions(mockData)
+      // Replace mock data with:
+      const disruptions = await api.getPublishedDisruptions()
+
+      setDisruptions(disruptions)
       setError(null)
     } catch (err) {
       console.error('Failed to fetch disruptions:', err)
