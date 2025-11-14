@@ -18,16 +18,16 @@ class DatabaseService:
     """
     
     def __init__(self):
-        """Initialize database connection"""
+        """Initialize database connection - SUPABASE POOLER"""
         self.connection_params = {
-            'dbname': os.getenv('DB_NAME', 'urbanflow'),
-            'user': os.getenv('DB_USER', 'postgres'),
-            'password': os.getenv('DB_PASSWORD', 'urbanflow123'),
-            'host': os.getenv('DB_HOST', 'localhost'),
-            'port': os.getenv('DB_PORT', '5432')
+            'dbname': 'postgres',
+            'user': 'postgres.ndozyvnrmryyidehykmu',  # Your Supabase user
+            'password': 'urbanflow123',  # Replace with your password
+            'host': 'aws-1-ap-south-1.pooler.supabase.com',  # Pooler host
+            'port': '5432'  # Must be 6543 for pooler
         }
         self._test_connection()
-    
+
     def _test_connection(self):
         """Test database connection on initialization"""
         try:
