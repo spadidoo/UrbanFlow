@@ -144,6 +144,45 @@ export const api = {
   deleteSimulation: (simulationId, userId = 2) =>
     apiCall(`/api/delete-simulation/${simulationId}?user_id=${userId}`, {
       method: "DELETE",
+      }),
+
+  /**
+   * Send OTP for publishing verification
+   */
+  sendPublishOTP: (simulationId, userId = 2) =>
+    apiCall("/api/send-publish-otp", {
+      method: "POST",
+      body: JSON.stringify({
+        simulation_id: simulationId,
+        user_id: userId,
+      }),
+    }),
+
+  /**
+   * Verify OTP and publish simulation
+   */
+  verifyPublishOTP: (simulationId, otpCode, title, description, userId = 2) =>
+    apiCall("/api/verify-publish-otp", {
+      method: "POST",
+      body: JSON.stringify({
+        simulation_id: simulationId,
+        otp_code: otpCode,
+        title: title,
+        public_description: description,
+        user_id: userId,
+      }),
+    }),
+
+  /**
+   * Delete multiple simulations
+   */
+  deleteSimulationsBatch: (simulationIds, userId = 2) =>
+    apiCall("/api/delete-simulations-batch", {
+      method: "POST",
+      body: JSON.stringify({
+        simulation_ids: simulationIds,
+        user_id: userId,
+      }),
     }),
 };
 
