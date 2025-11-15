@@ -11,6 +11,8 @@ from services.traffic_api import TrafficAPIService
 from services.database import DatabaseService
 from werkzeug.utils import secure_filename
 from flask import send_file
+import random
+import string
 
 
 load_dotenv()
@@ -1640,6 +1642,228 @@ def preview_file(filename):
             'success': False,
             'error': str(e)
         }), 500
+
+
+# ============================================================
+# OTP GENERATION AND VERIFICATION
+# ============================================================
+
+@app.route('/api/send-publish-otp', methods=['POST'])
+def send_publish_otp():
+    """
+    Generate and send OTP for publishing verification
+    In production, this would send an email. For now, we'll return it in response for testing.
+    """
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id', 2)
+        simulation_id = data.get('simulation_id')
+        
+        if not simulation_id:
+            return jsonify({
+                'success': False,
+                'error': 'simulation_id is required'
+            }), 400
+        
+        # Generate 6-digit OTP
+        otp_code = ''.join(random.choices(string.digits, k=6))
+        
+        # Store OTP in database
+        conn = None
+        try:
+            conn = db._get_connection()
+            cursor = conn.cursor()
+            
+            # Set expiry to 10 minutes from now
+            expires_at = datetime.now() + timedelta(minutes=10)
+            
+            cursor.execute("""
+                INSERT INTO verification_otps (user_id, simulation_id, otp_code, expires_at)
+                VALUES (%s, %s, %s, %s)
+            """, (user_id, simulation_id, otp_code, expires_at))
+            
+            # Get user email
+            cursor.execute("SELECT email, full_name FROM users WHERE user_id = %s", (user_id,))
+            user = cursor.fetchone()
+            
+            conn.commit()
+            
+            # TODO: In production, send email here using SendGrid/AWS SES
+            # For now, return OTP in response (REMOVE THIS IN PRODUCTION!)
+            
+            print(f"📧 OTP for simulation {simulation_id}: {otp_code}")
+            print(f"   User: {user[1]} ({user[0]})")
+            print(f"   Expires: {expires_at}")
+            
+            return jsonify({
+                'success': True,
+                'message': f'OTP sent to {user[0]}',
+                # REMOVE THIS IN PRODUCTION - only for testing:
+                'otp_for_testing': otp_code,  
+                'expires_in_minutes': 10
+            })
+            
+        finally:
+            if conn:
+                conn.close()
+                
+    except Exception as e:
+        print(f"✗ Error sending OTP: {e}")
+        import traceback
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
+@app.route('/api/verify-publish-otp', methods=['POST'])
+def verify_publish_otp():
+    """
+    Verify OTP and publish simulation if valid
+    """
+    try:
+        data = request.get_json()
+        
+        simulation_id = data.get('simulation_id')
+        otp_code = data.get('otp_code')
+        user_id = data.get('user_id', 2)
+        title = data.get('title')
+        public_description = data.get('public_description')
+        
+        if not simulation_id or not otp_code:
+            return jsonify({
+                'success': False,
+                'error': 'simulation_id and otp_code are required'
+            }), 400
+        
+        conn = None
+        try:
+            conn = db._get_connection()
+            cursor = conn.cursor()
+            
+            # Verify OTP
+            cursor.execute("""
+                SELECT otp_id, expires_at, is_used
+                FROM verification_otps
+                WHERE simulation_id = %s 
+                  AND otp_code = %s 
+                  AND user_id = %s
+                ORDER BY created_at DESC
+                LIMIT 1
+            """, (simulation_id, otp_code, user_id))
+            
+            otp_record = cursor.fetchone()
+            
+            if not otp_record:
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid OTP code'
+                }), 400
+            
+            otp_id, expires_at, is_used = otp_record
+            
+            # Check if already used
+            if is_used:
+                return jsonify({
+                    'success': False,
+                    'error': 'OTP code has already been used'
+                }), 400
+            
+            # Check if expired
+            if datetime.now() > expires_at:
+                return jsonify({
+                    'success': False,
+                    'error': 'OTP code has expired'
+                }), 400
+            
+            # Mark OTP as used
+            cursor.execute("""
+                UPDATE verification_otps
+                SET is_used = TRUE, used_at = CURRENT_TIMESTAMP
+                WHERE otp_id = %s
+            """, (otp_id,))
+            
+            # Publish the simulation
+            slug = db.publish_simulation(
+                simulation_id=simulation_id,
+                published_by_user_id=user_id,
+                title=title,
+                public_description=public_description
+            )
+            
+            if slug:
+                return jsonify({
+                    'success': True,
+                    'slug': slug,
+                    'message': 'Simulation published successfully',
+                    'public_url': f'/disruptions/{slug}'
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to publish simulation'
+                }), 500
+            
+        finally:
+            if conn:
+                conn.close()
+                
+    except Exception as e:
+        print(f"✗ Error verifying OTP: {e}")
+        import traceback
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
+# ============================================================
+# BATCH DELETE SIMULATIONS
+# ============================================================
+
+@app.route('/api/delete-simulations-batch', methods=['POST'])
+def delete_simulations_batch():
+    """
+    Delete multiple simulations at once
+    """
+    try:
+        data = request.get_json()
+        simulation_ids = data.get('simulation_ids', [])
+        user_id = data.get('user_id', 2)
+        
+        if not simulation_ids:
+            return jsonify({
+                'success': False,
+                'error': 'No simulation IDs provided'
+            }), 400
+        
+        deleted_count = 0
+        failed_ids = []
+        
+        for sim_id in simulation_ids:
+            success = db.delete_simulation(sim_id, user_id)
+            if success:
+                deleted_count += 1
+            else:
+                failed_ids.append(sim_id)
+        
+        return jsonify({
+            'success': True,
+            'deleted_count': deleted_count,
+            'failed_count': len(failed_ids),
+            'failed_ids': failed_ids,
+            'message': f'Successfully deleted {deleted_count} simulation(s)'
+        })
+        
+    except Exception as e:
+        print(f"✗ Error deleting simulations: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 
 # ============================================================
 # RUN APP
