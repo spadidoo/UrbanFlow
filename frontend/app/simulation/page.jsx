@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import PlannerNavbar from "@/components/PlannerNavbar";
 import api from "@/services/api";
@@ -10,11 +10,6 @@ import { getRoadInfoFromOSM, getRoadSegmentsInArea } from "@/services/osmService
 import SimulationActions from '@/components/SimulationActions';
 
 
-/*
-const RealisticResultsMap = dynamic(() => import("@/components/RealisticResultsMap"), {
-  ssr: false,
-  loading: () => <div className="h-[500px] bg-gray-200 flex it  ems-center justify-center rounded-lg">Loading map...</div>,
-});*/
 
 const SmartResultsMap = dynamic(() => import("@/components/SmartResultsMap"), {
   ssr: false,
@@ -64,6 +59,56 @@ export default function SimulationPage() {
   const [savedSimulationId, setSavedSimulationId] = useState(null);
   const [publishing, setPublishing] = useState(false);
   const [publishSuccess, setPublishSuccess] = useState(false);
+
+//=======================================
+// Load simulation data if editing
+//=======================================
+  useEffect(() => {
+    const editData = sessionStorage.getItem('editSimulation');
+    if (editData) {
+      try {
+        const simulation = JSON.parse(editData);
+        
+        // Pre-fill form
+        setFormData({
+          scenarioName: simulation.simulation_name || "",
+          disruptionType: simulation.disruption_type || "roadwork",
+          startDate: simulation.start_time ? simulation.start_time.split('T')[0] : "",
+          startTime: simulation.start_time ? simulation.start_time.split('T')[1].substring(0, 5) : "06:00",
+          endDate: simulation.end_time ? simulation.end_time.split('T')[0] : "",
+          endTime: simulation.end_time ? simulation.end_time.split('T')[1].substring(0, 5) : "18:00",
+          description: simulation.description || "",
+        });
+
+        // Pre-fill location if available
+        if (simulation.disruption_geometry) {
+          // Extract coordinates from WKT geometry
+          const wkt = simulation.disruption_geometry;
+          const match = wkt.match(/POINT\(([^ ]+) ([^)]+)\)/);
+          if (match) {
+            const lng = parseFloat(match[1]);
+            const lat = parseFloat(match[2]);
+            
+            setSelectedLocation({
+              type: 'point',
+              coordinates: [{ lat, lng }],
+              center: { lat, lng },
+            });
+
+            // Optionally fetch road info for this location
+            handlePointSelect(lat, lng);
+          }
+        }
+
+        // Clear from session storage after loading
+        sessionStorage.removeItem('editSimulation');
+        
+        alert("📝 Simulation loaded for editing");
+      } catch (error) {
+        console.error("Error loading edit data:", error);
+      }
+    }
+  }, []);
 
   const handleChange = (e) => {
     setFormData({
