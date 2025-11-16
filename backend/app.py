@@ -9,20 +9,27 @@ from datetime import datetime, timedelta
 import pandas as pd
 from services.traffic_api import TrafficAPIService
 from services.database import DatabaseService
+from flask_cors import CORS
+from routes.auth import auth_bp
 
 
 
 load_dotenv()
 
 app = Flask(__name__)
+
+# Configure CORS BEFORE registering blueprints
 CORS(app, resources={
     r"/api/*": {
         "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"]
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True  # Add this line
     }
 })
 
+# Register blueprints AFTER CORS
+app.register_blueprint(auth_bp, url_prefix='/api/auth')
 
 print("Loading trained model...")
 predictor = TrafficPredictor()
@@ -390,24 +397,27 @@ def get_published_disruptions():
         # Transform to match frontend format
         disruptions = []
         for sim in simulations:
+            # Safely get values with defaults
             disruptions.append({
-                'id': sim['published_id'],
-                'simulation_id': sim['simulation_id'],
-                'title': sim['title'],
-                'description': sim['public_description'],
-                'location': sim['disruption_location'],
-                'type': sim['disruption_type'],
+                'id': sim.get('published_id', sim.get('id', 0)),
+                'simulation_id': sim.get('simulation_id', 0),
+                'title': sim.get('title', 'Untitled Disruption'),
+                'description': sim.get('public_description', ''),
+                'location': sim.get('disruption_location', 'Unknown Location'),
+                'type': sim.get('disruption_type', 'other'),
                 'status': 'Active',
-                'start_date': sim['start_time'].isoformat() if sim['start_time'] else None,
-                'end_date': sim['end_time'].isoformat() if sim['end_time'] else None,
-                'severity_level': sim['severity_level'],
-                'congestion_level': sim['severity_level'].capitalize(),
-                'avg_severity': float(sim['average_delay_ratio']) if sim['average_delay_ratio'] else 1.0,
-                'expected_delay': round(float(sim['average_delay_ratio']) * 10) if sim['average_delay_ratio'] else 10,
-                'published_at': sim['published_at'].isoformat() if sim['published_at'] else None,
-                'slug': sim['slug'],
-                'view_count': sim['view_count'],
-                'organization': sim['organization']
+                'start_date': sim['start_time'].isoformat() if sim.get('start_time') else None,
+                'end_date': sim['end_time'].isoformat() if sim.get('end_time') else None,
+                'severity_level': sim.get('severity_level', 'Moderate'),
+                'congestion_level': sim.get('severity_level', 'Moderate').capitalize(),
+                'latitude': sim.get('latitude', 14.2096),  # Default to Calamba center
+                'longitude': sim.get('longitude', 121.164),
+                'avg_severity': float(sim.get('average_delay_ratio', 1.0)),
+                'expected_delay': round(float(sim.get('average_delay_ratio', 1.0)) * 10),
+                'published_at': sim['published_at'].isoformat() if sim.get('published_at') else None,
+                'slug': sim.get('slug', ''),
+                'view_count': sim.get('view_count', 0),
+                'organization': sim.get('organization', 'Calamba Traffic Office')
             })
         
         return jsonify({
@@ -418,10 +428,13 @@ def get_published_disruptions():
         
     except Exception as e:
         import traceback
+        print("Error in get_published_disruptions:")
+        print(traceback.format_exc())
         return jsonify({
             'success': False,
             'error': str(e),
-            'traceback': traceback.format_exc()
+            'traceback': traceback.format_exc(),
+            'disruptions': []  # Return empty array so frontend doesn't break
         }), 500
 
 # ============================================================
