@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect } from 'react'
 import L from 'leaflet'
-import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet'
-import api from '@/services/api'
+import React, { useEffect, useState } from 'react'
+import { Circle, MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
+import api from '../services/api'
 
 // Fix Leaflet icons
 delete L.Icon.Default.prototype._getIconUrl
@@ -28,18 +28,25 @@ export default function HomeMapWithSidebar() {
   const fetchDisruptions = async () => {
     try {
       setLoading(true)
-      // TODO: Replace with actual endpoint when backend has it
-      // For now, use mock data but show structure
-      
-      // Mock data - Replace this with: const data = await api.getPublishedDisruptions()
-      // Replace mock data with:
-      const disruptions = await api.getPublishedDisruptions()
-
-      setDisruptions(disruptions)
       setError(null)
+      
+      // Call the API
+      const response = await api.getPublishedDisruptions()
+      
+      // Check if the API call was successful
+      if (response.success === false) {
+        // Backend is down or unreachable
+        setError('Unable to connect to server. Showing offline mode.')
+        setDisruptions([])
+      } else {
+        // Extract the disruptions array from the response
+        const disruptionsData = response.disruptions || []
+        setDisruptions(disruptionsData)
+      }
     } catch (err) {
       console.error('Failed to fetch disruptions:', err)
-      setError('Failed to load disruptions. Please try again.')
+      setError('Failed to load disruptions. Please check your connection.')
+      setDisruptions([])
     } finally {
       setLoading(false)
     }
@@ -105,10 +112,12 @@ export default function HomeMapWithSidebar() {
 
       {/* Sidebar */}
       <div 
-        className={`fixed top-0 right-0 h-full w-96 shadow-2xl z-[999] transition-transform duration-300 overflow-y-auto ${
+        className={`fixed right-0 h-full w-96 shadow-2xl z-[999] transition-transform duration-300 overflow-y-auto ${
           sidebarOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
         style={{
+          top: '64px', // Start below navbar (navbar height is typically 64px or 4rem)
+          height: 'calc(100vh - 64px)', // Full height minus navbar
           backgroundColor: 'rgba(255, 255, 255, 0.95)',
           backdropFilter: 'blur(10px)',
         }}
@@ -142,16 +151,22 @@ export default function HomeMapWithSidebar() {
             </div>
           )}
 
-          {/* Error State */}
+          {/* Error State - Improved messaging */}
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-              <p className="text-red-700 text-sm">{error}</p>
-              <button
-                onClick={fetchDisruptions}
-                className="mt-2 text-red-600 text-sm font-semibold hover:underline"
-              >
-                Try again
-              </button>
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl">⚠️</span>
+                <div className="flex-1">
+                  <p className="text-orange-800 font-semibold mb-1">Server Offline</p>
+                  <p className="text-orange-700 text-sm mb-3">{error}</p>
+                  <button
+                    onClick={fetchDisruptions}
+                    className="bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-orange-700 transition"
+                  >
+                    Try Reconnecting
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -256,7 +271,7 @@ export default function HomeMapWithSidebar() {
 
         {/* Disruption Markers and Circles */}
         {disruptions.map((d) => (
-          <div key={d.id}>
+          <React.Fragment key={d.id}>
             <Marker position={[d.latitude, d.longitude]}>
               <Popup>
                 <div className="p-2">
@@ -275,7 +290,7 @@ export default function HomeMapWithSidebar() {
             {/* Congestion Circle (Blob) */}
             <Circle
               center={[d.latitude, d.longitude]}
-              radius={500} // 500m radius
+              radius={500}
               pathOptions={{
                 color: getCongestionColor(d.congestion_level),
                 fillColor: getCongestionColor(d.congestion_level),
@@ -283,7 +298,7 @@ export default function HomeMapWithSidebar() {
                 weight: 2
               }}
             />
-          </div>
+          </React.Fragment>
         ))}
       </MapContainer>
     </div>

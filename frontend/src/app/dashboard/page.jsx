@@ -1,6 +1,7 @@
 "use client";
 
 import PlannerNavbar from "@/components/PlannerNavbar";
+import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
@@ -15,19 +16,14 @@ import {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { user, loading: authLoading, isAuthenticated } = useAuth();
 
-  // ✅ ADD THESE STATE VARIABLES
   const [savedSimulations, setSavedSimulations] = useState([]);
   const [publishedSimulations, setPublishedSimulations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [backendStatus, setBackendStatus] = useState({
-    ml_model: "checking",
-    database: "checking",
-    response_time: "...",
-  });
 
-  //stats from database
+  // Stats from database
   const [stats, setStats] = useState({
     totalSaved: 0,
     totalPublished: 0,
@@ -37,26 +33,51 @@ export default function DashboardPage() {
     avgCongestionValue: 0,
   });
 
-  // ✅ ADD THIS useEffect - Fetch data when page loads
+  const [weeklyTrend, setWeeklyTrend] = useState([
+    { day: "Mon", level: 0 },
+    { day: "Tue", level: 0 },
+    { day: "Wed", level: 0 },
+    { day: "Thu", level: 0 },
+    { day: "Fri", level: 0 },
+    { day: "Sat", level: 0 },
+    { day: "Sun", level: 0 },
+  ]);
+
+  const [heatmapData, setHeatmapData] = useState({
+    times: ["6AM", "9AM", "12PM", "3PM", "6PM", "9PM"],
+    roads: [],
+  });
+
+  // Redirect if not authenticated
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    if (!authLoading && !isAuthenticated) {
+      router.push("/login");
+    }
+  }, [authLoading, isAuthenticated, router]);
+
+  // Fetch data when user is loaded
+  useEffect(() => {
+    if (user && user.id) {
+      fetchDashboardData();
+    }
+  }, [user]);
 
   const fetchDashboardData = async () => {
+    if (!user || !user.id) return;
+    
     setLoading(true);
     setError(null);
 
     try {
-      // Fetch user's saved simulations
+      // Fetch user's saved simulations - using actual user ID from auth
       const savedResponse = await fetch(
-        "http://localhost:5000/api/my-simulations?user_id=2"
+        `http://localhost:5000/api/my-simulations?user_id=${user.id}`
       );
       const savedData = await savedResponse.json();
 
       if (savedData.success) {
         setSavedSimulations(savedData.simulations);
 
-        // Calculate stats
         const totalSaved = savedData.simulations.length;
         const completed = savedData.simulations.filter(
           (s) => s.simulation_status === "completed"
@@ -65,7 +86,6 @@ export default function DashboardPage() {
           (s) => s.simulation_status === "published"
         );
 
-        // Calculate average congestion from recent simulations
         const avgSeverity =
           completed.length > 0
             ? completed.reduce(
@@ -89,9 +109,8 @@ export default function DashboardPage() {
         });
       }
 
-      // Fetch published simulations
       const publishedResponse = await fetch(
-        "http://localhost:5000/api/published-simulations"
+        "http://localhost:5000/api/published-disruptions"
       );
       const publishedData = await publishedResponse.json();
 
@@ -106,24 +125,6 @@ export default function DashboardPage() {
     }
   };
 
-  // ✅ STATE: Weekly trend data (calculated from simulations)
-  const [weeklyTrend, setWeeklyTrend] = useState([
-    { day: "Mon", level: 0 },
-    { day: "Tue", level: 0 },
-    { day: "Wed", level: 0 },
-    { day: "Thu", level: 0 },
-    { day: "Fri", level: 0 },
-    { day: "Sat", level: 0 },
-    { day: "Sun", level: 0 },
-  ]);
-
-  // ✅ STATE: Heatmap data (calculated from recent simulations)
-  const [heatmapData, setHeatmapData] = useState({
-    times: ["6AM", "9AM", "12PM", "3PM", "6PM", "9PM"],
-    roads: [],
-  });
-
-  // Get color based on congestion level
   const getCongestionColor = (value) => {
     if (value < 1.5) return "bg-green-500";
     if (value < 2.5) return "bg-yellow-500";
@@ -136,6 +137,22 @@ export default function DashboardPage() {
     return "Heavy";
   };
 
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-orange-500 border-r-transparent"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !user) {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <PlannerNavbar />
@@ -144,21 +161,18 @@ export default function DashboardPage() {
         <div className="grid grid-cols-12 gap-6">
           {/* Left Content */}
           <div className="col-span-12 lg:col-span-8">
-            {/* Greeting */}
+            {/* Greeting - Shows actual user's first name */}
             <div className="mb-6">
               <h1 className="text-3xl font-bold text-gray-800">
-                Hello, <span style={{ color: "#F5820D" }}>John</span>
+                Hello, <span style={{ color: "#F5820D" }}>{user.firstName}</span>! 👋
               </h1>
+              <p className="text-gray-600 mt-1">Welcome back to your dashboard</p>
             </div>
 
             {/* Quick Actions */}
             <div className="mb-6">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">
-                Quick Actions
-              </h2>
-
+              <h2 className="text-xl font-bold text-gray-800 mb-4">Quick Actions</h2>
               <div className="grid md:grid-cols-3 gap-4">
-                {/* New Simulation */}
                 <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow" style={{ background: 'linear-gradient(135deg, #F5820D 0%, #FFA611 100%)' }}>
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
@@ -175,21 +189,17 @@ export default function DashboardPage() {
                   >
                     Create
                   </button>
-                  
                   <div className="mt-4 pt-4 border-t border-white/20">
                     <p className="text-xs text-white/80 mb-1">Saved Scenarios</p>
-                    <p className="text-2xl font-bold text-white">
-                      {loading ? "..." : stats.totalSaved}
-                    </p>
+                    <p className="text-2xl font-bold text-white">{loading ? "..." : stats.totalSaved}</p>
                   </div>
                 </div>
 
-                {/* Saved Scenarios */}
                 <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow" style={{ background: 'linear-gradient(150deg, #F5820D 0%, #FFA611 100%)' }}>
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
                       <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34-3-3-3zm3-10H5V5h10v4z"/>
+                        <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
                       </svg>
                     </div>
                     <h3 className="text-lg font-semibold text-white">Saved Scenarios</h3>
@@ -209,7 +219,6 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* Published Results */}
                 <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow" style={{ background: 'linear-gradient(190deg, #F5820D 0%, #FFA611 100%)' }}>
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
@@ -231,9 +240,7 @@ export default function DashboardPage() {
                   </button>
                   <div className="mt-4 pt-4 border-t border-white/20">
                     <p className="text-xs text-white/80 mb-1">Published</p>
-                    <p className="text-2xl font-bold text-white">
-                      {loading ? "..." : stats.totalPublished}
-                    </p>
+                    <p className="text-2xl font-bold text-white">{loading ? "..." : stats.totalPublished}</p>
                   </div>
                 </div>
               </div>
@@ -242,35 +249,21 @@ export default function DashboardPage() {
             {/* Stats */}
             <div className="grid grid-cols-4 gap-4 mb-6">
               <div className="bg-white rounded-lg shadow p-4 text-center">
-                <p className="text-2xl font-bold text-gray-800">
-                  {loading ? "..." : stats.activeDisruptions}
-                </p>
+                <p className="text-2xl font-bold text-gray-800">{loading ? "..." : stats.activeDisruptions}</p>
                 <p className="text-xs text-gray-600">Active Disruptions</p>
               </div>
               <div className="bg-white rounded-lg shadow p-4 text-center">
-                <p className="text-2xl font-bold text-gray-800">
-                  {loading ? "..." : stats.totalSaved}
-                </p>
+                <p className="text-2xl font-bold text-gray-800">{loading ? "..." : stats.totalSaved}</p>
                 <p className="text-xs text-gray-600">Simulations Run</p>
               </div>
               <div className="bg-white rounded-lg shadow p-4 text-center">
-                <p
-                  className={`text-2xl font-bold ${
-                    stats.avgCongestion === "Heavy"
-                      ? "text-red-600"
-                      : stats.avgCongestion === "Moderate"
-                      ? "text-yellow-600"
-                      : "text-green-600"
-                  }`}
-                >
+                <p className={`text-2xl font-bold ${stats.avgCongestion === "Heavy" ? "text-red-600" : stats.avgCongestion === "Moderate" ? "text-yellow-600" : "text-green-600"}`}>
                   {loading ? "..." : stats.avgCongestion}
                 </p>
                 <p className="text-xs text-gray-600">Avg Congestion</p>
               </div>
               <div className="bg-white rounded-lg shadow p-4 text-center">
-                <p className="text-2xl font-bold text-gray-800">
-                  {loading ? "..." : stats.totalPublished}
-                </p>
+                <p className="text-2xl font-bold text-gray-800">{loading ? "..." : stats.totalPublished}</p>
                 <p className="text-xs text-gray-600">Reports Generated</p>
               </div>
             </div>
@@ -278,13 +271,8 @@ export default function DashboardPage() {
             {/* Recent Activity */}
             <div className="bg-white rounded-lg shadow-md p-6 mb-6">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold text-gray-800">
-                  Recent Activity
-                </h2>
-                <button
-                  onClick={() => router.push("/planner/saved-scenarios")}
-                  className="text-orange-500 text-sm font-semibold hover:underline"
-                >
+                <h2 className="text-xl font-bold text-gray-800">Recent Activity</h2>
+                <button onClick={() => router.push("/planner/saved-scenarios")} className="text-orange-500 text-sm font-semibold hover:underline">
                   View all
                 </button>
               </div>
@@ -303,49 +291,16 @@ export default function DashboardPage() {
               ) : (
                 <div className="space-y-3">
                   {savedSimulations.slice(0, 3).map((sim) => (
-                    <div
-                      key={sim.simulation_id}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition cursor-pointer"
-                      onClick={() =>
-                        router.push(`/planner/simulation/${sim.simulation_id}`)
-                      }
-                    >
+                    <div key={sim.simulation_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition cursor-pointer" onClick={() => router.push(`/planner/simulation/${sim.simulation_id}`)}>
                       <div className="flex-1">
-                        <p className="font-semibold text-gray-800">
-                          {sim.simulation_name || "Unnamed Simulation"}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          {sim.simulation_status === "published"
-                            ? "Published"
-                            : "Saved"}{" "}
-                          — {new Date(sim.created_at).toLocaleDateString()}
-                        </p>
+                        <p className="font-semibold text-gray-800">{sim.simulation_name || "Unnamed Simulation"}</p>
+                        <p className="text-sm text-gray-600">{sim.simulation_status === "published" ? "Published" : "Saved"} — {new Date(sim.created_at).toLocaleDateString()}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span
-                          className={`px-3 py-1 text-xs font-semibold rounded ${
-                            sim.average_delay_ratio >= 2
-                              ? "bg-red-100 text-red-700"
-                              : sim.average_delay_ratio >= 1
-                              ? "bg-yellow-100 text-yellow-700"
-                              : "bg-green-100 text-green-700"
-                          }`}
-                        >
-                          {sim.average_delay_ratio >= 2
-                            ? "Heavy"
-                            : sim.average_delay_ratio >= 1
-                            ? "Moderate"
-                            : "Light"}
+                        <span className={`px-3 py-1 text-xs font-semibold rounded ${sim.average_delay_ratio >= 2 ? "bg-red-100 text-red-700" : sim.average_delay_ratio >= 1 ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
+                          {sim.average_delay_ratio >= 2 ? "Heavy" : sim.average_delay_ratio >= 1 ? "Moderate" : "Light"}
                         </span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(
-                              `/planner/simulation/${sim.simulation_id}`
-                            );
-                          }}
-                          className="px-4 py-1 bg-orange-500 text-white text-sm rounded hover:bg-orange-600 transition"
-                        >
+                        <button onClick={(e) => { e.stopPropagation(); router.push(`/planner/simulation/${sim.simulation_id}`); }} className="px-4 py-1 bg-orange-500 text-white text-sm rounded hover:bg-orange-600 transition">
                           Review
                         </button>
                       </div>
@@ -353,61 +308,29 @@ export default function DashboardPage() {
                   ))}
                 </div>
               )}
-
-              {!loading && !error && savedSimulations.length > 3 && (
-                <button
-                  onClick={() => router.push("/planner/saved-scenarios")}
-                  className="w-full mt-4 text-orange-500 text-sm font-semibold hover:underline"
-                >
-                  View all {savedSimulations.length} simulations →
-                </button>
-              )}
             </div>
 
             {/* Graphs */}
             <div className="grid md:grid-cols-2 gap-6">
-              {/* HEATMAP - Location x Time */}
               <div className="bg-white rounded-lg shadow-md p-6">
-                <h2 className="text-lg font-bold text-gray-800 mb-4">
-                  Congestion by Location & Time (Today)
-                </h2>
-
-                {/* Heatmap Grid */}
+                <h2 className="text-lg font-bold text-gray-800 mb-4">Congestion by Location & Time (Today)</h2>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
                       <tr>
-                        <th className="text-left p-2 font-semibold text-gray-700">
-                          Location
-                        </th>
+                        <th className="text-left p-2 font-semibold text-gray-700">Location</th>
                         {heatmapData.times.map((time) => (
-                          <th
-                            key={time}
-                            className="p-2 font-semibold text-gray-700 text-center"
-                          >
-                            {time}
-                          </th>
+                          <th key={time} className="p-2 font-semibold text-gray-700 text-center">{time}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {heatmapData.roads.map((road, roadIdx) => (
                         <tr key={roadIdx}>
-                          <td className="p-2 font-medium text-gray-800 text-xs">
-                            {road.name}
-                          </td>
+                          <td className="p-2 font-medium text-gray-800 text-xs">{road.name}</td>
                           {road.values.map((value, timeIdx) => (
                             <td key={timeIdx} className="p-1">
-                              <div
-                                className={`h-10 rounded flex items-center justify-center text-white font-bold text-xs ${getCongestionColor(
-                                  value
-                                )} hover:scale-110 transition cursor-pointer`}
-                                title={`${road.name} at ${
-                                  heatmapData.times[timeIdx]
-                                }: ${getCongestionLabel(
-                                  value
-                                )} (${value.toFixed(1)})`}
-                              >
+                              <div className={`h-10 rounded flex items-center justify-center text-white font-bold text-xs ${getCongestionColor(value)} hover:scale-110 transition cursor-pointer`} title={`${road.name} at ${heatmapData.times[timeIdx]}: ${getCongestionLabel(value)} (${value.toFixed(1)})`}>
                                 {value.toFixed(1)}
                               </div>
                             </td>
@@ -417,8 +340,6 @@ export default function DashboardPage() {
                     </tbody>
                   </table>
                 </div>
-
-                {/* Legend */}
                 <div className="flex justify-center gap-4 mt-4 text-xs">
                   <div className="flex items-center gap-1">
                     <div className="w-4 h-4 bg-green-500 rounded"></div>
@@ -435,63 +356,26 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Weekly Trend */}
               <div className="bg-white rounded-lg shadow-md p-6">
-                <h2 className="text-lg font-bold text-gray-800 mb-4">
-                  Weekly Congestion Trend
-                </h2>
+                <h2 className="text-lg font-bold text-gray-800 mb-4">Weekly Congestion Trend</h2>
                 <ResponsiveContainer width="100%" height={220}>
                   <LineChart data={weeklyTrend}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis
-                      dataKey="day"
-                      tick={{ fill: "#6b7280", fontSize: 11 }}
-                    />
-                    <YAxis
-                      domain={[0, 3]}
-                      ticks={[0, 1, 2, 3]}
-                      tick={{ fill: "#6b7280", fontSize: 11 }}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#fff",
-                        border: "1px solid #e5e7eb",
-                        borderRadius: "8px",
-                        fontSize: "12px",
-                      }}
-                      formatter={(value) => {
-                        const label =
-                          value < 1.5
-                            ? "Light"
-                            : value < 2.5
-                            ? "Moderate"
-                            : "Heavy";
-                        return [label, "Congestion"];
-                      }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="level"
-                      stroke="#f97316"
-                      strokeWidth={2}
-                      dot={{ fill: "#f97316", r: 4 }}
-                    />
+                    <XAxis dataKey="day" tick={{ fill: "#6b7280", fontSize: 11 }} />
+                    <YAxis domain={[0, 3]} ticks={[0, 1, 2, 3]} tick={{ fill: "#6b7280", fontSize: 11 }} />
+                    <Tooltip contentStyle={{ backgroundColor: "#fff", border: "1px solid #e5e7eb", borderRadius: "8px", fontSize: "12px" }} formatter={(value) => { const label = value < 1.5 ? "Light" : value < 2.5 ? "Moderate" : "Heavy"; return [label, "Congestion"]; }} />
+                    <Line type="monotone" dataKey="level" stroke="#f97316" strokeWidth={2} dot={{ fill: "#f97316", r: 4 }} />
                   </LineChart>
                 </ResponsiveContainer>
-                <p className="text-xs text-gray-500 text-center mt-2">
-                  Peak congestion on Friday
-                </p>
+                <p className="text-xs text-gray-500 text-center mt-2">Peak congestion on Friday</p>
               </div>
             </div>
           </div>
 
           {/* Right Sidebar */}
           <div className="col-span-12 lg:col-span-4 space-y-6">
-            {/* System Status */}
             <div className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-lg font-bold text-gray-800 mb-4">
-                System Status
-              </h3>
+              <h3 className="text-lg font-bold text-gray-800 mb-4">System Status</h3>
               <div className="space-y-3">
                 <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
                   <div className="flex items-center gap-3">
@@ -501,114 +385,74 @@ export default function DashboardPage() {
                       <p className="text-xs text-gray-600">Random Forest</p>
                     </div>
                   </div>
-                  <span className="px-2 py-1 bg-green-500 text-white text-xs font-semibold rounded">
-                    Active
-                  </span>
+                  <span className="px-2 py-1 bg-green-500 text-white text-xs font-semibold rounded">Active</span>
                 </div>
-
                 <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
                   <div className="flex items-center gap-3">
                     <div className="text-2xl">📊</div>
                     <div>
-                      <p className="font-semibold text-gray-800">
-                        Data Updated
-                      </p>
+                      <p className="font-semibold text-gray-800">Data Updated</p>
                       <p className="text-xs text-gray-600">Last sync</p>
                     </div>
                   </div>
-                  <span className="text-sm font-semibold text-blue-600">
-                    5 min ago
-                  </span>
+                  <span className="text-sm font-semibold text-blue-600">5 min ago</span>
                 </div>
-
                 <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
                   <div className="flex items-center gap-3">
                     <div className="text-2xl">⚡</div>
                     <div>
-                      <p className="font-semibold text-gray-800">
-                        Server Health
-                      </p>
+                      <p className="font-semibold text-gray-800">Server Health</p>
                       <p className="text-xs text-gray-600">Response time</p>
                     </div>
                   </div>
-                  <span className="text-sm font-semibold text-green-600">
-                    45ms
-                  </span>
+                  <span className="text-sm font-semibold text-green-600">45ms</span>
                 </div>
               </div>
             </div>
 
-            {/* Quick Links */}
             <div className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-lg font-bold text-gray-800 mb-4">
-                Quick Links
-              </h3>
+              <h3 className="text-lg font-bold text-gray-800 mb-4">Quick Links</h3>
               <div className="space-y-2">
-                <button
-                  onClick={() => router.push("/data")}
-                  className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition text-left"
-                >
+                <button onClick={() => router.push("/data")} className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition text-left">
                   <span className="text-xl">📊</span>
-                  <span className="font-medium text-gray-700">
-                    View All Data
-                  </span>
+                  <span className="font-medium text-gray-700">View All Data</span>
                 </button>
-                <button
-                  onClick={() => router.push("/reports")}
-                  className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition text-left"
-                >
+                <button onClick={() => router.push("/reports")} className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition text-left">
                   <span className="text-xl">📋</span>
-                  <span className="font-medium text-gray-700">
-                    Generate Report
-                  </span>
+                  <span className="font-medium text-gray-700">Generate Report</span>
                 </button>
-                <button className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition text-left">
+                <button onClick={() => router.push("/settings")} className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition text-left">
                   <span className="text-xl">⚙️</span>
                   <span className="font-medium text-gray-700">Settings</span>
                 </button>
               </div>
             </div>
 
-            {/* Notifications */}
             <div className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-lg font-bold text-gray-800 mb-4">
-                Notifications
-              </h3>
-
+              <h3 className="text-lg font-bold text-gray-800 mb-4">Notifications</h3>
               <div className="space-y-2">
                 <div className="flex gap-2 p-2 bg-blue-50 border-l-4 border-blue-500 rounded text-sm">
                   <span>ℹ️</span>
                   <div className="flex-1">
-                    <p className="font-semibold text-gray-800">
-                      Simulation ready
-                    </p>
+                    <p className="font-semibold text-gray-800">Simulation ready</p>
                     <p className="text-xs text-gray-500">5 min ago</p>
                   </div>
                 </div>
-
                 <div className="flex gap-2 p-2 bg-green-50 border-l-4 border-green-500 rounded text-sm">
                   <span>✅</span>
                   <div className="flex-1">
-                    <p className="font-semibold text-gray-800">
-                      Report generated
-                    </p>
+                    <p className="font-semibold text-gray-800">Report generated</p>
                     <p className="text-xs text-gray-500">2 hours ago</p>
                   </div>
                 </div>
-
                 <div className="flex gap-2 p-2 bg-yellow-50 border-l-4 border-yellow-500 rounded text-sm">
                   <span>⚠️</span>
                   <div className="flex-1">
-                    <p className="font-semibold text-gray-800">
-                      Draft expiring
-                    </p>
+                    <p className="font-semibold text-gray-800">Draft expiring</p>
                     <p className="text-xs text-gray-500">1 day ago</p>
                   </div>
                 </div>
-
-                <button className="w-full mt-3 text-orange-500 text-sm font-semibold hover:underline">
-                  View all →
-                </button>
+                <button className="w-full mt-3 text-orange-500 text-sm font-semibold hover:underline">View all →</button>
               </div>
             </div>
           </div>

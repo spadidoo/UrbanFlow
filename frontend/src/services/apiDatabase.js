@@ -149,7 +149,7 @@ export const getSimulationDetails = async (runId) => {
  */
 export const getPublishedSimulations = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/published-simulations`);
+    const response = await fetch(`${API_BASE_URL}/published-disruptions`);
     const data = await response.json();
 
     if (!response.ok) {
