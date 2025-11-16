@@ -357,3 +357,55 @@ COMMENT ON TABLE published_runs IS 'Tracks simulations published to the public m
 COMMENT ON TABLE mitigation_recommendations IS 'AI-generated strategies to mitigate traffic disruptions';
 COMMENT ON TABLE travel_time_advice IS 'Travel time recommendations for the public';
 COMMENT ON TABLE audit_log IS 'Security and accountability log of all system actions';
+
+
+-- =============================================================================
+-- VERIFICATION ON SIMULATION RUNS
+-- =============================================================================
+
+-- Add OTP table for verification
+CREATE TABLE verification_otps (
+    otp_id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    simulation_id INTEGER NOT NULL REFERENCES simulation_runs(simulation_id) ON DELETE CASCADE,
+    otp_code VARCHAR(6) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL,
+    is_used BOOLEAN DEFAULT FALSE,
+    used_at TIMESTAMP
+);
+
+CREATE INDEX idx_verification_otps_user_id ON verification_otps(user_id);
+CREATE INDEX idx_verification_otps_simulation_id ON verification_otps(simulation_id);
+CREATE INDEX idx_verification_otps_otp_code ON verification_otps(otp_code);
+
+-- Add published_by name to published_runs view
+DROP VIEW IF EXISTS v_published_simulations;
+CREATE VIEW v_published_simulations AS
+SELECT 
+    pr.published_id,
+    pr.slug,
+    pr.title,
+    pr.public_description,
+    pr.published_at,
+    pr.is_active,
+    pr.view_count,
+    sr.simulation_name,
+    sr.disruption_type,
+    sr.disruption_location,
+    sr.start_time,
+    sr.end_time,
+    sr.severity_level,
+    sr.total_affected_segments,
+    sr.average_delay_ratio,
+    sr.disruption_geometry,
+    sr.updated_at as last_modified,
+    u.username as published_by_username,
+    u.full_name as published_by_name,
+    u.organization,
+    publisher.email as publisher_email
+FROM published_runs pr
+JOIN simulation_runs sr ON pr.simulation_id = sr.simulation_id
+JOIN users u ON sr.user_id = u.user_id
+JOIN users publisher ON pr.published_by = publisher.user_id
+WHERE pr.is_active = TRUE;

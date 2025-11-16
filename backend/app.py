@@ -1,6 +1,6 @@
 # backend/app.py - COMPLETE VERSION
 # Replace your entire app.py with this file
-
+import os
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
@@ -9,7 +9,10 @@ from datetime import datetime, timedelta
 import pandas as pd
 from services.traffic_api import TrafficAPIService
 from services.database import DatabaseService
-
+from werkzeug.utils import secure_filename
+from flask import send_file
+import random
+import string
 
 
 load_dotenv()
@@ -22,7 +25,38 @@ CORS(app, resources={
         "allow_headers": ["Content-Type", "Authorization"]
     }
 })
+# ============================================================
+# File upload configuration
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), '..', 'data', 'processed')
+ALLOWED_EXTENSIONS = {'csv'}
 
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
+
+# Ensure folder exists
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def allowed_file(filename):
+    """Check if file has allowed extension"""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def get_csv_info(filepath):
+    """Get CSV file information (rows, columns)"""
+    try:
+        df = pd.read_csv(filepath)
+        return {
+            'rows': len(df),
+            'cols': len(df.columns)
+        }
+    except Exception as e:
+        print(f"Error reading CSV {filepath}: {e}")
+        return {
+            'rows': 0,
+            'cols': 0
+        }
+
+# ============================================================
 
 print("Loading trained model...")
 predictor = TrafficPredictor()
@@ -1374,6 +1408,545 @@ def get_recommendations():
         'success': True,
         'recommendations': recommendations
     })
+
+# ============================================================
+# (Data/Uploaded) ROUTE 1: List All Files
+# ============================================================
+
+@app.route('/api/files/list', methods=['GET'])
+def list_files():
+    """
+    Get list of all CSV files in data/final folder
+    Returns file metadata including name, size, rows, cols, last modified
+    """
+    try:
+        files = []
+        
+        if not os.path.exists(UPLOAD_FOLDER):
+            return jsonify({
+                'success': True,
+                'files': []
+            })
+        
+        for filename in os.listdir(UPLOAD_FOLDER):
+            if filename.endswith('.csv'):
+                filepath = os.path.join(UPLOAD_FOLDER, filename)
+                
+                # Get file stats
+                file_stats = os.stat(filepath)
+                file_size = file_stats.st_size
+                modified_time = datetime.fromtimestamp(file_stats.st_mtime)
+                
+                # Get CSV info (rows/cols)
+                csv_info = get_csv_info(filepath)
+                
+                files.append({
+                    'id': filename,  # Using filename as ID
+                    'name': filename,
+                    'size_bytes': file_size,
+                    'size_mb': round(file_size / (1024 * 1024), 2),
+                    'rows': csv_info['rows'],
+                    'cols': csv_info['cols'],
+                    'updated': modified_time.strftime('%Y-%m-%d'),
+                    'updated_full': modified_time.strftime('%Y-%m-%d %H:%M:%S')
+                })
+        
+        # Sort by most recent first
+        files.sort(key=lambda x: x['updated_full'], reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'files': files,
+            'count': len(files)
+        })
+        
+    except Exception as e:
+        print(f"Error listing files: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ============================================================
+# (Data/Uploaded) ROUTE 2: Upload File
+# ============================================================
+
+@app.route('/api/files/upload', methods=['POST'])
+def upload_file():
+    """
+    Upload a CSV file to data/final folder
+    """
+    try:
+        # Check if file is in request
+        if 'file' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': 'No file provided'
+            }), 400
+        
+        file = request.files['file']
+        
+        # Check if file was selected
+        if file.filename == '':
+            return jsonify({
+                'success': False,
+                'error': 'No file selected'
+            }), 400
+        
+        # Validate file type
+        if not allowed_file(file.filename):
+            return jsonify({
+                'success': False,
+                'error': 'Only CSV files are allowed'
+            }), 400
+        
+        # Secure the filename
+        filename = secure_filename(file.filename)
+        
+        # Check if file already exists
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        if os.path.exists(filepath):
+            return jsonify({
+                'success': False,
+                'error': f'File "{filename}" already exists. Please rename or delete the existing file first.'
+            }), 409
+        
+        # Save file
+        file.save(filepath)
+        
+        # Get file info
+        csv_info = get_csv_info(filepath)
+        file_stats = os.stat(filepath)
+        
+        return jsonify({
+            'success': True,
+            'message': f'File "{filename}" uploaded successfully',
+            'file': {
+                'name': filename,
+                'rows': csv_info['rows'],
+                'cols': csv_info['cols'],
+                'size_mb': round(file_stats.st_size / (1024 * 1024), 2),
+                'updated': datetime.fromtimestamp(file_stats.st_mtime).strftime('%Y-%m-%d')
+            }
+        })
+        
+    except Exception as e:
+        print(f"Error uploading file: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ============================================================
+# (Data/Uploaded) ROUTE 3: Download Single File
+# ============================================================
+
+@app.route('/api/files/download/<filename>', methods=['GET'])
+def download_file(filename):
+    """
+    Download a specific file
+    """
+    try:
+        # Secure the filename
+        filename = secure_filename(filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        # Check if file exists
+        if not os.path.exists(filepath):
+            return jsonify({
+                'success': False,
+                'error': 'File not found'
+            }), 404
+        
+        # Send file
+        return send_file(
+            filepath,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='text/csv'
+        )
+        
+    except Exception as e:
+        print(f"Error downloading file: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ============================================================
+# (Data/Uploaded) ROUTE 4: Download Multiple Files (as ZIP)
+# ============================================================
+
+@app.route('/api/files/download-multiple', methods=['POST'])
+def download_multiple_files():
+    """
+    Download multiple files as a ZIP archive
+    """
+    try:
+        import zipfile
+        import io
+        
+        data = request.get_json()
+        filenames = data.get('filenames', [])
+        
+        if not filenames:
+            return jsonify({
+                'success': False,
+                'error': 'No files selected'
+            }), 400
+        
+        # Create in-memory ZIP file
+        memory_file = io.BytesIO()
+        
+        with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for filename in filenames:
+                filename = secure_filename(filename)
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                
+                if os.path.exists(filepath):
+                    zf.write(filepath, arcname=filename)
+        
+        memory_file.seek(0)
+        
+        # Generate ZIP filename with timestamp
+        zip_filename = f'urbanflow_datasets_{datetime.now().strftime("%Y%m%d_%H%M%S")}.zip'
+        
+        return send_file(
+            memory_file,
+            as_attachment=True,
+            download_name=zip_filename,
+            mimetype='application/zip'
+        )
+        
+    except Exception as e:
+        print(f"Error creating ZIP: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ============================================================
+# (Data/Uploaded) ROUTE 5: Delete File(s)
+# ============================================================
+
+@app.route('/api/files/delete', methods=['POST'])
+def delete_files():
+    """
+    Delete one or more files
+    """
+    try:
+        data = request.get_json()
+        filenames = data.get('filenames', [])
+        
+        if not filenames:
+            return jsonify({
+                'success': False,
+                'error': 'No files selected for deletion'
+            }), 400
+        
+        deleted = []
+        failed = []
+        
+        for filename in filenames:
+            try:
+                filename = secure_filename(filename)
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+                    deleted.append(filename)
+                else:
+                    failed.append({
+                        'filename': filename,
+                        'reason': 'File not found'
+                    })
+            except Exception as e:
+                failed.append({
+                    'filename': filename,
+                    'reason': str(e)
+                })
+        
+        return jsonify({
+            'success': len(failed) == 0,
+            'deleted': deleted,
+            'failed': failed,
+            'message': f'Successfully deleted {len(deleted)} file(s)'
+        })
+        
+    except Exception as e:
+        print(f"Error deleting files: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ============================================================
+# (Data/Uploaded) ROUTE 6: Get File Preview (first 10 rows)
+# ============================================================
+
+@app.route('/api/files/preview/<filename>', methods=['GET'])
+def preview_file(filename):
+    """
+    Get preview of CSV file (first 10 rows)
+    """
+    try:
+        filename = secure_filename(filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        if not os.path.exists(filepath):
+            return jsonify({
+                'success': False,
+                'error': 'File not found'
+            }), 404
+        
+        # Read CSV
+        df = pd.read_csv(filepath)
+        
+        # Get first 10 rows
+        preview_data = df.head(10).to_dict('records')
+        columns = df.columns.tolist()
+        
+        return jsonify({
+            'success': True,
+            'filename': filename,
+            'columns': columns,
+            'preview': preview_data,
+            'total_rows': len(df)
+        })
+        
+    except Exception as e:
+        print(f"Error previewing file: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ============================================================
+# OTP GENERATION AND VERIFICATION
+# ============================================================
+
+@app.route('/api/send-publish-otp', methods=['POST'])
+def send_publish_otp():
+    """
+    Generate and send OTP for publishing verification
+    In production, this would send an email. For now, we'll return it in response for testing.
+    """
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id', 2)
+        simulation_id = data.get('simulation_id')
+        
+        if not simulation_id:
+            return jsonify({
+                'success': False,
+                'error': 'simulation_id is required'
+            }), 400
+        
+        # Generate 6-digit OTP
+        otp_code = ''.join(random.choices(string.digits, k=6))
+        
+        # Store OTP in database
+        conn = None
+        try:
+            conn = db._get_connection()
+            cursor = conn.cursor()
+            
+            # Set expiry to 10 minutes from now
+            expires_at = datetime.now() + timedelta(minutes=10)
+            
+            cursor.execute("""
+                INSERT INTO verification_otps (user_id, simulation_id, otp_code, expires_at)
+                VALUES (%s, %s, %s, %s)
+            """, (user_id, simulation_id, otp_code, expires_at))
+            
+            # Get user email
+            cursor.execute("SELECT email, full_name FROM users WHERE user_id = %s", (user_id,))
+            user = cursor.fetchone()
+            
+            conn.commit()
+            
+            # TODO: In production, send email here using SendGrid/AWS SES
+            # For now, return OTP in response (REMOVE THIS IN PRODUCTION!)
+            
+            print(f"📧 OTP for simulation {simulation_id}: {otp_code}")
+            print(f"   User: {user[1]} ({user[0]})")
+            print(f"   Expires: {expires_at}")
+            
+            return jsonify({
+                'success': True,
+                'message': f'OTP sent to {user[0]}',
+                # REMOVE THIS IN PRODUCTION - only for testing:
+                'otp_for_testing': otp_code,  
+                'expires_in_minutes': 10
+            })
+            
+        finally:
+            if conn:
+                conn.close()
+                
+    except Exception as e:
+        print(f"✗ Error sending OTP: {e}")
+        import traceback
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
+@app.route('/api/verify-publish-otp', methods=['POST'])
+def verify_publish_otp():
+    """
+    Verify OTP and publish simulation if valid
+    """
+    try:
+        data = request.get_json()
+        
+        simulation_id = data.get('simulation_id')
+        otp_code = data.get('otp_code')
+        user_id = data.get('user_id', 2)
+        title = data.get('title')
+        public_description = data.get('public_description')
+        
+        if not simulation_id or not otp_code:
+            return jsonify({
+                'success': False,
+                'error': 'simulation_id and otp_code are required'
+            }), 400
+        
+        conn = None
+        try:
+            conn = db._get_connection()
+            cursor = conn.cursor()
+            
+            # Verify OTP
+            cursor.execute("""
+                SELECT otp_id, expires_at, is_used
+                FROM verification_otps
+                WHERE simulation_id = %s 
+                  AND otp_code = %s 
+                  AND user_id = %s
+                ORDER BY created_at DESC
+                LIMIT 1
+            """, (simulation_id, otp_code, user_id))
+            
+            otp_record = cursor.fetchone()
+            
+            if not otp_record:
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid OTP code'
+                }), 400
+            
+            otp_id, expires_at, is_used = otp_record
+            
+            # Check if already used
+            if is_used:
+                return jsonify({
+                    'success': False,
+                    'error': 'OTP code has already been used'
+                }), 400
+            
+            # Check if expired
+            if datetime.now() > expires_at:
+                return jsonify({
+                    'success': False,
+                    'error': 'OTP code has expired'
+                }), 400
+            
+            # Mark OTP as used
+            cursor.execute("""
+                UPDATE verification_otps
+                SET is_used = TRUE, used_at = CURRENT_TIMESTAMP
+                WHERE otp_id = %s
+            """, (otp_id,))
+            
+            # Publish the simulation
+            slug = db.publish_simulation(
+                simulation_id=simulation_id,
+                published_by_user_id=user_id,
+                title=title,
+                public_description=public_description
+            )
+            
+            if slug:
+                return jsonify({
+                    'success': True,
+                    'slug': slug,
+                    'message': 'Simulation published successfully',
+                    'public_url': f'/disruptions/{slug}'
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to publish simulation'
+                }), 500
+            
+        finally:
+            if conn:
+                conn.close()
+                
+    except Exception as e:
+        print(f"✗ Error verifying OTP: {e}")
+        import traceback
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
+# ============================================================
+# BATCH DELETE SIMULATIONS
+# ============================================================
+
+@app.route('/api/delete-simulations-batch', methods=['POST'])
+def delete_simulations_batch():
+    """
+    Delete multiple simulations at once
+    """
+    try:
+        data = request.get_json()
+        simulation_ids = data.get('simulation_ids', [])
+        user_id = data.get('user_id', 2)
+        
+        if not simulation_ids:
+            return jsonify({
+                'success': False,
+                'error': 'No simulation IDs provided'
+            }), 400
+        
+        deleted_count = 0
+        failed_ids = []
+        
+        for sim_id in simulation_ids:
+            success = db.delete_simulation(sim_id, user_id)
+            if success:
+                deleted_count += 1
+            else:
+                failed_ids.append(sim_id)
+        
+        return jsonify({
+            'success': True,
+            'deleted_count': deleted_count,
+            'failed_count': len(failed_ids),
+            'failed_ids': failed_ids,
+            'message': f'Successfully deleted {deleted_count} simulation(s)'
+        })
+        
+    except Exception as e:
+        print(f"✗ Error deleting simulations: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 
 # ============================================================
 # RUN APP
