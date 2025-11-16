@@ -1046,6 +1046,37 @@ class DatabaseService:
                 conn.close()
     
     # ============================================================
+    # Tracks publisher email and organization
+    # ============================================================
+    def get_published_simulations_with_publisher(self):
+        """
+        Get published simulations with publisher information
+        """
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            
+            query = """
+                SELECT * FROM v_published_simulations
+                ORDER BY published_at DESC
+            """
+            
+            cursor.execute(query)
+            simulations = cursor.fetchall()
+            
+            return [dict(s) for s in simulations]
+            
+        except Exception as e:
+            print(f"✗ Error retrieving published simulations: {e}")
+            return []
+            
+        finally:
+            if conn:
+                conn.close()
+
+
+    # ============================================================
     # EXISTING: DELETE OPERATIONS (No changes)
     # ============================================================
     
