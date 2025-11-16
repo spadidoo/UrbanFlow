@@ -46,6 +46,105 @@ print("Loading database service...")
 db = DatabaseService()
 print("✓ Database service ready!")
 
+# health check endpoint
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for dashboard"""
+    try:
+        # Test database connection
+        conn = db._get_connection()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'ml_model': 'active',
+            'database': 'active',
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'ml_model': 'error',
+            'database': 'error',
+            'error': str(e)
+        }), 500
+
+# ============================================
+# OPTION 2: Query your existing traffic_records table
+# ============================================
+@app.route('/api/traffic-status-db', methods=['GET'])
+def get_traffic_status_from_db():
+    """
+    Returns actual traffic data from your database.
+    Queries the most recent traffic_records for the specified road and hour.
+    """
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+    
+    road = request.args.get('road', '')
+    hour = request.args.get('hour', type=int)
+    
+    if not road or hour is None:
+        return jsonify({
+            "success": False,
+            "error": "Missing required parameters: road, hour"
+        }), 400
+    
+    try:
+        # Connect to your Supabase database
+        conn = psycopg2.connect(
+            host="YOUR_SUPABASE_HOST",
+            database="postgres",
+            user="postgres",
+            password="YOUR_PASSWORD",
+            port=5432
+        )
+        
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Query recent traffic records for this road at this hour
+        query = """
+            SELECT 
+                AVG(delay_ratio) as avg_congestion,
+                COUNT(*) as record_count
+            FROM traffic_records
+            WHERE road_segment_id IN (
+                SELECT segment_id 
+                FROM road_segments 
+                WHERE road_name ILIKE %s
+            )
+            AND EXTRACT(HOUR FROM timestamp) = %s
+            AND DATE(timestamp) >= CURRENT_DATE - INTERVAL '7 days'
+            GROUP BY EXTRACT(HOUR FROM timestamp)
+        """
+        
+        cursor.execute(query, (f'%{road}%', hour))
+        result = cursor.fetchone()
+        
+        cursor.close()
+        conn.close()
+        
+        if result and result['record_count'] > 0:
+            return jsonify({
+                "success": True,
+                "congestion_level": round(float(result['avg_congestion']), 2),
+                "timestamp": datetime.now().isoformat(),
+                "data_source": "database",
+                "road": road,
+                "hour": hour,
+                "sample_size": result['record_count']
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "message": "No recent data available for this road and hour"
+            }), 404
+            
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 # ============================================================
 # NEW ROUTE: Save Simulation to Database
@@ -893,22 +992,6 @@ def home():
     """Render the main page"""
     return render_template('index.html')
 
-# ============================================================
-# ROUTE 2: Health Check
-# ============================================================
-
-@app.route('/api/health', methods=['GET'])
-def health_check():
-    """Check if API and model are loaded"""
-    return jsonify({
-        'status': 'healthy',
-        'model_loaded': True,
-        'model_info': {
-            'accuracy': f"{predictor.model_info['accuracy']*100:.2f}%",
-            'mae': f"{predictor.model_info['mae']:.4f}",
-            'features': predictor.model_info['n_features']
-        }
-    })
 
 # ============================================================
 # ROUTE 3: Get Road Info (KEEP THIS - It's still useful!)
