@@ -1,9 +1,9 @@
 "use client"
 
-import Navbar from '@/components/Navbar'
-import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
+import Navbar from '../../components/Navbar'
+import { useAuth } from '../../src/contexts/AuthContext'
 
 export default function LoginPage() {
   const router = useRouter()
