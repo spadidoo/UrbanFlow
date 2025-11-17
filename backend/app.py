@@ -19,12 +19,13 @@ load_dotenv()
 app = Flask(__name__)
 
 # Configure CORS BEFORE registering blueprints
+# Configure CORS BEFORE registering blueprints
 CORS(app, resources={
     r"/api/*": {
-        "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
+        "origins": ["http://localhost:3000", "http://localhost:3001"],  # ✅ Both localhost
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"],
-        "supports_credentials": True  # Add this line
+        "supports_credentials": True
     }
 })
 

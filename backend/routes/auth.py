@@ -15,8 +15,14 @@ SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
 DATABASE_URL = os.getenv('DATABASE_URL')
 
 def get_db_connection():
-    """Get database connection using Supabase credentials"""
+    """Get database connection using your Supabase credentials"""
+    from dotenv import load_dotenv
+    load_dotenv()
+    
+    DATABASE_URL = os.getenv('DATABASE_URL')
+    
     if DATABASE_URL:
+        # Use Supabase connection
         from urllib.parse import urlparse
         url = urlparse(DATABASE_URL)
         return psycopg2.connect(
@@ -28,6 +34,7 @@ def get_db_connection():
             sslmode='require'
         )
     else:
+        # Fallback to local (but this won't work without local PostgreSQL)
         return psycopg2.connect(
             host=os.getenv('DB_HOST', 'localhost'),
             port=int(os.getenv('DB_PORT', 5432)),

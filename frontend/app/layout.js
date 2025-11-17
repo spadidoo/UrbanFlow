@@ -1,7 +1,7 @@
 "use client"  // ✅ Add this at the very top
 
-import { AuthProvider } from '@/contexts/AuthContext'
 import 'leaflet/dist/leaflet.css'
+import { AuthProvider } from '../src/contexts/AuthContext.js'
 import './globals.css'
 
 // Remove or comment out metadata since it's not allowed in client components

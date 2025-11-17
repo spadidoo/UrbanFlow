@@ -1,9 +1,9 @@
 "use client";
 
-import PlannerNavbar from "@/components/PlannerNavbar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import PlannerNavbar from "../../components/PlannerNavbar";
 
 export default function AccountPage() {
   const { user, loading: authLoading, isAuthenticated, updateProfile, changePassword } = useAuth();
