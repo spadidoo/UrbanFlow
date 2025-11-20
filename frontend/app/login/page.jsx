@@ -1,17 +1,29 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Navbar from '@/components/Navbar'
+import { useAuth } from '@/context/AuthContext';
+import LoadingScreen from '@/components/LoadingScreen'
 
 export default function LoginPage() {
   const router = useRouter()
+  const { login, isAuthenticated, loading: authLoading } = useAuth();
   const [formData, setFormData] = useState({
-    username: '',
+    email: '',
     password: ''
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  const hasRedirected = useRef(false)
+
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && !hasRedirected.current) {
+      hasRedirected.current = true;
+      router.replace('/dashboard');
+    }
+  }, [isAuthenticated, authLoading, router]);
 
   const handleChange = (e) => {
     setFormData({
@@ -26,18 +38,23 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    // TODO: Replace with actual API call later
-    // For now, use hardcoded credentials
-    if (formData.username === 'admin' && formData.password === 'admin123') {
-      // Success!
-      alert('Login successful! 🎉')
-      // TODO: Set authentication state
-      // TODO: Redirect to dashboard
-      router.push('/dashboard')
-    } else {
-      setError('Invalid username or password')
+    const result = await login(formData.email, formData.password)
+    
+    if (result.success) {
+      setError(result.error || 'Invalid email or password')
       setLoading(false)
-    }
+    } 
+  }
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -87,8 +104,8 @@ export default function LoginPage() {
               <div>
                 <input
                   type="text"
-                  name="username"
-                  value={formData.username}
+                  name="email"
+                  value={formData.email}
                   onChange={handleChange}
                   placeholder="Email"
                   required
@@ -139,10 +156,10 @@ export default function LoginPage() {
                 🔑 Test Credentials:
               </p>
               <p className="text-sm text-yellow-700">
-                Username: <code className="bg-yellow-100 px-2 py-1 rounded">admin</code>
+                Username: <code className="bg-yellow-100 px-2 py-1 rounded">planner_calamba@example.gov</code>
               </p>
               <p className="text-sm text-yellow-700">
-                Password: <code className="bg-yellow-100 px-2 py-1 rounded">admin123</code>
+                Password: <code className="bg-yellow-100 px-2 py-1 rounded">password123</code>
               </p>
             </div>
 

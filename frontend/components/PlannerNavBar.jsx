@@ -1,5 +1,6 @@
 "use client"
 
+import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
@@ -7,8 +8,14 @@ import { useState } from 'react'
 export default function PlannerNavbar() {
   const pathname = usePathname()
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const { logout, user } = useAuth(); //get logout function and user
   
   const isActive = (path) => pathname === path
+
+  const handleLogout = async () => {
+    setDropdownOpen(false); //close dropdown
+    await logout(); //call logout function
+  }
 
   return (
     <nav 
@@ -73,21 +80,29 @@ export default function PlannerNavbar() {
               {/* Dropdown Menu */}
               {dropdownOpen && (
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl py-2 z-50">
+                  {/* ADDED: Show user name if available */}
+                  {user && (
+                    <>
+                      <div className="px-4 py-2 text-gray-800 border-b">
+                        <p className="font-semibold">{user.firstName} {user.lastName}</p>
+                        <p className="text-xs text-gray-500">{user.email}</p>
+                      </div>
+                    </>
+                  )}
+                  
                   <Link 
                     href="/settings" 
                     className="block px-4 py-2 text-gray-800 hover:bg-gray-100"
+                    onClick={() => setDropdownOpen(false)}
                   >
                     Account Settings
                   </Link>
-                  <Link 
-                    href="/help" 
-                    className="block px-4 py-2 text-gray-800 hover:bg-gray-100"
-                  >
-                    Help
-                  </Link>
+                  
                   <hr className="my-2" />
+                  
+                  {/* FIXED: Now calls the proper logout function */}
                   <button 
-                    onClick={() => window.location.href = '/login'}
+                    onClick={handleLogout}
                     className="block w-full text-left px-4 py-2 text-red-600 hover:bg-gray-100"
                   >
                     Logout

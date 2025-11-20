@@ -13,6 +13,7 @@ from werkzeug.utils import secure_filename
 from flask import send_file
 import random
 import string
+from routes.auth import auth_bp
 
 
 load_dotenv()
@@ -22,9 +23,14 @@ CORS(app, resources={
     r"/api/*": {
         "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"]
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True
     }
 })
+
+# register blueprints after CORS
+app.register_blueprint(auth_bp, url_prefix='/api/auth')
+
 # ============================================================
 # File upload configuration
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), '..', 'data', 'processed')
@@ -457,6 +463,14 @@ def get_published_disruptions():
             'error': str(e),
             'traceback': traceback.format_exc()
         }), 500
+
+# Alias route for frontend compatibility
+@app.route('/api/published-simulations', methods=['GET'])
+def get_published_simulations_alias():
+    """
+    Alias for /api/published-disruptions for frontend compatibility
+    """
+    return get_published_disruptions()
 
 # ============================================================
 # NEW ROUTE: Delete Simulation
