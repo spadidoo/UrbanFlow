@@ -3,6 +3,7 @@
 import PlannerNavbar from "@/components/PlannerNavbar";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
+import { useAuth } from "@/context/AuthContext";
 import {
   CartesianGrid,
   Line,
@@ -15,6 +16,7 @@ import {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { user, loading: authLoading, isAuthenticated } = useAuth();
   const heatmapScrollRef = useRef(null);
 
   // State variables
@@ -56,6 +58,21 @@ export default function DashboardPage() {
     { day: "Sat", level: 0 },
     { day: "Sun", level: 0 },
   ]);
+
+  //redirect if not autheticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push("/login");
+    }
+  }, [authLoading, isAuthenticated, router]);
+
+  //fetch data when user is loaded
+  useEffect(() => {
+    if (user?.id) {
+      fetchDashboardData();
+      checkBackendHealth();
+    }
+  }, [user]);
 
   // ============================================
   // BACKEND HEALTH CHECK
@@ -425,8 +442,9 @@ export default function DashboardPage() {
             {/* Greeting */}
             <div className="mb-6">
               <h1 className="text-3xl font-bold text-gray-800">
-                Hello, <span style={{ color: "#F5820D" }}>John</span>
+                Hello, <span style={{ color: "#F5820D" }}>{user?.firstName}</span>
               </h1>
+              <p className="text-gray-600 mt-1"> Welcome back to your dashboard!</p>
             </div>
 
             {/* Quick Actions */}

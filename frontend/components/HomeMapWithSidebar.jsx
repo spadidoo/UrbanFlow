@@ -28,18 +28,22 @@ export default function HomeMapWithSidebar() {
   const fetchDisruptions = async () => {
     try {
       setLoading(true)
-      // TODO: Replace with actual endpoint when backend has it
-      // For now, use mock data but show structure
-      
-      // Mock data - Replace this with: const data = await api.getPublishedDisruptions()
-      // Replace mock data with:
+      setError(null)
+      // call api
       const disruptions = await api.getPublishedDisruptions()
 
-      setDisruptions(disruptions)
-      setError(null)
+      if (disruptions.success === false) {
+        setError('Unable to connect to server. Showing offline mode.')
+        setDisruptions([])
+      } else {
+        const disruptionData = disruptions.disruptions || []
+        setDisruptions(disruptionData)
+      }
+
     } catch (err) {
       console.error('Failed to fetch disruptions:', err)
-      setError('Failed to load disruptions. Please try again.')
+      setError('Failed to load disruptions. Please check your connection.')
+      setDisruptions([])
     } finally {
       setLoading(false)
     }
@@ -145,13 +149,19 @@ export default function HomeMapWithSidebar() {
           {/* Error State */}
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-              <p className="text-red-700 text-sm">{error}</p>
-              <button
-                onClick={fetchDisruptions}
-                className="mt-2 text-red-600 text-sm font-semibold hover:underline"
-              >
-                Try again
-              </button>
+              <div className="flex items-start gap-3">
+                <span className="text-2xl">⚠️</span>
+                <div className="flex-1">
+                  <p className="text-orange-800 font-semibold mb-1">Server Offline</p>
+                  <p className="text-red-700 text-sm">{error}</p>
+                <button
+                  onClick={fetchDisruptions}
+                  className="bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-orange-700 transition"
+                >
+                  Try again
+                </button>
+                </div>
+              </div>
             </div>
           )}
 

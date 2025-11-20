@@ -21,8 +21,19 @@ async function apiCall(endpoint, options = {}) {
 
     return await response.json();
   } catch (error) {
-    console.error("API call failed:", error);
-    throw error;
+    //silently handle errors when backend is offline -- only log in development mode
+    if (process.env.NODE_ENV !== 'development') {
+      console.warn(`API call failed for ${endpoint}: ${error.message}`);
+  }
+
+    return{
+      success: false,
+      error: error.message,
+      //provide empty data structure based on whats expected
+      disruptions: [],
+      simulations: [],
+      data: null,
+    };
   }
 }
 
