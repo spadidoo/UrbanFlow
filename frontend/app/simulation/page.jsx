@@ -2,12 +2,10 @@
 
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import dynamic from "next/dynamic";
 import PlannerNavbar from "@/components/PlannerNavbar";
-import api from "@/services/api";
 import { getRoadInfoFromOSM, getRoadSegmentsInArea } from "@/services/osmService";
-import SimulationActions from '@/components/SimulationActions';
+import dynamic from "next/dynamic";
+import { useEffect, useState } from "react";
 
 
 

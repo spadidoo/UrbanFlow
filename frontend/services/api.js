@@ -1,5 +1,5 @@
 // frontend/services/api.js
-// MERGED VERSION - Combines your existing API with database operations
+// COMPLETE VERSION - Includes all existing methods + new reports methods
 
 // API Configuration
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -32,6 +32,7 @@ async function apiCall(endpoint, options = {}) {
       //provide empty data structure based on whats expected
       disruptions: [],
       simulations: [],
+      reports: [],
       data: null,
     };
   }
@@ -78,7 +79,7 @@ export const api = {
   getPublishedDisruptions: () => apiCall("/api/published-disruptions"),
 
   // ============================================================
-  // NEW METHODS - Database Operations
+  // DATABASE OPERATIONS (Existing)
   // ============================================================
 
   /**
@@ -195,6 +196,68 @@ export const api = {
         user_id: userId,
       }),
     }),
+
+  // ============================================================
+  // NEW METHODS - Reports Operations
+  // ============================================================
+
+  /**
+   * Get all finished/completed simulations for reports
+   * @param {Object} filters - Optional filters
+   * @param {string} filters.query - Search query (matches title or location)
+   * @param {string} filters.date - Filter by date (YYYY-MM-DD)
+   * @param {string} filters.location - Filter by location (partial match)
+   * @param {string} filters.type - Filter by disruption type
+   * @param {number} filters.userId - User ID (defaults to 2)
+   * @returns {Promise<Object>} List of finished reports with metadata
+   * 
+   * Example:
+   * api.getFinishedReports({ query: 'roadwork', type: 'roadwork', userId: 2 })
+   */
+  getFinishedReports: (filters = {}) => {
+    const params = new URLSearchParams();
+    
+    if (filters.query) params.append('query', filters.query);
+    if (filters.date) params.append('date', filters.date);
+    if (filters.location) params.append('location', filters.location);
+    if (filters.type && filters.type !== 'all') params.append('type', filters.type);
+    if (filters.userId) params.append('user_id', filters.userId);
+    
+    const queryString = params.toString();
+    const endpoint = queryString ? `/api/reports?${queryString}` : '/api/reports';
+    
+    return apiCall(endpoint);
+  },
+
+  /**
+   * Export a report in the specified format
+   * NOTE: This method is different from others - it returns a Response object for file download
+   * 
+   * @param {number} simulationId - Simulation ID to export
+   * @param {string} format - Export format: 'pdf', 'csv', or 'excel'
+   * @returns {Promise<Response>} Response object with file blob
+   * 
+   * Example:
+   * const response = await api.exportReport(123, 'pdf');
+   * const blob = await response.blob();
+   * // Then trigger download in browser
+   */
+  exportReport: async (simulationId, format) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/reports/${simulationId}/export?format=${format}`
+      );
+      
+      if (!response.ok) {
+        throw new Error(`Export failed: ${response.status}`);
+      }
+      
+      return response;
+    } catch (error) {
+      console.error(`Error exporting report as ${format}:`, error);
+      throw error;
+    }
+  },
 };
 
 export default api;

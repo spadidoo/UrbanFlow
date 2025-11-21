@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
-import api from '@/services/api'
-import { getRoadInfoFromOSM } from '@/services/osmService'
+import React, { useEffect, useState } from 'react'
+import { Circle, MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
+import api from '../services/api'
 
 // Fix Leaflet icons
 delete L.Icon.Default.prototype._getIconUrl
@@ -75,11 +75,9 @@ export default function HomeMapWithSidebar() {
         setError('Unable to connect to server. Showing offline mode.')
         setDisruptions([])
       } else {
-        const disruptionData = response.disruptions || []
-        console.log('📥 Loaded disruptions:', disruptionData.length)
+        const disruptionData = disruptions.disruptions || []
         setDisruptions(disruptionData)
       }
-
     } catch (err) {
       console.error('Failed to fetch disruptions:', err)
       setError('Failed to load disruptions. Please check your connection.')
@@ -469,6 +467,8 @@ export default function HomeMapWithSidebar() {
         style={{
           top: '64px', // Start below navbar (navbar height is typically 64px or 4rem)
           height: 'calc(100vh - 64px)', // Full height minus navbar
+          top: '64px', // Start below navbar (navbar height is typically 64px or 4rem)
+          height: 'calc(100vh - 64px)', // Full height minus navbar
           backgroundColor: 'rgba(255, 255, 255, 0.95)',
           backdropFilter: 'blur(10px)',
         }}
@@ -502,9 +502,9 @@ export default function HomeMapWithSidebar() {
             </div>
           )}
 
-          {/* Error State */}
+          {/* Error State - Improved messaging */}
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
               <div className="flex items-start gap-3">
                 <span className="text-2xl">⚠️</span>
                 <div className="flex-1">
@@ -618,7 +618,49 @@ export default function HomeMapWithSidebar() {
       </div>
 
       {/* Map */}
-      <div ref={mapRef} className="w-full h-full" />
+      <MapContainer
+        center={[14.2096, 121.164]}
+        zoom={13}
+        style={{ height: '100%', width: '100%' }}
+        zoomControl={false}
+      >
+        <TileLayer
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution="&copy; OpenStreetMap contributors"
+        />
+
+        {/* Disruption Markers and Circles */}
+        {disruptions.map((d) => (
+          <React.Fragment key={d.id}>
+            <Marker position={[d.latitude, d.longitude]}>
+              <Popup>
+                <div className="p-2">
+                  <h3 className="font-bold text-lg">{d.title}</h3>
+                  <p className="text-sm text-gray-600">{d.location}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    <strong>Delay:</strong> +{d.expected_delay} min
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    <strong>Status:</strong> {d.congestion_level}
+                  </p>
+                </div>
+              </Popup>
+            </Marker>
+
+            {/* Congestion Circle (Blob) */}
+            <Circle
+              center={[d.latitude, d.longitude]}
+              radius={500}
+              pathOptions={{
+                color: getCongestionColor(d.congestion_level),
+                fillColor: getCongestionColor(d.congestion_level),
+                fillOpacity: 0.3,
+                weight: 2
+              }}
+            />
+          </React.Fragment>
+        ))}
+      </MapContainer>
     </div>
   )
 }
