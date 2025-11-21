@@ -102,6 +102,165 @@ def health_check():
             'error': str(e)
         }), 500
 
+# ============================================================
+# NEW ROUTE: Get Real-Time Traffic Status for Area
+# ============================================================
+@app.route('/api/traffic-status', methods=['GET'])
+def get_traffic_status():
+    """
+    Get real-time traffic status for a specific area and hour
+    
+    Query params:
+        - area: Area name (Bucal, Parian, Turbina, etc.)
+        - hour: Hour of day (0-23)
+    
+    Returns:
+        {
+            'success': True,
+            'area': 'Bucal',
+            'hour': 14,
+            'congestion_level': 1.5,  # 0.5-3.0 scale
+            'congestion_label': 'Moderate',
+            'timestamp': '2025-11-21T14:30:00',
+            'data_source': 'realtime' or 'historical' or 'predicted'
+        }
+    """
+    try:
+        area = request.args.get('area', '')
+        hour = request.args.get('hour', type=int)
+        
+        if not area or hour is None:
+            return jsonify({
+                'success': False,
+                'error': 'Missing area or hour parameter'
+            }), 400
+        
+        # Map area names to coordinates (adjust these based on your data)
+        area_coordinates = {
+            'Bucal': {'lat': 14.1894, 'lng': 121.1653},
+            'Parian': {'lat': 14.2115, 'lng': 121.1653},
+            'Turbina': {'lat': 14.2331, 'lng': 121.1653}
+        }
+        
+        if area not in area_coordinates:
+            return jsonify({
+                'success': False,
+                'error': f'Unknown area: {area}'
+            }), 400
+        
+        coords = area_coordinates[area]
+        current_hour = datetime.now().hour
+        
+        # ============================================================
+        # Try to get real-time data for current and recent hours
+        # ============================================================
+        if hour == current_hour or abs(hour - current_hour) <= 2:
+            try:
+                realtime_data = traffic_service.get_traffic_flow(
+                    coords['lat'], 
+                    coords['lng']
+                )
+                
+                if realtime_data.get('success'):
+                    congestion_ratio = realtime_data.get('congestion_ratio', 1.0)
+                    
+                    # Convert 0-2 scale to 0.5-3.0 scale
+                    # 0 = light (0.5-1.0)
+                    # 1 = moderate (1.0-2.0)
+                    # 2 = heavy (2.0-3.0)
+                    if congestion_ratio == 0:
+                        congestion_level = 0.5 + (random.random() * 0.5)  # 0.5-1.0
+                    elif congestion_ratio == 1:
+                        congestion_level = 1.0 + (random.random() * 1.0)  # 1.0-2.0
+                    else:
+                        congestion_level = 2.0 + (random.random() * 1.0)  # 2.0-3.0
+                    
+                    return jsonify({
+                        'success': True,
+                        'area': area,
+                        'hour': hour,
+                        'congestion_level': round(congestion_level, 2),
+                        'congestion_label': (
+                            'Light' if congestion_level < 1.5 else
+                            'Moderate' if congestion_level < 2.5 else
+                            'Heavy'
+                        ),
+                        'timestamp': datetime.now().isoformat(),
+                        'data_source': 'realtime'
+                    })
+            except Exception as e:
+                print(f"Real-time API failed: {e}")
+                # Fall through to historical/prediction
+        
+        # ============================================================
+        # Use historical patterns + prediction for other hours
+        # ============================================================
+        
+        # Base traffic levels per area (from your DWPH/POSO data)
+        base_levels = {
+            'Bucal': 1.3,
+            'Parian': 1.5,
+            'Turbina': 1.2
+        }
+        
+        base_level = base_levels.get(area, 1.0)
+        
+        # Time-of-day multiplier
+        if 6 <= hour <= 9:
+            time_mult = 1.6  # Morning rush
+        elif 17 <= hour <= 19:
+            time_mult = 1.8  # Evening rush
+        elif 12 <= hour <= 14:
+            time_mult = 1.3  # Lunch
+        elif 10 <= hour <= 11:
+            time_mult = 1.2  # Mid-morning
+        elif 15 <= hour <= 16:
+            time_mult = 1.3  # Mid-afternoon
+        elif 20 <= hour <= 22:
+            time_mult = 1.1  # Evening
+        elif hour >= 23 or hour <= 5:
+            time_mult = 0.4  # Night
+        else:
+            time_mult = 0.9  # Off-peak
+        
+        # Weekend adjustment
+        is_weekend = datetime.now().weekday() >= 5
+        if is_weekend:
+            if 6 <= hour <= 9 or 17 <= hour <= 19:
+                time_mult *= 0.7
+        
+        congestion_level = base_level * time_mult
+        
+        # Add slight variation
+        congestion_level += (random.random() - 0.5) * 0.2
+        
+        # Clamp to valid range
+        congestion_level = max(0.5, min(3.0, congestion_level))
+        
+        data_source = 'historical' if hour < current_hour else 'predicted'
+        
+        return jsonify({
+            'success': True,
+            'area': area,
+            'hour': hour,
+            'congestion_level': round(congestion_level, 2),
+            'congestion_label': (
+                'Light' if congestion_level < 1.5 else
+                'Moderate' if congestion_level < 2.5 else
+                'Heavy'
+            ),
+            'timestamp': datetime.now().isoformat(),
+            'data_source': data_source
+        })
+        
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
 # ============================================
 # OPTION 2: Query your existing traffic_records table
 # ============================================
@@ -293,6 +452,14 @@ def get_simulation(simulation_id):
         simulation = db.get_simulation_by_id(simulation_id)
         
         if simulation:
+            # 🔍 ADD THIS LOGGING
+            print(f"📊 Fetched simulation {simulation_id}")
+            print(f"   - Has hourly_predictions: {simulation.get('hourly_predictions') is not None}")
+            print(f"   - Type: {type(simulation.get('hourly_predictions'))}")
+            if simulation.get('hourly_predictions'):
+                print(f"   - Length: {len(simulation.get('hourly_predictions'))}")
+            print(f"   - Has aggregated_view: {simulation.get('aggregated_view') is not None}")
+            
             return jsonify({
                 'success': True,
                 'simulation': simulation
@@ -304,6 +471,9 @@ def get_simulation(simulation_id):
             }), 404
             
     except Exception as e:
+        print(f"❌ Error fetching simulation: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': str(e)

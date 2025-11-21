@@ -50,8 +50,12 @@ export default function SmartResultsMap({ simulationResults, selectedLocation, r
           }
         });
 
+        // ✅ FIXED: Don't throw error, use fallback instead
         if (!response.ok) {
-          throw new Error('OSM API request failed');
+          console.warn('⚠️ OSM API unavailable (status: ' + response.status + '), showing main road only');
+          setNearbyRoads([]);
+          setLoading(false);
+          return;
         }
 
         const data = await response.json();
@@ -115,10 +119,14 @@ export default function SmartResultsMap({ simulationResults, selectedLocation, r
           })));
 
           setNearbyRoads(filtered);
+        } else {
+          // No elements returned
+          console.log('ℹ️ No road elements in response');
+          setNearbyRoads([]);
         }
       } catch (error) {
         console.error('❌ Error fetching roads:', error);
-        // Set empty array on error instead of leaving it stuck
+        // ✅ Set empty array on error instead of crashing
         setNearbyRoads([]);
       } finally {
         setLoading(false);

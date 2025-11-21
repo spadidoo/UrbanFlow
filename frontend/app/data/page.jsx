@@ -297,20 +297,28 @@ export default function DataPage() {
 
   // Handle Edit - Navigate to simulation page with pre-filled data
   const handleEdit = async (simulation) => {
-    try {
-      // Fetch full simulation details
-      const details = await api.getSimulation(simulation.simulation_id);
+  try {
+    // Fetch full simulation details
+    const details = await api.getSimulation(simulation.simulation_id);
 
-      if (details) {
-        // Store in sessionStorage to pre-fill simulation form
-        sessionStorage.setItem("editSimulation", JSON.stringify(details));
-        router.push("/simulation");
-      }
-    } catch (error) {
-      console.error("Error loading simulation for edit:", error);
-      alert("Failed to load simulation details");
+    if (details) {
+      console.log("🔍 API Response:", details); // ADD THIS
+      
+      // ❌ WRONG: If details has { success: true, simulation: {...} }
+      // sessionStorage.setItem("editSimulation", JSON.stringify(details));
+      
+      // ✅ CORRECT: Extract the simulation object
+      const simulationData = details.simulation || details; // ADD THIS
+      console.log("💾 Saving to session:", simulationData); // ADD THIS
+      
+      sessionStorage.setItem("editSimulation", JSON.stringify(simulationData));
+      router.push("/simulation");
     }
-  };
+  } catch (error) {
+    console.error("Error loading simulation for edit:", error);
+    alert("Failed to load simulation details");
+  }
+};
 
   // Handle Publish - Show OTP Modal
   const handlePublishClick = (simulation) => {

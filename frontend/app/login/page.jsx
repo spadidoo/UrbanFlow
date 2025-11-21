@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Navbar from '@/components/Navbar'
 import { useAuth } from '@/context/AuthContext';
-import LoadingScreen from '@/components/LoadingScreen'
+
 
 export default function LoginPage() {
   const router = useRouter()
@@ -40,7 +40,7 @@ export default function LoginPage() {
 
     const result = await login(formData.email, formData.password)
     
-    if (result.success) {
+    if (!result.success) {
       setError(result.error || 'Invalid email or password')
       setLoading(false)
     } 
