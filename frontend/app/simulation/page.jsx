@@ -63,11 +63,12 @@ export default function SimulationPage() {
 //=======================================
 // Load simulation data if editing
 //=======================================
-  useEffect(() => {
+ useEffect(() => {
     const editData = sessionStorage.getItem('editSimulation');
     if (editData) {
       try {
         const simulation = JSON.parse(editData);
+        console.log("📊 EDIT DATA:", simulation);
         
         // Pre-fill form
         setFormData({
@@ -82,7 +83,6 @@ export default function SimulationPage() {
 
         // Pre-fill location if available
         if (simulation.disruption_geometry) {
-          // Extract coordinates from WKT geometry
           const wkt = simulation.disruption_geometry;
           const match = wkt.match(/POINT\(([^ ]+) ([^)]+)\)/);
           if (match) {
@@ -95,9 +95,96 @@ export default function SimulationPage() {
               center: { lat, lng },
             });
 
-            // Optionally fetch road info for this location
             handlePointSelect(lat, lng);
           }
+        }
+
+        // ✅ Parse hourly_predictions if it's a string
+        let hourlyPreds = simulation.hourly_predictions;
+        if (typeof hourlyPreds === 'string') {
+          hourlyPreds = JSON.parse(hourlyPreds);
+        }
+        
+        // ✅ Parse aggregated_view if it's a string
+        let aggView = simulation.aggregated_view;
+        if (typeof aggView === 'string') {
+          aggView = JSON.parse(aggView);
+        }
+
+        // Parse and set road_info
+         let roadInfoData = simulation.road_info;
+        if (typeof roadInfoData === 'string') {
+          roadInfoData = JSON.parse(roadInfoData);
+        }
+        if (roadInfoData) {
+          setRoadInfo(roadInfoData);
+          console.log("✅ Loaded road_info:", roadInfoData);
+        }
+
+        // Parse time_segments if needed
+        let timeSegsData = simulation.time_segments_data || simulation.time_segments;
+        if (typeof timeSegsData === 'string') {
+          timeSegsData = JSON.parse(timeSegsData);
+        }
+        console.log("✅ Loaded time_segments:", timeSegsData);
+
+        console.log("✅ Parsed hourly_predictions:", hourlyPreds);
+        console.log("✅ Parsed aggregated_view:", aggView);
+
+        // Load results
+        // Load results
+        if (hourlyPreds && Array.isArray(hourlyPreds) && hourlyPreds.length > 0) {
+          const resultsData = {
+            success: true,
+            simulation_id: simulation.simulation_id,
+            scenario_name: simulation.simulation_name,
+            disruption_type: simulation.disruption_type,
+            disruption_location: simulation.disruption_location,
+            start_datetime: simulation.start_time,
+            end_datetime: simulation.end_time,
+            severity_level: simulation.severity_level,
+            hourly_predictions: hourlyPreds,
+            time_segments: timeSegsData || {
+              morning: { light: 0, moderate: 0, heavy: 0 },
+              afternoon: { light: 0, moderate: 0, heavy: 0 },
+              night: { light: 0, moderate: 0, heavy: 0 }
+            },
+            summary: {
+              total_hours: hourlyPreds.length,
+              avg_severity: parseFloat(simulation.average_delay_ratio) || 0,
+              avg_delay: hourlyPreds.reduce((sum, h) => sum + (h.delay_info?.additional_delay_min || 0), 0) / hourlyPreds.length
+            },
+            aggregated_map_data: aggView,
+            road_info: roadInfoData || null,
+            recommendations: simulation.recommendations || [],
+            travel_advice: simulation.travel_advice || [],
+            // ✅ ADD THIS - the missing input field
+            input: {
+              area: simulation.disruption_location?.split(' - ')[0] || 'Unknown',
+              disruption_type: simulation.disruption_type || 'roadwork',
+              road_corridor: simulation.disruption_location?.split(' - ')[1] || 'Unknown',
+              start_datetime: simulation.start_time,
+              end_datetime: simulation.end_time
+            }
+          };
+          
+          setResults(resultsData);
+          console.log("🎨 After setResults - results:", !!resultsData, "isMapExpanded:", isMapExpanded);
+          
+          
+          setSavedSimulationId(simulation.simulation_id);
+          // ✅ ADD THESE - Set additional states for complete display
+          
+          // Mark as already saved so buttons show correctly
+          setSaveSuccess(true);
+          
+          // If it's published, mark publish success too
+          if (simulation.simulation_status === 'published') {
+            setPublishSuccess(true);
+          }
+          console.log("✅ Results loaded successfully!");
+        } else {
+          console.log("❌ hourly_predictions not valid:", hourlyPreds);
         }
 
         // Clear from session storage after loading
@@ -328,7 +415,8 @@ export default function SimulationPage() {
           summary: results.summary,
           hourly_predictions: results.hourly_predictions,
           aggregated_view: results.aggregated_view || null,
-          time_segments: results.time_segments
+          time_segments: results.time_segments,
+          road_info: results.road_info || roadInfo 
         }
       };
 

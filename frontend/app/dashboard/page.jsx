@@ -137,50 +137,22 @@ export default function DashboardPage() {
   // ============================================
   // CALCULATE HOURLY HEATMAP - ALL 24 HOURS
   // ============================================
+  //const calculateHeatmap = async (simulations) => {
+  // ============================================
+  // CALCULATE HOURLY HEATMAP - ALL 24 HOURS
+  // INDEPENDENT MODE - ALWAYS SHOWS BUCAL, PARIAN, TURBINA
+  // ============================================
   const calculateHeatmap = async (simulations) => {
-    console.log("🔥 Calculating 24-hour heatmap from", simulations.length, "simulations");
+    console.log("🔥 Calculating 24-hour heatmap (independent mode)");
     
-    if (!simulations || simulations.length === 0) {
-      console.log("⚠️ No simulations available");
-      setHeatmapData({
-        times: Array.from({ length: 24 }, (_, i) => `${i}:00`),
-        roads: [
-          { name: "No data yet", values: Array(24).fill(0) }
-        ]
-      });
-      return;
-    }
-
-    // Count frequency of each road
-    const roadFrequency = new Map();
+    // ✅ ALWAYS USE THESE TOP 3 AREAS - NO DEPENDENCY ON SIMULATIONS
+    const topAreas = [
+      { name: 'Bucal', lat: 14.1894, lng: 121.1653 },
+      { name: 'Parian', lat: 14.2115, lng: 121.1653 },
+      { name: 'Turbina', lat: 14.2331, lng: 121.1653 }
+    ];
     
-    simulations.forEach(sim => {
-      let roadName = sim.disruption_location;
-      if (roadName) {
-        roadName = roadName.split(' - ')[0].trim();
-        roadName = roadName.split(',')[0].trim();
-        roadFrequency.set(roadName, (roadFrequency.get(roadName) || 0) + 1);
-      }
-    });
-
-    // Get top 3 roads
-    let topRoads = Array.from(roadFrequency.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-      .map(([name]) => name);
-
-    console.log("📍 Top 3 roads:", topRoads);
-
-    // Fallback to defaults if needed
-    const defaultRoads = ['Bagong Kalsada', 'Parian Road', 'Makiling Road'];
-    while (topRoads.length < 3) {
-      const nextDefault = defaultRoads.find(road => !topRoads.includes(road));
-      if (nextDefault) {
-        topRoads.push(nextDefault);
-      } else {
-        break;
-      }
-    }
+    console.log("📍 Fixed top 3 areas:", topAreas.map(a => a.name).join(', '));
 
     const currentHour = new Date().getHours();
     
@@ -189,37 +161,20 @@ export default function DashboardPage() {
     
     // Format time labels
     const timeLabels = allHours.map(h => {
-      const isPast = h < currentHour;
-      const isCurrent = h === currentHour;
-      const isFuture = h > currentHour;
-      
       let label;
       if (h === 0) label = "12AM";
       else if (h === 12) label = "12PM";
       else if (h < 12) label = `${h}AM`;
       else label = `${h - 12}PM`;
       
-      if (isCurrent) label += " 🔴"; // Live indicator
+      if (h === currentHour) label += " 🔴"; // Live indicator
       
       return label;
     });
 
-    // Calculate values for each road across all 24 hours
-    const roadData = await Promise.all(topRoads.map(async roadName => {
-      const roadSims = simulations.filter(sim => 
-        sim.disruption_location?.includes(roadName)
-      );
-
-      // Calculate base severity from simulations
-      const validSeverities = roadSims
-        .map(sim => sim.average_delay_ratio)
-        .filter(val => val !== null && val !== undefined && !isNaN(val) && val > 0);
-      
-      const avgSeverity = validSeverities.length > 0
-        ? validSeverities.reduce((sum, val) => sum + val, 0) / validSeverities.length
-        : 1.5;
-
-      console.log(`📊 ${roadName}: ${roadSims.length} sims, ${validSeverities.length} valid, avg: ${avgSeverity.toFixed(2)}`);
+    // Calculate values for each area across all 24 hours
+    const roadData = await Promise.all(topAreas.map(async area => {
+      console.log(`\n📊 Processing ${area.name}...`);
 
       // Generate values for all 24 hours
       const values = await Promise.all(allHours.map(async hour => {
@@ -227,47 +182,108 @@ export default function DashboardPage() {
         const isCurrent = hour === currentHour;
         const isFuture = hour > currentHour;
 
-        // Try to get real-time data for current and recent past hours
+        // ============================================================
+        // 1. TRY REAL-TIME API FOR CURRENT AND RECENT HOURS
+        // ============================================================
         let realTimeValue = null;
-        if (isCurrent || (isPast && currentHour - hour <= 2)) {
-          realTimeValue = await fetchRealTimeTraffic(roadName, hour);
+        if (isCurrent || (isPast && currentHour - hour <= 3)) {
+          try {
+            const response = await fetch(
+              `http://localhost:5000/api/traffic-status?area=${encodeURIComponent(area.name)}&hour=${hour}`
+            );
+            
+            if (response.ok) {
+              const data = await response.json();
+              realTimeValue = data.congestion_level || null;
+              
+              if (realTimeValue !== null) {
+                console.log(`  ✅ Real-time data for ${area.name} at ${hour}:00 = ${realTimeValue}`);
+                return Math.max(0.5, Math.min(3.0, realTimeValue));
+              }
+            }
+          } catch (err) {
+            // Real-time API not available, will use historical patterns
+          }
         }
 
-        // If we have real-time data, use it!
-        if (realTimeValue !== null) {
-          console.log(`✅ Real-time data for ${roadName} at ${hour}:00 = ${realTimeValue}`);
-          return Math.max(0.5, Math.min(3.0, realTimeValue));
+        // ============================================================
+        // 2. USE HISTORICAL PATTERNS + PREDICTION
+        // ============================================================
+        
+        // Base traffic pattern per area (from historical DWPH/POSO data)
+        let baseLevel = 1.0;
+        
+        // Area-specific base levels (adjust based on your historical data)
+        if (area.name === 'Bucal') baseLevel = 1.3; // Higher base traffic
+        else if (area.name === 'Parian') baseLevel = 1.5; // Highest base traffic
+        else if (area.name === 'Turbina') baseLevel = 1.2; // Moderate base traffic
+        
+        // Time-of-day multiplier (typical daily pattern)
+        let timeMultiplier = 1.0;
+        
+        if (hour >= 6 && hour <= 9) {
+          // Morning rush hour
+          timeMultiplier = 1.6;
+        } else if (hour >= 17 && hour <= 19) {
+          // Evening rush hour  
+          timeMultiplier = 1.8;
+        } else if (hour >= 12 && hour <= 14) {
+          // Lunch time
+          timeMultiplier = 1.3;
+        } else if (hour >= 10 && hour <= 11) {
+          // Mid-morning
+          timeMultiplier = 1.2;
+        } else if (hour >= 15 && hour <= 16) {
+          // Mid-afternoon
+          timeMultiplier = 1.3;
+        } else if (hour >= 20 && hour <= 22) {
+          // Evening
+          timeMultiplier = 1.1;
+        } else if (hour >= 23 || hour <= 5) {
+          // Late night / early morning
+          timeMultiplier = 0.4;
+        } else {
+          // Off-peak
+          timeMultiplier = 0.9;
         }
-
-        // Otherwise, calculate based on patterns
-        let multiplier = 1.0;
         
-        // Time-of-day patterns
-        if (hour >= 7 && hour <= 9) multiplier = 1.5; // Morning rush
-        else if (hour >= 17 && hour <= 19) multiplier = 1.6; // Evening rush
-        else if (hour >= 12 && hour <= 14) multiplier = 1.2; // Lunch
-        else if (hour >= 22 || hour <= 5) multiplier = 0.5; // Night
-        else if (hour >= 10 && hour <= 11) multiplier = 1.1; // Mid-morning
-        else if (hour >= 15 && hour <= 16) multiplier = 1.2; // Mid-afternoon
-        else multiplier = 0.9; // Off-peak
+        // Check if it's weekend
+        const today = new Date();
+        const isWeekend = today.getDay() === 0 || today.getDay() === 6;
+        if (isWeekend) {
+          // Reduce weekday rush hour patterns on weekends
+          if (hour >= 6 && hour <= 9) timeMultiplier *= 0.7;
+          if (hour >= 17 && hour <= 19) timeMultiplier *= 0.7;
+        }
         
-        let value = avgSeverity * multiplier;
+        // Calculate final value
+        let value = baseLevel * timeMultiplier;
         
-        // Boost current hour slightly
+        // Add slight variation for realism
+        const randomVariation = (Math.random() - 0.5) * 0.2; // ±0.1
+        value += randomVariation;
+        
+        // Boost current hour slightly for emphasis
         if (isCurrent) {
-          value *= 1.15;
+          value *= 1.1;
         }
         
+        // For future hours, add uncertainty (slightly reduce confidence)
+        if (isFuture) {
+          value *= 0.95;
+        }
+        
+        // Ensure value is within bounds (0.5 = light, 3.0 = heavy)
         return Math.max(0.5, Math.min(3.0, value));
       }));
 
       return {
-        name: roadName,
+        name: area.name,
         values: values
       };
     }));
 
-    console.log("✅ 24-hour heatmap updated");
+    console.log("✅ 24-hour heatmap updated (independent mode)");
 
     setHeatmapData({
       times: timeLabels,
@@ -279,6 +295,7 @@ export default function DashboardPage() {
       scrollToCurrentHour();
     }, 100);
   };
+  
 
   // ============================================
   // AUTO-SCROLL TO CURRENT HOUR

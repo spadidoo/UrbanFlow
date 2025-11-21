@@ -211,6 +211,7 @@ class DatabaseService:
                 time_segment = 'night'
             
             # Insert into simulation_runs table
+            # Insert into simulation_runs table
             insert_query = """
                 INSERT INTO simulation_runs (
                     user_id,
@@ -226,8 +227,10 @@ class DatabaseService:
                     simulation_status,
                     total_affected_segments,
                     average_delay_ratio,
-                    max_delay_ratio
-                ) VALUES (%s, %s, %s, %s, %s, ST_GeomFromText(%s, 4326), %s, %s, %s, %s, %s, %s, %s, %s)
+                    max_delay_ratio,
+                    road_info,
+                    time_segments_data
+                ) VALUES (%s, %s, %s, %s, %s, ST_GeomFromText(%s, 4326), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING simulation_id
             """
             
@@ -245,7 +248,9 @@ class DatabaseService:
                 'completed',
                 summary.get('total_hours', 0),
                 summary.get('avg_severity', 1.0),
-                summary.get('max_severity', 1.0)
+                summary.get('max_severity', 1.0),
+                Json(results_data.get('road_info')),  # ✅ ADD
+                Json(results_data.get('time_segments'))  # ✅ ADD
             ))
             
             simulation_id = cursor.fetchone()[0]
@@ -336,20 +341,24 @@ class DatabaseService:
             try:
                 for pred in hourly_predictions:
                     cursor.execute("""
-                        INSERT INTO hourly_predictions (
-                            simulation_id,
-                            prediction_datetime,
-                            prediction_date,
-                            prediction_hour,
-                            day_of_week,
-                            severity_score,
-                            severity_label,
-                            confidence_score,
-                            additional_delay_minutes,
-                            reduced_speed_kmh,
-                            realtime_adjusted,
-                            probabilities
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        INSERT INTO simulation_runs (
+                            user_id,
+                            simulation_name,
+                            description,
+                            disruption_type,
+                            disruption_location,
+                            disruption_geometry,
+                            start_time,
+                            end_time,
+                            time_segment,
+                            severity_level,
+                            simulation_status,
+                            total_affected_segments,
+                            average_delay_ratio,
+                            max_delay_ratio,
+                            road_info,
+                            time_segments_data
+                        ) VALUES (%s, %s, %s, %s, %s, ST_GeomFromText(%s, 4326), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (simulation_id, prediction_datetime) DO NOTHING
                     """, (
                         simulation_id,
@@ -761,15 +770,32 @@ class DatabaseService:
             conn = self._get_connection()
             cursor = conn.cursor(cursor_factory=RealDictCursor)
             
-            # Get simulation run WITH new JSONB fields
+            # Get simulation run WITH JSONB fields properly decoded
             cursor.execute("""
                 SELECT 
-                    sr.*,
-                    u.username,
-                    u.full_name,
-                    ST_AsText(sr.disruption_geometry) as disruption_geometry_wkt,
+                    sr.simulation_id,
+                    sr.user_id,
+                    sr.simulation_name,
+                    sr.description,
+                    sr.disruption_type,
+                    sr.disruption_location,
+                    ST_AsText(sr.disruption_geometry) as disruption_geometry,
+                    sr.start_time,
+                    sr.end_time,
+                    sr.time_segment,
+                    sr.severity_level,
+                    sr.alternate_route_provided,
+                    sr.simulation_status,
+                    sr.run_timestamp,
+                    sr.created_at,
+                    sr.updated_at,
+                    sr.total_affected_segments,
+                    sr.average_delay_ratio,
+                    sr.max_delay_ratio,
                     sr.hourly_predictions,
-                    sr.aggregated_view
+                    sr.aggregated_view,
+                    u.username,
+                    u.full_name
                 FROM simulation_runs sr
                 JOIN users u ON sr.user_id = u.user_id
                 WHERE sr.simulation_id = %s
@@ -780,6 +806,21 @@ class DatabaseService:
                 return None
             
             simulation = dict(simulation)
+
+            # Parse JSONB fields
+            if simulation.get('hourly_predictions_json'):
+                try:
+                    simulation['hourly_predictions'] = json.loads(simulation['hourly_predictions_json'])
+                    del simulation['hourly_predictions_json']
+                except:
+                    simulation['hourly_predictions'] = None
+            
+            if simulation.get('aggregated_view_json'):
+                try:
+                    simulation['aggregated_view'] = json.loads(simulation['aggregated_view_json'])
+                    del simulation['aggregated_view_json']
+                except:
+                    simulation['aggregated_view'] = None
             
             # Get time segment results
             cursor.execute("""
