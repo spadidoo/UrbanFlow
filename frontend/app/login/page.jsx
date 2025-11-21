@@ -1,36 +1,38 @@
 "use client"
 
-import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
-import Navbar from '@/components/Navbar'
+import Navbar from '@/components/Navbar';
 import { useAuth } from '@/context/AuthContext';
-import LoadingScreen from '@/components/LoadingScreen'
+import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login, isAuthenticated, loading: authLoading } = useAuth();
+  const { login, isAuthenticated, loading: authLoading } = useAuth()
+  
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-
+  
+  // Use ref to track if we've already redirected
   const hasRedirected = useRef(false)
 
+  // FIXED: Only redirect if authenticated AND not currently loading
   useEffect(() => {
     if (!authLoading && isAuthenticated && !hasRedirected.current) {
       hasRedirected.current = true;
       router.replace('/dashboard');
     }
-  }, [isAuthenticated, authLoading, router]);
+  }, [isAuthenticated, authLoading, router])
 
   const handleChange = (e) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
     })
-    setError('') // Clear error when user types
+    setError('')
   }
 
   const handleSubmit = async (e) => {
@@ -40,12 +42,14 @@ export default function LoginPage() {
 
     const result = await login(formData.email, formData.password)
     
-    if (result.success) {
+    if (!result.success) {
       setError(result.error || 'Invalid email or password')
       setLoading(false)
-    } 
+    }
+    // If success, the AuthContext will handle the redirect to dashboard
   }
 
+  // Show loading spinner while checking authentication
   if (authLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center">
@@ -67,7 +71,7 @@ export default function LoginPage() {
           backgroundImage: "url('map.jpg')",
           backgroundSize: 'cover',
           backgroundPosition: 'center',
-          opacity: 0.5, // Adjust the opacity here
+          opacity: 0.5,
         }}
       ></div>
       <Navbar />
@@ -77,16 +81,16 @@ export default function LoginPage() {
           {/* Login Card */}
           <div className="bg-white rounded-lg shadow-xl p-8">
             {/* Header */}
-                  <div className="text-center mb-10">
-                    <div className="mx-auto w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mb-4">
-                    <img src="urban_planner_icon.png" alt="Urban Planner Icon" className="h-20 w-20" />
-                    </div>
-                    <h1 className="text-3xl font-bold text-gray-800 mb-2">
-                    Urban Planner Login
-                    </h1>
-                  </div>
+            <div className="text-center mb-10">
+              <div className="mx-auto w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mb-4">
+                <img src="urban_planner_icon.png" alt="Urban Planner Icon" className="h-20 w-20" />
+              </div>
+              <h1 className="text-3xl font-bold text-gray-800 mb-2">
+                Urban Planner Login
+              </h1>
+            </div>
 
-                  {/* Error Message */}
+            {/* Error Message */}
             {error && (
               <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
                 <div className="flex items-center gap-2">
@@ -100,16 +104,17 @@ export default function LoginPage() {
 
             {/* Login Form */}
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Username */}
+              {/* Email */}
               <div>
                 <input
-                  type="text"
+                  type="email"
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
                   placeholder="Email"
                   required
-                  className="w-full px-2 py-1 border border-gray-300 text-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={loading}
+                  className="w-full px-2 py-1 border border-gray-300 text-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
                 />
               </div>
 
@@ -122,19 +127,20 @@ export default function LoginPage() {
                   onChange={handleChange}
                   placeholder="Password"
                   required
-                  className="w-full px-2 py-1 border border-gray-300 text-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={loading}
+                  className="w-full px-2 py-1 border border-gray-300 text-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
                 />
               </div>
 
               {/* Forgot Password */}
-                <div className="text-left">
-                  <a
-                      href="/forgot-password"
-                      className="text-sm text-blue-600 hover:underline font-semibold"
-                    >
-                      Forgot password?
-                  </a>
-                </div>
+              <div className="text-left">
+                <a
+                  href="/forgot-password"
+                  className="text-sm text-blue-600 hover:underline font-semibold"
+                >
+                  Forgot password?
+                </a>
+              </div>
 
               {/* Submit Button */}
               <button
@@ -143,7 +149,7 @@ export default function LoginPage() {
                 className={`w-full bg-[#242424] text-[#FFA611] py-3 rounded-full font-semibold transition ${
                   loading 
                     ? 'opacity-50 cursor-not-allowed' 
-                    : 'hover:bg-[#FFA611] hover:text-[#242424] '
+                    : 'hover:bg-[#FFA611] hover:text-[#242424]'
                 }`}
               >
                 {loading ? 'Logging in...' : 'Login'}
@@ -156,7 +162,7 @@ export default function LoginPage() {
                 🔑 Test Credentials:
               </p>
               <p className="text-sm text-yellow-700">
-                Username: <code className="bg-yellow-100 px-2 py-1 rounded">planner_calamba@example.gov</code>
+                Email: <code className="bg-yellow-100 px-2 py-1 rounded">planner_calamba@example.gov</code>
               </p>
               <p className="text-sm text-yellow-700">
                 Password: <code className="bg-yellow-100 px-2 py-1 rounded">password123</code>
