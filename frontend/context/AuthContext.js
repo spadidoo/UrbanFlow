@@ -54,7 +54,15 @@ export function AuthProvider({ children }) {
       if (response.ok) {
         const data = await response.json();
         console.log("✅ User authenticated:", data.user);
-        setUser(data.user);
+        
+        // ✅ NEW: Include avatarUrl in user object
+        const userData = {
+          ...data.user,
+          // Map profile_photo to avatarUrl for frontend consistency
+          avatarUrl: data.user.profile_photo || data.user.avatarUrl || "/urban_planner_icon.png"
+        };
+        
+        setUser(userData);
       } else {
         console.log("❌ Token invalid - clearing");
         localStorage.removeItem("token");
@@ -87,7 +95,14 @@ export function AuthProvider({ children }) {
       }
 
       localStorage.setItem("token", data.token);
-      setUser(data.user);
+      
+      // ✅ NEW: Include avatarUrl in user object after login
+      const userData = {
+        ...data.user,
+        avatarUrl: data.user.profile_photo || data.user.avatarUrl || "/urban_planner_icon.png"
+      };
+      
+      setUser(userData);
 
       router.push("/dashboard");
       
@@ -138,7 +153,8 @@ export function AuthProvider({ children }) {
         throw new Error(data.error || "Update failed");
       }
 
-      setUser(data.user);
+      // ✅ NEW: Reload user data to get updated avatar
+      await checkAuth();
       
       return { success: true, message: data.message };
     } catch (error) {
@@ -173,6 +189,7 @@ export function AuthProvider({ children }) {
     }
   }
 
+  // ✅ NEW: Expose checkAuth so it can be called after avatar upload
   const value = {
     user,
     loading,
@@ -180,6 +197,7 @@ export function AuthProvider({ children }) {
     logout,
     updateProfile,
     changePassword,
+    checkAuth,  // NEW: Allow manual refresh of user data
     isAuthenticated: !!user,
   };
 
