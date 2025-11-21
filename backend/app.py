@@ -14,7 +14,22 @@ from flask import send_file
 import random
 import string
 from routes.auth import auth_bp
-
+from flask import jsonify, request, send_file, make_response
+from datetime import datetime
+import pandas as pd
+import io
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+from reportlab.lib.units import inch
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment
+from psycopg2.extras import RealDictCursor
+from werkzeug.utils import secure_filename
+import os
+import base64
+from datetime import datetime, timedelta
 
 load_dotenv()
 
@@ -61,6 +76,12 @@ def get_csv_info(filepath):
             'rows': 0,
             'cols': 0
         }
+    
+
+
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), '..', 'uploads', 'avatars')
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+MAX_FILE_SIZE = 2 * 1024 * 1024
 
 # ============================================================
 
@@ -78,6 +99,1140 @@ print("✓ Traffic API service ready!")
 print("Loading database service...")
 db = DatabaseService()
 print("✓ Database service ready!")
+
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def allowed_file(filename):
+    """Check if file has allowed extension"""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def save_avatar_to_db(user_id, image_data, filename):
+    """Save avatar image data to database"""
+    conn = None
+    try:
+        conn = db._get_connection()
+        cursor = conn.cursor()
+        
+        # Update user's avatar in database
+        # Store as base64 in profile_photo column
+        cursor.execute("""
+            UPDATE users 
+            SET profile_photo = %s,
+                profile_photo_filename = %s,
+                updated_at = NOW()
+            WHERE user_id = %s
+        """, (image_data, filename, user_id))
+        
+        conn.commit()
+        print(f"✓ Avatar saved for user {user_id}")
+        return True
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"✗ Error saving avatar: {e}")
+        return False
+        
+    finally:
+        if conn:
+            conn.close()
+
+# ============================================================
+# NEW ROUTE: Upload Avatar
+# ============================================================
+
+@app.route('/api/upload-avatar', methods=['POST'])
+def upload_avatar():
+    """
+    Upload user avatar/profile picture
+    
+    Form data:
+        - avatar: Image file
+        - user_id: User ID
+    
+    Returns:
+        - success: Boolean
+        - avatar_url: URL to access the avatar (if successful)
+        - error: Error message (if failed)
+    """
+    try:
+        # Check if file is in request
+        if 'avatar' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': 'No file provided'
+            }), 400
+        
+        file = request.files['avatar']
+        
+        # Check if file was selected
+        if file.filename == '':
+            return jsonify({
+                'success': False,
+                'error': 'No file selected'
+            }), 400
+        
+        # Get user_id
+        user_id = request.form.get('user_id')
+        if not user_id:
+            return jsonify({
+                'success': False,
+                'error': 'user_id is required'
+            }), 400
+        
+        user_id = int(user_id)
+        
+        # Validate file type
+        if not allowed_file(file.filename):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid file type. Allowed: PNG, JPG, JPEG, GIF, WEBP'
+            }), 400
+        
+        # Read file data
+        file_data = file.read()
+        
+        # Check file size
+        if len(file_data) > MAX_FILE_SIZE:
+            return jsonify({
+                'success': False,
+                'error': f'File too large. Maximum size: {MAX_FILE_SIZE / (1024*1024)}MB'
+            }), 400
+        
+        # Generate secure filename
+        original_filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"user_{user_id}_{timestamp}_{original_filename}"
+        
+        # Convert to base64 for database storage
+        base64_data = base64.b64encode(file_data).decode('utf-8')
+        
+        # Get file extension for data URL
+        file_ext = original_filename.rsplit('.', 1)[1].lower()
+        mime_type = f"image/{file_ext if file_ext != 'jpg' else 'jpeg'}"
+        
+        # Create data URL for storage
+        data_url = f"data:{mime_type};base64,{base64_data}"
+        
+        # Save to database
+        success = save_avatar_to_db(user_id, data_url, filename)
+        
+        if not success:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to save avatar to database'
+            }), 500
+        
+        # OPTIONAL: Also save to filesystem
+        # file_path = os.path.join(UPLOAD_FOLDER, filename)
+        # with open(file_path, 'wb') as f:
+        #     f.write(file_data)
+        
+        return jsonify({
+            'success': True,
+            'avatar_url': data_url,  # Return data URL for immediate preview
+            'filename': filename,
+            'message': 'Avatar uploaded successfully'
+        })
+        
+    except Exception as e:
+        import traceback
+        print(f"✗ Error uploading avatar: {e}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ============================================================
+# NEW ROUTE: Get User Avatar
+# ============================================================
+
+@app.route('/api/user/<int:user_id>/avatar', methods=['GET'])
+def get_user_avatar(user_id):
+    """
+    Get user's avatar image
+    
+    Returns the avatar as base64 data URL
+    """
+    conn = None
+    try:
+        conn = db._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT profile_photo, profile_photo_filename
+            FROM users
+            WHERE user_id = %s
+        """, (user_id,))
+        
+        result = cursor.fetchone()
+        
+        if not result or not result[0]:
+            return jsonify({
+                'success': False,
+                'error': 'No avatar found'
+            }), 404
+        
+        return jsonify({
+            'success': True,
+            'avatar_url': result[0],
+            'filename': result[1]
+        })
+        
+    except Exception as e:
+        print(f"✗ Error fetching avatar: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+        
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/user/profile', methods=['GET'])
+def get_user_profile():
+    """
+    Get current user's profile including avatar
+    """
+    try:
+        # Get user_id from auth (for now, using hardcoded)
+        user_id = request.args.get('user_id', 3, type=int)  # Your user is ID 3
+        
+        conn = db._get_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cursor.execute("""
+            SELECT 
+                user_id,
+                username,
+                email,
+                first_name,
+                last_name,
+                role,
+                profile_photo,          -- CRITICAL: Include this
+                profile_photo_filename,
+                organization,
+                created_at,
+                updated_at
+            FROM users
+            WHERE user_id = %s
+        """, (user_id,))
+        
+        user = cursor.fetchone()
+        
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+        
+        # Convert to dict and format
+        user_data = dict(user)
+        
+        return jsonify({
+            'success': True,
+            'user': {
+                'id': user_data['user_id'],
+                'username': user_data['username'],
+                'email': user_data['email'],
+                'firstName': user_data['first_name'],
+                'lastName': user_data['last_name'],
+                'role': user_data['role'],
+                'name': f"{user_data['first_name']} {user_data['last_name']}",
+                'avatarUrl': user_data['profile_photo'] or '/urban_planner_icon.png',  # CRITICAL
+                'organization': user_data.get('organization')
+            }
+        })
+        
+    except Exception as e:
+        print(f"Error fetching profile: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    finally:
+        if conn:
+            conn.close()
+
+# ============================================================
+# NEW ROUTE: Get Completed/Finished Simulations (for Reports)
+# ============================================================
+
+@app.route('/api/reports', methods=['GET'])
+def get_finished_reports():
+    """
+    Get all finished simulations for the reports page
+    
+    A simulation is considered finished when:
+    - Its end_time is before current time
+    - OR simulation_status is 'completed' or 'published'
+    
+    Query params:
+        - query: Search by title or location
+        - date: Filter by date (YYYY-MM-DD)
+        - location: Filter by location
+        - type: Filter by disruption type
+        - user_id: User ID (optional, defaults to 2)
+    """
+    try:
+        # Get query parameters
+        search_query = request.args.get('query', '').strip()
+        filter_date = request.args.get('date', '').strip()
+        filter_location = request.args.get('location', '').strip()
+        filter_type = request.args.get('type', '').strip()
+        user_id = request.args.get('user_id', 2, type=int)
+        
+        conn = None
+        try:
+            conn = db._get_connection()
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            
+            # Base query for finished simulations
+            query = """
+                SELECT 
+                    sr.simulation_id,
+                    sr.simulation_name,
+                    sr.description,
+                    sr.disruption_type,
+                    sr.disruption_location,
+                    sr.start_time,
+                    sr.end_time,
+                    sr.severity_level,
+                    sr.simulation_status,
+                    sr.total_affected_segments,
+                    sr.average_delay_ratio,
+                    sr.created_at,
+                    sr.updated_at,
+                    pr.published_id,
+                    pr.title as published_title,
+                    pr.published_at,
+                    pr.is_active as is_published
+                FROM simulation_runs sr
+                LEFT JOIN published_runs pr ON sr.simulation_id = pr.simulation_id
+                WHERE sr.user_id = %s
+                AND sr.simulation_status != 'deleted'
+                AND (
+                    sr.end_time < NOW()
+                    OR sr.simulation_status IN ('completed', 'published')
+                )
+            """
+            
+            params = [user_id]
+            
+            # Apply filters
+            if search_query:
+                query += """ AND (
+                    LOWER(sr.simulation_name) LIKE %s 
+                    OR LOWER(sr.disruption_location) LIKE %s
+                    OR LOWER(pr.title) LIKE %s
+                )"""
+                search_pattern = f'%{search_query.lower()}%'
+                params.extend([search_pattern, search_pattern, search_pattern])
+            
+            if filter_date:
+                query += " AND DATE(sr.start_time) = %s"
+                params.append(filter_date)
+            
+            if filter_location:
+                query += " AND LOWER(sr.disruption_location) LIKE %s"
+                params.append(f'%{filter_location.lower()}%')
+            
+            if filter_type and filter_type.lower() != 'all':
+                query += " AND LOWER(sr.disruption_type) = %s"
+                params.append(filter_type.lower())
+            
+            query += " ORDER BY sr.end_time DESC, sr.created_at DESC"
+            
+            cursor.execute(query, params)
+            simulations = cursor.fetchall()
+            
+            # Transform to frontend format
+            reports = []
+            for sim in simulations:
+                # Determine the display title
+                title = sim.get('published_title') or sim['simulation_name']
+                
+                # Format dates
+                start_date = sim['start_time'].strftime('%Y-%m-%d') if sim['start_time'] else 'N/A'
+                end_date = sim['end_time'].strftime('%Y-%m-%d') if sim['end_time'] else 'N/A'
+                date_range = f"{start_date} to {end_date}" if start_date != end_date else start_date
+                
+                # Extract barangay from location
+                location = sim['disruption_location'] or 'Unknown Location'
+                
+                reports.append({
+                    'id': sim['simulation_id'],
+                    'title': title,
+                    'location': location,
+                    'date': date_range,
+                    'start_date': start_date,
+                    'end_date': end_date,
+                    'type': (sim['disruption_type'] or 'general').capitalize(),
+                    'severity_level': sim['severity_level'] or 'moderate',
+                    'status': 'Published' if sim.get('is_published') else 'Completed',
+                    'total_affected_segments': sim['total_affected_segments'] or 0,
+                    'average_delay_ratio': float(sim['average_delay_ratio']) if sim['average_delay_ratio'] else 0.0,
+                    'created_at': sim['created_at'].isoformat() if sim['created_at'] else None,
+                })
+            
+            return jsonify({
+                'success': True,
+                'reports': reports,
+                'count': len(reports)
+            })
+            
+        except Exception as e:
+            print(f"✗ Error retrieving reports: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+            
+        finally:
+            if conn:
+                conn.close()
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ============================================================
+# NEW ROUTE: Export Report as PDF
+# ============================================================
+
+@app.route('/api/reports/<int:simulation_id>/export', methods=['GET'])
+def export_report(simulation_id):
+    """
+    Export a report in PDF, CSV, or Excel format
+    
+    Query params:
+        - format: 'pdf', 'csv', or 'excel' (required)
+    """
+    try:
+        export_format = request.args.get('format', '').lower()
+        
+        if export_format not in ['pdf', 'csv', 'excel']:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid format. Must be pdf, csv, or excel'
+            }), 400
+        
+        # Get simulation data
+        simulation = db.get_simulation_by_id(simulation_id)
+        
+        if not simulation:
+            return jsonify({
+                'success': False,
+                'error': 'Simulation not found'
+            }), 404
+        
+        # Generate export based on format
+        if export_format == 'pdf':
+            return export_as_pdf(simulation)
+        elif export_format == 'csv':
+            return export_as_csv(simulation)
+        elif export_format == 'excel':
+            return export_as_excel(simulation)
+            
+    except Exception as e:
+        import traceback
+        print(f"✗ Error exporting report: {e}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+def export_as_pdf(simulation):
+    """
+    Generate COMPACT PDF export with minimal spacing
+    All sections flow continuously without unnecessary page breaks
+    """
+    buffer = io.BytesIO()
+    
+    # ============================================================
+    # COMPACT DOCUMENT SETUP - Reduced margins
+    # ============================================================
+    doc = SimpleDocTemplate(
+        buffer, 
+        pagesize=letter,
+        rightMargin=40,      # Reduced from 50
+        leftMargin=40,       # Reduced from 50
+        topMargin=35,        # Reduced from 50
+        bottomMargin=25      # Reduced from 30
+    )
+    
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    # ============================================================
+    # COMPACT STYLES - Reduced spacing
+    # ============================================================
+    
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=18,          # Reduced from 22
+        textColor=colors.HexColor('#FF6B35'),
+        spaceAfter=8,         # Reduced from 20
+        spaceBefore=0,
+        alignment=1,
+        fontName='Helvetica-Bold'
+    )
+    
+    heading_style = ParagraphStyle(
+        'CustomHeading',
+        parent=styles['Heading2'],
+        fontSize=12,          # Reduced from 14
+        textColor=colors.HexColor('#2C3E50'),
+        spaceAfter=6,         # Reduced from 10
+        spaceBefore=8,        # Reduced from 15
+        fontName='Helvetica-Bold'
+    )
+    
+    subheading_style = ParagraphStyle(
+        'CustomSubheading',
+        parent=styles['Heading3'],
+        fontSize=10,          # Reduced from 12
+        textColor=colors.HexColor('#34495E'),
+        spaceAfter=4,         # Reduced from 8
+        spaceBefore=6,        # Reduced from 10
+        fontName='Helvetica-Bold'
+    )
+    
+    compact_normal = ParagraphStyle(
+        'CompactNormal',
+        parent=styles['Normal'],
+        fontSize=9,
+        spaceAfter=4,
+        spaceBefore=0
+    )
+    
+    # ============================================================
+    # TITLE AND METADATA - Compact
+    # ============================================================
+    
+    title = Paragraph(
+        f"UrbanFlow Traffic Simulation Report<br/>{simulation['simulation_name']}", 
+        title_style
+    )
+    elements.append(title)
+    elements.append(Spacer(1, 6))  # Reduced from 10
+    
+    # Report metadata - compact
+    metadata_text = f"""
+    <b>Report Generated:</b> {datetime.now().strftime('%B %d, %Y at %I:%M %p')}<br/>
+    <b>Simulation ID:</b> {simulation['simulation_id']}<br/>
+    <b>Report Type:</b> Traffic Disruption Analysis
+    """
+    elements.append(Paragraph(metadata_text, compact_normal))
+    elements.append(Spacer(1, 8))  # Reduced from 15
+    
+    # ============================================================
+    # BASIC INFORMATION TABLE - Compact
+    # ============================================================
+    
+    elements.append(Paragraph("Simulation Information", heading_style))
+    
+    info_data = [
+        ['Field', 'Value'],
+        ['Type', (simulation['disruption_type'] or 'N/A').capitalize()],
+        ['Location', simulation['disruption_location'] or 'N/A'],
+        ['Start Date', simulation['start_time'].strftime('%Y-%m-%d %H:%M') if simulation['start_time'] else 'N/A'],
+        ['End Date', simulation['end_time'].strftime('%Y-%m-%d %H:%M') if simulation['end_time'] else 'N/A'],
+        ['Severity Level', (simulation['severity_level'] or 'N/A').capitalize()],
+        ['Duration', f"{calculate_duration_hours(simulation)} hours"],
+    ]
+    
+    info_table = Table(info_data, colWidths=[2.2*inch, 4*inch])
+    info_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498DB')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),  # Reduced from 10
+        ('TOPPADDING', (0, 0), (-1, 0), 6),     # Reduced from 10
+        ('BACKGROUND', (0, 1), (0, -1), colors.HexColor('#ECF0F1')),
+        ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('FONTNAME', (1, 1), (1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 9),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8F9FA')]),
+        ('TOPPADDING', (0, 1), (-1, -1), 4),    # Reduced padding
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+    ]))
+    
+    elements.append(info_table)
+    elements.append(Spacer(1, 10))  # Reduced from 20
+    
+    # ============================================================
+    # SUMMARY METRICS - Compact
+    # ============================================================
+    
+    elements.append(Paragraph("Key Performance Indicators", heading_style))
+    
+    summary_data = [
+        ['Metric', 'Value', 'Impact Level'],
+        ['Total Affected Segments', str(simulation.get('total_affected_segments', 'N/A')), '-'],
+        ['Average Delay Ratio', f"{simulation.get('average_delay_ratio', 0):.2f}x", get_impact_level(simulation.get('average_delay_ratio', 0))],
+        ['Peak Congestion Hour', get_peak_hour(simulation), '-'],
+        ['Status', simulation.get('simulation_status', 'N/A').capitalize(), '-'],
+    ]
+    
+    summary_table = Table(summary_data, colWidths=[2.2*inch, 1.8*inch, 1.8*inch])
+    summary_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2ECC71')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+        ('TOPPADDING', (0, 0), (-1, 0), 6),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F0F0F0')),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 9),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8F9FA')]),
+        ('TOPPADDING', (0, 1), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+    ]))
+    
+    elements.append(summary_table)
+    elements.append(Spacer(1, 10))  # Reduced from 20
+    
+    # ============================================================
+    # HOUR-BY-HOUR BREAKDOWN - NO PAGE BREAK, COMPACT
+    # ============================================================
+    
+    if simulation.get('results') and len(simulation['results']) > 0:
+        # NO PageBreak() here - let it flow naturally
+        elements.append(Paragraph("Hour-by-Hour Analysis", heading_style))
+        elements.append(Paragraph(
+            "Detailed breakdown of traffic conditions for each hour.",
+            compact_normal
+        ))
+        elements.append(Spacer(1, 6))  # Reduced from 10
+        
+        # Prepare hourly data - limit to reasonable amount per page
+        hourly_data = [['Hour', 'Time', 'Severity', 'Delay (min)', 'Status']]
+        
+        # Show up to 24 hours on first page, then continue if needed
+        max_hours_first = 24
+        for i, result in enumerate(simulation['results'][:max_hours_first]):
+            hour = result.get('hour', i)
+            severity = result.get('severity', 0)
+            delay_minutes = result.get('delay_minutes', 0)
+            
+            if simulation['start_time']:
+                time_obj = simulation['start_time'] + timedelta(hours=hour)
+                time_str = time_obj.strftime('%I:%M %p')
+            else:
+                time_str = f"Hour {hour}"
+            
+            status = get_severity_status(severity)
+            
+            hourly_data.append([
+                str(hour),
+                time_str,
+                f"{severity:.2f}",
+                str(delay_minutes),
+                status
+            ])
+        
+        # Compact hourly table
+        hourly_table = Table(hourly_data, colWidths=[0.5*inch, 1.2*inch, 0.9*inch, 1*inch, 1.2*inch])
+        
+        # Compact table style
+        table_style = [
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E74C3C')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 5),  # Reduced
+            ('TOPPADDING', (0, 0), (-1, 0), 5),     # Reduced
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('TOPPADDING', (0, 1), (-1, -1), 3),    # Reduced
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 3), # Reduced
+        ]
+        
+        # Color rows based on severity
+        for i, result in enumerate(simulation['results'][:max_hours_first], start=1):
+            severity = result.get('severity', 0)
+            if severity >= 2.0:
+                bg_color = colors.HexColor('#FADBD8')
+            elif severity >= 1.5:
+                bg_color = colors.HexColor('#FCF3CF')
+            elif severity >= 1.0:
+                bg_color = colors.HexColor('#D5F4E6')
+            else:
+                bg_color = colors.white
+            
+            table_style.append(('BACKGROUND', (0, i), (-1, i), bg_color))
+        
+        hourly_table.setStyle(TableStyle(table_style))
+        elements.append(hourly_table)
+        elements.append(Spacer(1, 8))  # Reduced from 15
+        
+        # Legend - compact
+        legend_text = """
+        <b>Severity Legend:</b> Light (&lt;1.5), Moderate (1.5-2.0), Heavy (&gt;2.0)
+        """
+        elements.append(Paragraph(legend_text, compact_normal))
+        
+        # ============================================================
+        # DAY-BY-DAY BREAKDOWN - NO PAGE BREAK if multi-day
+        # ============================================================
+        
+        duration_hours = calculate_duration_hours(simulation)
+        if duration_hours > 24:
+            # NO PageBreak() - let it continue on same page if space allows
+            elements.append(Spacer(1, 10))
+            elements.append(Paragraph("Day-by-Day Summary", heading_style))
+            elements.append(Paragraph(
+                "Daily aggregated metrics showing average conditions.",
+                compact_normal
+            ))
+            elements.append(Spacer(1, 6))
+            
+            daily_summary = calculate_daily_summary(simulation)
+            
+            daily_data = [['Day', 'Date', 'Avg Severity', 'Peak Hour', 'Max Delay (min)', 'Status']]
+            
+            for day_info in daily_summary[:14]:  # Limit to 14 days per page
+                daily_data.append([
+                    f"Day {day_info['day_number']}",
+                    day_info['date'],
+                    f"{day_info['avg_severity']:.2f}",
+                    day_info['peak_hour'],
+                    str(day_info['max_delay']),
+                    day_info['status']
+                ])
+            
+            daily_table = Table(daily_data, colWidths=[0.6*inch, 1.3*inch, 1*inch, 1*inch, 1.1*inch, 1*inch])
+            daily_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#9B59B6')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
+                ('TOPPADDING', (0, 0), (-1, 0), 5),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 8),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8F9FA')]),
+                ('TOPPADDING', (0, 1), (-1, -1), 3),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 3),
+            ]))
+            
+            elements.append(daily_table)
+            elements.append(Spacer(1, 8))
+        
+        # ============================================================
+        # WEEK-BY-WEEK BREAKDOWN - Only if very long
+        # ============================================================
+        
+        if duration_hours > 168:  # More than 1 week
+            # Add page break only for weekly summary since it's a separate analysis
+            elements.append(PageBreak())
+            elements.append(Paragraph("Week-by-Week Summary", heading_style))
+            elements.append(Paragraph(
+                "Weekly aggregated trends showing overall patterns.",
+                compact_normal
+            ))
+            elements.append(Spacer(1, 6))
+            
+            weekly_summary = calculate_weekly_summary(simulation)
+            
+            weekly_data = [['Week', 'Date Range', 'Avg Severity', 'Total Hours', 'Avg Delay (min)', 'Trend']]
+            
+            for week_info in weekly_summary:
+                weekly_data.append([
+                    f"Week {week_info['week_number']}",
+                    week_info['date_range'],
+                    f"{week_info['avg_severity']:.2f}",
+                    str(week_info['total_hours']),
+                    f"{week_info['avg_delay']:.1f}",
+                    week_info['trend']
+                ])
+            
+            weekly_table = Table(weekly_data, colWidths=[0.7*inch, 1.8*inch, 1*inch, 1*inch, 1.1*inch, 0.9*inch])
+            weekly_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#16A085')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
+                ('TOPPADDING', (0, 0), (-1, 0), 5),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 8),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8F9FA')]),
+                ('TOPPADDING', (0, 1), (-1, -1), 3),
+                ('BOTTOMPADDING', (0, 1), (-1, -1), 3),
+            ]))
+            
+            elements.append(weekly_table)
+            elements.append(Spacer(1, 8))
+    
+    # ============================================================
+    # FOOTER - Compact
+    # ============================================================
+    
+    elements.append(Spacer(1, 15))
+    footer_style = ParagraphStyle(
+        'Footer',
+        parent=styles['Normal'],
+        fontSize=8,
+        textColor=colors.grey,
+        alignment=1
+    )
+    footer_text = f"""
+    <b>UrbanFlow Traffic Simulation System</b><br/>
+    Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}<br/>
+    For official use by CCPOSO and DPWH | Calamba City, Laguna
+    """
+    elements.append(Paragraph(footer_text, footer_style))
+    
+    # Build PDF
+    doc.build(elements)
+    
+    # Prepare response
+    buffer.seek(0)
+    filename = f"urbanflow_report_{simulation['simulation_id']}_{datetime.now().strftime('%Y%m%d')}.pdf"
+    
+    from flask import make_response
+    response = make_response(buffer.getvalue())
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    
+    return response
+
+
+def export_as_csv(simulation):
+    """Generate CSV export of simulation report"""
+    # Prepare data
+    data = {
+        'Simulation ID': [simulation['simulation_id']],
+        'Title': [simulation['simulation_name']],
+        'Type': [(simulation['disruption_type'] or 'N/A').capitalize()],
+        'Location': [simulation['disruption_location'] or 'N/A'],
+        'Start Date': [simulation['start_time'].strftime('%Y-%m-%d %H:%M') if simulation['start_time'] else 'N/A'],
+        'End Date': [simulation['end_time'].strftime('%Y-%m-%d %H:%M') if simulation['end_time'] else 'N/A'],
+        'Severity Level': [(simulation['severity_level'] or 'N/A').capitalize()],
+        'Total Affected Segments': [simulation.get('total_affected_segments', 'N/A')],
+        'Average Delay Ratio': [simulation.get('average_delay_ratio', 'N/A')],
+        'Status': [simulation.get('simulation_status', 'N/A').capitalize()],
+    }
+    
+    df = pd.DataFrame(data)
+    
+    # If there are results, add them as well
+    if simulation.get('results') and len(simulation['results']) > 0:
+        # Create a separate section for hourly results
+        results_data = []
+        for result in simulation['results']:
+            results_data.append({
+                'Hour': result.get('hour', 'N/A'),
+                'Severity': result.get('severity', 'N/A'),
+                'Delay Minutes': result.get('delay_minutes', 'N/A')
+            })
+        
+        results_df = pd.DataFrame(results_data)
+        
+        # Combine both dataframes with a separator
+        output = io.StringIO()
+        df.to_csv(output, index=False)
+        output.write('\n\n--- Hourly Results ---\n')
+        results_df.to_csv(output, index=False)
+        csv_content = output.getvalue()
+    else:
+        csv_content = df.to_csv(index=False)
+    
+    # Prepare response
+    filename = f"report_{simulation['simulation_id']}_{simulation['simulation_name'].replace(' ', '_')}.csv"
+    
+    response = make_response(csv_content)
+    response.headers['Content-Type'] = 'text/csv'
+    response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    
+    return response
+
+
+def export_as_excel(simulation):
+    """Generate Excel export of simulation report"""
+    output = io.BytesIO()
+    
+    # Create workbook
+    wb = openpyxl.Workbook()
+    
+    # Sheet 1: Summary
+    ws_summary = wb.active
+    ws_summary.title = "Summary"
+    
+    # Add header
+    ws_summary['A1'] = 'UrbanFlow Traffic Simulation Report'
+    ws_summary['A1'].font = Font(size=16, bold=True, color='FF6B35')
+    ws_summary.merge_cells('A1:B1')
+    
+    # Add basic info
+    info_data = [
+        ['Simulation ID', simulation['simulation_id']],
+        ['Title', simulation['simulation_name']],
+        ['Type', (simulation['disruption_type'] or 'N/A').capitalize()],
+        ['Location', simulation['disruption_location'] or 'N/A'],
+        ['Start Date', simulation['start_time'].strftime('%Y-%m-%d %H:%M') if simulation['start_time'] else 'N/A'],
+        ['End Date', simulation['end_time'].strftime('%Y-%m-%d %H:%M') if simulation['end_time'] else 'N/A'],
+        ['Severity Level', (simulation['severity_level'] or 'N/A').capitalize()],
+        ['Total Affected Segments', simulation.get('total_affected_segments', 'N/A')],
+        ['Average Delay Ratio', simulation.get('average_delay_ratio', 'N/A')],
+        ['Status', simulation.get('simulation_status', 'N/A').capitalize()],
+    ]
+    
+    row = 3
+    for label, value in info_data:
+        ws_summary[f'A{row}'] = label
+        ws_summary[f'B{row}'] = value
+        ws_summary[f'A{row}'].font = Font(bold=True)
+        row += 1
+    
+    # Style the summary sheet
+    ws_summary.column_dimensions['A'].width = 25
+    ws_summary.column_dimensions['B'].width = 40
+    
+    # Sheet 2: Hourly Results (if available)
+    if simulation.get('results') and len(simulation['results']) > 0:
+        ws_results = wb.create_sheet(title="Hourly Results")
+        
+        # Add headers
+        headers = ['Hour', 'Severity', 'Delay (minutes)']
+        for col, header in enumerate(headers, start=1):
+            cell = ws_results.cell(row=1, column=col, value=header)
+            cell.font = Font(bold=True, color='FFFFFF')
+            cell.fill = PatternFill(start_color='3498DB', end_color='3498DB', fill_type='solid')
+            cell.alignment = Alignment(horizontal='center')
+        
+        # Add data
+        for row, result in enumerate(simulation['results'], start=2):
+            ws_results.cell(row=row, column=1, value=result.get('hour', 'N/A'))
+            ws_results.cell(row=row, column=2, value=result.get('severity', 'N/A'))
+            ws_results.cell(row=row, column=3, value=result.get('delay_minutes', 'N/A'))
+        
+        # Style columns
+        ws_results.column_dimensions['A'].width = 15
+        ws_results.column_dimensions['B'].width = 15
+        ws_results.column_dimensions['C'].width = 20
+    
+    # Save workbook
+    wb.save(output)
+    output.seek(0)
+    
+    # Prepare response
+    filename = f"report_{simulation['simulation_id']}_{simulation['simulation_name'].replace(' ', '_')}.xlsx"
+    
+    response = make_response(output.getvalue())
+    response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    
+    return response
+
+def calculate_duration_hours(simulation):
+    """Calculate total duration in hours"""
+    if simulation.get('start_time') and simulation.get('end_time'):
+        delta = simulation['end_time'] - simulation['start_time']
+        return int(delta.total_seconds() / 3600)
+    return len(simulation.get('results', []))
+
+def get_peak_hour(simulation):
+    """Find the hour with highest severity"""
+    results = simulation.get('results', [])
+    if not results:
+        return 'N/A'
+    
+    max_result = max(results, key=lambda x: x.get('severity', 0))
+    hour = max_result.get('hour', 0)
+    
+    if simulation.get('start_time'):
+        time_obj = simulation['start_time'] + timedelta(hours=hour)
+        return time_obj.strftime('%I:%M %p')
+    
+    return f"Hour {hour}"
+
+def get_impact_level(delay_ratio):
+    """Get impact level from delay ratio"""
+    if delay_ratio >= 2.0:
+        return 'High'
+    elif delay_ratio >= 1.5:
+        return 'Moderate'
+    elif delay_ratio >= 1.0:
+        return 'Low'
+    else:
+        return 'Minimal'
+
+def get_severity_status(severity):
+    """Get status label from severity"""
+    if severity >= 2.0:
+        return 'Heavy'
+    elif severity >= 1.5:
+        return 'Moderate'
+    elif severity >= 1.0:
+        return 'Light'
+    else:
+        return 'Normal'
+
+def calculate_daily_summary(simulation):
+    """Calculate day-by-day summary"""
+    results = simulation.get('results', [])
+    start_time = simulation.get('start_time')
+    
+    if not results or not start_time:
+        return []
+    
+    daily_summary = []
+    current_day = []
+    day_number = 1
+    
+    for i, result in enumerate(results):
+        hour = result.get('hour', i)
+        
+        # Group by 24-hour periods
+        if hour > 0 and hour % 24 == 0:
+            if current_day:
+                # Calculate summary for this day
+                avg_severity = sum(r.get('severity', 0) for r in current_day) / len(current_day)
+                max_delay = max(r.get('delay_minutes', 0) for r in current_day)
+                peak_result = max(current_day, key=lambda x: x.get('severity', 0))
+                peak_hour = peak_result.get('hour', 0) % 24
+                
+                date_obj = start_time + timedelta(days=day_number-1)
+                
+                daily_summary.append({
+                    'day_number': day_number,
+                    'date': date_obj.strftime('%Y-%m-%d'),
+                    'avg_severity': avg_severity,
+                    'peak_hour': f"{peak_hour:02d}:00",
+                    'max_delay': max_delay,
+                    'status': get_severity_status(avg_severity)
+                })
+                
+                current_day = []
+                day_number += 1
+        
+        current_day.append(result)
+    
+    # Handle last day
+    if current_day:
+        avg_severity = sum(r.get('severity', 0) for r in current_day) / len(current_day)
+        max_delay = max(r.get('delay_minutes', 0) for r in current_day)
+        peak_result = max(current_day, key=lambda x: x.get('severity', 0))
+        peak_hour = peak_result.get('hour', 0) % 24
+        
+        date_obj = start_time + timedelta(days=day_number-1)
+        
+        daily_summary.append({
+            'day_number': day_number,
+            'date': date_obj.strftime('%Y-%m-%d'),
+            'avg_severity': avg_severity,
+            'peak_hour': f"{peak_hour:02d}:00",
+            'max_delay': max_delay,
+            'status': get_severity_status(avg_severity)
+        })
+    
+    return daily_summary
+
+def calculate_weekly_summary(simulation):
+    """Calculate week-by-week summary"""
+    results = simulation.get('results', [])
+    start_time = simulation.get('start_time')
+    
+    if not results or not start_time:
+        return []
+    
+    weekly_summary = []
+    current_week = []
+    week_number = 1
+    
+    for i, result in enumerate(results):
+        hour = result.get('hour', i)
+        
+        # Group by 168-hour periods (7 days)
+        if hour > 0 and hour % 168 == 0:
+            if current_week:
+                # Calculate summary for this week
+                avg_severity = sum(r.get('severity', 0) for r in current_week) / len(current_week)
+                avg_delay = sum(r.get('delay_minutes', 0) for r in current_week) / len(current_week)
+                
+                week_start = start_time + timedelta(days=(week_number-1)*7)
+                week_end = week_start + timedelta(days=6)
+                
+                # Determine trend (simplified)
+                first_half_avg = sum(r.get('severity', 0) for r in current_week[:len(current_week)//2]) / (len(current_week)//2)
+                second_half_avg = sum(r.get('severity', 0) for r in current_week[len(current_week)//2:]) / (len(current_week) - len(current_week)//2)
+                
+                if second_half_avg > first_half_avg + 0.2:
+                    trend = '↑ Rising'
+                elif second_half_avg < first_half_avg - 0.2:
+                    trend = '↓ Falling'
+                else:
+                    trend = '→ Stable'
+                
+                weekly_summary.append({
+                    'week_number': week_number,
+                    'date_range': f"{week_start.strftime('%m/%d')} - {week_end.strftime('%m/%d')}",
+                    'avg_severity': avg_severity,
+                    'total_hours': len(current_week),
+                    'avg_delay': avg_delay,
+                    'trend': trend
+                })
+                
+                current_week = []
+                week_number += 1
+        
+        current_week.append(result)
+    
+    # Handle last week
+    if current_week:
+        avg_severity = sum(r.get('severity', 0) for r in current_week) / len(current_week)
+        avg_delay = sum(r.get('delay_minutes', 0) for r in current_week) / len(current_week)
+        
+        week_start = start_time + timedelta(days=(week_number-1)*7)
+        week_end = start_time + timedelta(hours=len(results))
+        
+        first_half_avg = sum(r.get('severity', 0) for r in current_week[:len(current_week)//2]) / max(len(current_week)//2, 1)
+        second_half_avg = sum(r.get('severity', 0) for r in current_week[len(current_week)//2:]) / max(len(current_week) - len(current_week)//2, 1)
+        
+        if second_half_avg > first_half_avg + 0.2:
+            trend = '↑ Rising'
+        elif second_half_avg < first_half_avg - 0.2:
+            trend = '↓ Falling'
+        else:
+            trend = '→ Stable'
+        
+        weekly_summary.append({
+            'week_number': week_number,
+            'date_range': f"{week_start.strftime('%m/%d')} - {week_end.strftime('%m/%d')}",
+            'avg_severity': avg_severity,
+            'total_hours': len(current_week),
+            'avg_delay': avg_delay,
+            'trend': trend
+        })
+    
+    return weekly_summary
 
 # health check endpoint
 @app.route('/api/health', methods=['GET'])
