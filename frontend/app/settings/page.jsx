@@ -1,218 +1,407 @@
 "use client";
 
+import PlannerNavbar from "@/components/PlannerNavbar";
 import { useAuth } from "@/context/AuthContext";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import PlannerNavbar from "../../components/PlannerNavbar";
 
-export default function AccountPage() {
-  const { user, loading: authLoading, isAuthenticated, updateProfile, changePassword } = useAuth();
-  const router = useRouter();
-
-  const [editMode, setEditMode] = useState(false);
-  const [formData, setFormData] = useState({
+export default function SettingsPage() {
+  const { user, updateProfile, changePassword } = useAuth();
+  
+  const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState({ type: "", text: "" });
+  
+  // Profile form state
+  const [profileData, setProfileData] = useState({
     firstName: "",
     lastName: "",
     email: "",
   });
-
-  const [passwords, setPasswords] = useState({
-    current: "",
-    newPass: "",
-    confirm: "",
+  
+  // Password form state
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
   });
-
-  const [preview, setPreview] = useState("");
+  
+  // Avatar state
+  const [avatarPreview, setAvatarPreview] = useState("/urban_planner_icon.png");
   const [avatarFile, setAvatarFile] = useState(null);
-  const [errors, setErrors] = useState({});
-  const [successMessage, setSuccessMessage] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  // Redirect if not authenticated
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      router.push("/login");
-    }
-  }, [authLoading, isAuthenticated, router]);
-
-  // Populate form when user data loads
+  // Load user data when available
   useEffect(() => {
     if (user) {
-      setFormData({
+      setProfileData({
         firstName: user.firstName || "",
         lastName: user.lastName || "",
         email: user.email || "",
       });
-      setPreview(user.avatarUrl || "/urban_planner_icon.png");
+      
+      // Load avatar if available
+      if (user.avatarUrl) {
+        setAvatarPreview(user.avatarUrl);
+      }
     }
   }, [user]);
 
-  function handleImageChange(e) {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    setAvatarFile(f);
-    const reader = new FileReader();
-    reader.onload = () => setPreview(reader.result);
-    reader.readAsDataURL(f);
-  }
+  const handleProfileChange = (e) => {
+    setProfileData({
+      ...profileData,
+      [e.target.name]: e.target.value,
+    });
+  };
 
-  function handleInputChange(e) {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    setErrors((prev) => ({ ...prev, [name]: "" }));
-  }
+  const handlePasswordChange = (e) => {
+    setPasswordData({
+      ...passwordData,
+      [e.target.name]: e.target.value,
+    });
+  };
 
-  function handlePasswordChange(e) {
-    const { name, value } = e.target;
-    setPasswords((prev) => ({ ...prev, [name]: value }));
-    setErrors((prev) => ({ ...prev, passwords: "" }));
-  }
-
-  function validate() {
-    const nextErrors = {};
-    
-    if (!formData.firstName || formData.firstName.trim().length < 2) {
-      nextErrors.firstName = "First name must be at least 2 characters.";
-    }
-    
-    if (!formData.lastName || formData.lastName.trim().length < 2) {
-      nextErrors.lastName = "Last name must be at least 2 characters.";
-    }
-    
-    if (!formData.email || !formData.email.includes("@")) {
-      nextErrors.email = "Please enter a valid email.";
-    }
-
-    // Validate password fields if any are filled
-    if (passwords.current || passwords.newPass || passwords.confirm) {
-      if (!passwords.current) {
-        nextErrors.passwords = "Enter current password to change password.";
+  const handleAvatarChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        setMessage({
+          type: "error",
+          text: "File size must be less than 2MB",
+        });
+        return;
       }
-      if (!passwords.newPass || passwords.newPass.length < 6) {
-        nextErrors.passwords = "New password must be at least 6 characters.";
+
+      if (!file.type.startsWith("image/")) {
+        setMessage({
+          type: "error",
+          text: "Please select an image file",
+        });
+        return;
       }
-      if (passwords.newPass !== passwords.confirm) {
-        nextErrors.passwords = "New password and confirmation do not match.";
-      }
+
+      setAvatarFile(file);
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatarPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
     }
+  };
 
-    setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
-  }
-
-  async function handleSave() {
-    if (!validate()) return;
-
-    setLoading(true);
-    setSuccessMessage("");
-    setErrors({});
-
+  const handleSaveProfile = async () => {
     try {
-      // Update profile
-      const profileResult = await updateProfile({
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        email: formData.email,
-      });
+      setLoading(true);
+      setMessage({ type: "", text: "" });
 
-      if (!profileResult.success) {
-        throw new Error(profileResult.error);
-      }
+      // Upload avatar first if changed
+      if (avatarFile) {
+        const formData = new FormData();
+        formData.append("avatar", avatarFile);
+        formData.append("user_id", user.id);
 
-      // Change password if provided
-      if (passwords.current && passwords.newPass) {
-        const passwordResult = await changePassword(
-          passwords.current,
-          passwords.newPass
-        );
+        const uploadResponse = await fetch("http://localhost:5000/api/upload-avatar", {
+          method: "POST",
+          body: formData,
+        });
 
-        if (!passwordResult.success) {
-          throw new Error(passwordResult.error);
+        const uploadData = await uploadResponse.json();
+
+        if (!uploadData.success) {
+          throw new Error(uploadData.error || "Failed to upload avatar");
         }
       }
 
-      // TODO: Upload avatar file if changed
-      // if (avatarFile) {
-      //   await uploadAvatar(avatarFile);
-      // }
+      // Update profile
+      const result = await updateProfile(profileData);
 
-      setSuccessMessage("Account settings saved successfully!");
-      setPasswords({ current: "", newPass: "", confirm: "" });
-      setAvatarFile(null);
-      setEditMode(false);
-
-      // Auto-hide success message after 3 seconds
-      setTimeout(() => setSuccessMessage(""), 3000);
-    } catch (err) {
-      console.error("Save error:", err);
-      setErrors({ general: err.message || "Failed to save changes. Please try again." });
+      if (result.success) {
+        setMessage({
+          type: "success",
+          text: "Account settings saved successfully!",
+        });
+        setIsEditing(false);
+        setAvatarFile(null);
+      } else {
+        throw new Error(result.error || "Failed to update profile");
+      }
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error.message || "Failed to save changes",
+      });
     } finally {
       setLoading(false);
     }
-  }
+  };
 
-  function handleCancel() {
-    // Revert to original user data
-    if (user) {
-      setFormData({
-        firstName: user.firstName || "",
-        lastName: user.lastName || "",
-        email: user.email || "",
+  const handleChangePassword = async () => {
+    try {
+      if (passwordData.newPassword !== passwordData.confirmPassword) {
+        setMessage({
+          type: "error",
+          text: "New passwords do not match",
+        });
+        return;
+      }
+
+      if (passwordData.newPassword.length < 8) {
+        setMessage({
+          type: "error",
+          text: "Password must be at least 8 characters",
+        });
+        return;
+      }
+
+      setLoading(true);
+      setMessage({ type: "", text: "" });
+
+      const result = await changePassword(
+        passwordData.currentPassword,
+        passwordData.newPassword
+      );
+
+      if (result.success) {
+        setMessage({
+          type: "success",
+          text: "Password changed successfully!",
+        });
+        setPasswordData({
+          currentPassword: "",
+          newPassword: "",
+          confirmPassword: "",
+        });
+      } else {
+        throw new Error(result.error || "Failed to change password");
+      }
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error.message || "Failed to change password",
       });
-      setPreview(user.avatarUrl || "/urban_planner_icon.png");
+    } finally {
+      setLoading(false);
     }
-    setAvatarFile(null);
-    setPasswords({ current: "", newPass: "", confirm: "" });
-    setErrors({});
-    setSuccessMessage("");
-    setEditMode(false);
-  }
+  };
 
-  // Show loading state
-  if (authLoading) {
+  if (!user) {
     return (
-      <div className="min-h-screen bg-[#F5F6FA] flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-orange-500 border-r-transparent"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-600">Loading...</div>
       </div>
     );
   }
 
-  if (!user) return null;
-
   return (
-    <div className="min-h-screen bg-[#F5F6FA] text-gray-800">
+    <div className="min-h-screen bg-gray-50">
+      {/* ✅ NAVBAR INCLUDED */}
       <PlannerNavbar />
 
-      <main className="container mx-auto px-6 py-10">
-        <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-lg overflow-hidden">
-          <div className="p-6 border-b">
-            <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-bold text-gray-800">Account Settings</h1>
-
+      {/* PAGE CONTENT */}
+      <div className="py-6 px-4">
+        <div className="max-w-5xl mx-auto">
+          {/* Header */}
+          <div className="bg-white rounded-lg shadow-sm mb-4 p-6">
+            <div className="flex justify-between items-start">
               <div>
-                {!editMode ? (
-                  <button
-                    onClick={() => setEditMode(true)}
-                    className="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 transition"
-                  >
-                    Edit Profile
-                  </button>
-                ) : (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleSave}
-                      disabled={loading}
-                      className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition disabled:bg-gray-400"
+                <h1 className="text-2xl font-bold text-gray-900 mb-1">
+                  Account Settings
+                </h1>
+                <p className="text-sm text-gray-600">
+                  Change your profile information and password.
+                </p>
+              </div>
+              {!isEditing && (
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="px-5 py-2.5 bg-orange-500 text-white font-medium rounded-lg hover:bg-orange-600 transition"
+                >
+                  Edit Profile
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Success Message */}
+          {message.text && message.type === "success" && (
+            <div className="mb-4">
+              <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg flex items-start gap-2">
+                <svg
+                  className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                <span className="text-sm font-medium">{message.text}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Error Message */}
+          {message.text && message.type === "error" && (
+            <div className="mb-4">
+              <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
+                <span className="text-sm">{message.text}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Profile Section */}
+          <div className="bg-white rounded-lg shadow-sm p-6 mb-4">
+            <div className="flex gap-8">
+              {/* Avatar - Left Side */}
+              <div className="flex-shrink-0">
+                <div className="w-32 h-32 rounded-full overflow-hidden bg-orange-50 flex items-center justify-center border-4 border-orange-100">
+                  {avatarPreview && avatarPreview !== "/urban_planner_icon.png" ? (
+                    <img
+                      src={avatarPreview}
+                      alt="Profile"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <svg
+                      className="w-16 h-16 text-orange-500"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
                     >
-                      {loading ? "Saving..." : "Save"}
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" />
+                    </svg>
+                  )}
+                </div>
+                {isEditing && (
+                  <div className="mt-3">
+                    <label className="block">
+                      <span className="sr-only">Choose photo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleAvatarChange}
+                        className="block w-32 text-xs text-gray-500
+                          file:mr-2 file:py-1.5 file:px-3
+                          file:rounded file:border-0
+                          file:text-xs file:font-medium
+                          file:bg-orange-50 file:text-orange-700
+                          hover:file:bg-orange-100 cursor-pointer"
+                      />
+                    </label>
+                    <p className="mt-1 text-xs text-gray-500">Max 2MB</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Form Fields - Right Side */}
+              <div className="flex-1">
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  {/* First Name */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      First Name
+                    </label>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        name="firstName"
+                        value={profileData.firstName}
+                        onChange={handleProfileChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      />
+                    ) : (
+                      <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900">
+                        {user.firstName}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Last Name */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Last Name
+                    </label>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        name="lastName"
+                        value={profileData.lastName}
+                        onChange={handleProfileChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      />
+                    ) : (
+                      <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900">
+                        {user.lastName}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Email */}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Email
+                  </label>
+                  {isEditing ? (
+                    <input
+                      type="email"
+                      name="email"
+                      value={profileData.email}
+                      onChange={handleProfileChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    />
+                  ) : (
+                    <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900">
+                      {user.email}
+                    </div>
+                  )}
+                </div>
+
+                {/* Account Information */}
+                <div className="pt-4 border-t border-gray-200">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                    Account Information
+                  </h3>
+                  <div className="space-y-1.5 text-sm text-gray-700">
+                    <div>
+                      <span className="font-medium">User ID:</span> {user.id}
+                    </div>
+                    <div>
+                      <span className="font-medium">Username:</span> {user.username}
+                    </div>
+                    <div>
+                      <span className="font-medium">Role:</span> {user.role}
+                    </div>
+                    <div>
+                      <span className="font-medium">Full Name:</span> {user.name}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                {isEditing && (
+                  <div className="flex gap-3 pt-6">
+                    <button
+                      onClick={handleSaveProfile}
+                      disabled={loading}
+                      className="px-6 py-2 bg-orange-500 text-white font-medium rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                      {loading ? "Saving..." : "Save Changes"}
                     </button>
                     <button
-                      onClick={handleCancel}
+                      onClick={() => {
+                        setIsEditing(false);
+                        setAvatarPreview(user.avatarUrl || "/urban_planner_icon.png");
+                        setAvatarFile(null);
+                        setProfileData({
+                          firstName: user.firstName || "",
+                          lastName: user.lastName || "",
+                          email: user.email || "",
+                        });
+                        setMessage({ type: "", text: "" });
+                      }}
                       disabled={loading}
-                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-100 transition disabled:bg-gray-100"
+                      className="px-6 py-2 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition"
                     >
                       Cancel
                     </button>
@@ -220,185 +409,73 @@ export default function AccountPage() {
                 )}
               </div>
             </div>
-            <p className="text-sm text-gray-500 mt-1">
-              Change your profile information and password.
-            </p>
           </div>
 
-          {/* Success Message */}
-          {successMessage && (
-            <div className="mx-6 mt-6 p-4 bg-green-50 border border-green-200 rounded text-green-700">
-              ✅ {successMessage}
-            </div>
-          )}
+          {/* Password Section */}
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">
+              Change Password
+            </h2>
 
-          {/* Error Message */}
-          {errors.general && (
-            <div className="mx-6 mt-6 p-4 bg-red-50 border border-red-200 rounded text-red-700">
-              ❌ {errors.general}
-            </div>
-          )}
-
-          <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Left: Avatar */}
-            <div className="flex flex-col items-center md:items-start">
-              <div className="w-36 h-36 rounded-full overflow-hidden border border-gray-200 shadow-sm">
-                {preview && (
-                  <img
-                    src={preview}
-                    alt="avatar"
-                    className="w-full h-full object-cover"
-                  />
-)}
+            <div className="space-y-4 max-w-md">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Current Password
+                </label>
+                <input
+                  type="password"
+                  name="currentPassword"
+                  value={passwordData.currentPassword}
+                  onChange={handlePasswordChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  placeholder="Enter current password"
+                />
               </div>
 
-              {editMode && (
-                <>
-                  <label className="mt-4 inline-flex items-center cursor-pointer">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageChange}
-                      className="hidden"
-                    />
-                    <span className="px-3 py-2 bg-gray-100 border rounded text-sm text-gray-700 hover:bg-gray-200">
-                      Change Photo
-                    </span>
-                  </label>
-                  <p className="text-xs text-gray-500 mt-2">
-                    PNG/JPG, less than 2MB recommended
-                  </p>
-                </>
-              )}
-            </div>
-
-            {/* Right: form */}
-            <div className="md:col-span-2">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* First Name */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    First Name
-                  </label>
-                  <input
-                    name="firstName"
-                    value={formData.firstName}
-                    onChange={handleInputChange}
-                    disabled={!editMode}
-                    className={`mt-1 block w-full rounded border px-3 py-2 ${
-                      !editMode ? "bg-gray-100 cursor-not-allowed" : ""
-                    }`}
-                  />
-                  {errors.firstName && (
-                    <p className="text-xs text-red-600 mt-1">{errors.firstName}</p>
-                  )}
-                </div>
-
-                {/* Last Name */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Last Name
-                  </label>
-                  <input
-                    name="lastName"
-                    value={formData.lastName}
-                    onChange={handleInputChange}
-                    disabled={!editMode}
-                    className={`mt-1 block w-full rounded border px-3 py-2 ${
-                      !editMode ? "bg-gray-100 cursor-not-allowed" : ""
-                    }`}
-                  />
-                  {errors.lastName && (
-                    <p className="text-xs text-red-600 mt-1">{errors.lastName}</p>
-                  )}
-                </div>
-
-                {/* Email */}
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Email
-                  </label>
-                  <input
-                    name="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    disabled={!editMode}
-                    className={`mt-1 block w-full rounded border px-3 py-2 ${
-                      !editMode ? "bg-gray-100 cursor-not-allowed" : ""
-                    }`}
-                  />
-                  {errors.email && (
-                    <p className="text-xs text-red-600 mt-1">{errors.email}</p>
-                  )}
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  name="newPassword"
+                  value={passwordData.newPassword}
+                  onChange={handlePasswordChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  placeholder="Enter new password"
+                />
               </div>
 
-              {/* Change password section */}
-              {editMode && (
-                <div className="mt-6">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">
-                    Change password
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <input
-                      name="current"
-                      type="password"
-                      placeholder="Current password"
-                      value={passwords.current}
-                      onChange={handlePasswordChange}
-                      className="mt-1 block w-full rounded border px-3 py-2"
-                    />
-                    <input
-                      name="newPass"
-                      type="password"
-                      placeholder="New password"
-                      value={passwords.newPass}
-                      onChange={handlePasswordChange}
-                      className="mt-1 block w-full rounded border px-3 py-2"
-                    />
-                    <input
-                      name="confirm"
-                      type="password"
-                      placeholder="Confirm new password"
-                      value={passwords.confirm}
-                      onChange={handlePasswordChange}
-                      className="mt-1 block w-full rounded border px-3 py-2"
-                    />
-                  </div>
-                  {errors.passwords && (
-                    <p className="text-xs text-red-600 mt-2">{errors.passwords}</p>
-                  )}
-                  <p className="text-xs text-gray-500 mt-2">
-                    Leave password fields empty if you do not want to change password.
-                  </p>
-                </div>
-              )}
-
-              {/* User Info Display */}
-              <div className="mt-6 p-4 bg-gray-50 rounded">
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">
-                  Account Information
-                </h3>
-                <div className="text-sm text-gray-600 space-y-1">
-                  <p>
-                    <span className="font-medium">User ID:</span> {user.id}
-                  </p>
-                  <p>
-                    <span className="font-medium">Username:</span> {user.username}
-                  </p>
-                  <p>
-                    <span className="font-medium">Role:</span> {user.role}
-                  </p>
-                  <p>
-                    <span className="font-medium">Full Name:</span> {user.name}
-                  </p>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  name="confirmPassword"
+                  value={passwordData.confirmPassword}
+                  onChange={handlePasswordChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  placeholder="Confirm new password"
+                />
               </div>
+
+              <button
+                onClick={handleChangePassword}
+                disabled={
+                  loading ||
+                  !passwordData.currentPassword ||
+                  !passwordData.newPassword ||
+                  !passwordData.confirmPassword
+                }
+                className="px-6 py-2 bg-orange-500 text-white font-medium rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                {loading ? "Changing..." : "Change Password"}
+              </button>
             </div>
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }
