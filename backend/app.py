@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 from services.traffic_api import TrafficAPIService
 from services.database import DatabaseService
+from services.email_service import send_otp_email
 from werkzeug.utils import secure_filename
 from flask import send_file
 import random
@@ -30,6 +31,8 @@ from werkzeug.utils import secure_filename
 import os
 import base64
 from datetime import datetime, timedelta
+import pytz
+import smtplib
 
 load_dotenv()
 
@@ -48,19 +51,18 @@ app.register_blueprint(auth_bp, url_prefix='/api/auth')
 
 # ============================================================
 # File upload configuration
+# Path to preprocessed data folder - adjust this to match your structure
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), '..', 'data', 'processed')
 ALLOWED_EXTENSIONS = {'csv'}
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
 
+
+
+
 # Ensure folder exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-def allowed_file(filename):
-    """Check if file has allowed extension"""
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def get_csv_info(filepath):
     """Get CSV file information (rows, columns)"""
@@ -79,8 +81,8 @@ def get_csv_info(filepath):
     
 
 
-UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), '..', 'uploads', 'avatars')
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+AVATAR_FOLDER = os.path.join(os.path.dirname(__file__), '..', 'uploads', 'avatars')
+AVATAR_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 MAX_FILE_SIZE = 2 * 1024 * 1024
 
 # ============================================================
@@ -101,11 +103,17 @@ db = DatabaseService()
 print("✓ Database service ready!")
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(AVATAR_FOLDER, exist_ok=True)
 
-def allowed_file(filename):
-    """Check if file has allowed extension"""
+def allowed_csv_file(filename):
+    """Check if file has allowed CSV extension"""
     return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+           filename.rsplit('.', 1)[1].lower() in {'csv'}
+
+def allowed_avatar_file(filename):
+    """Check if file has allowed image extension"""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in AVATAR_EXTENSIONS
 
 def save_avatar_to_db(user_id, image_data, filename):
     """Save avatar image data to database"""
@@ -184,7 +192,7 @@ def upload_avatar():
         user_id = int(user_id)
         
         # Validate file type
-        if not allowed_file(file.filename):
+        if not allowed_avatar_file(file.filename):
             return jsonify({
                 'success': False,
                 'error': 'Invalid file type. Allowed: PNG, JPG, JPEG, GIF, WEBP'
@@ -300,7 +308,7 @@ def get_user_profile():
     """
     try:
         # Get user_id from auth (for now, using hardcoded)
-        user_id = request.args.get('user_id', 3, type=int)  # Your user is ID 3
+        user_id = request.args.get('user_id', type=int)  # Your user is ID 3
         
         conn = db._get_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
@@ -384,7 +392,7 @@ def get_finished_reports():
         filter_date = request.args.get('date', '').strip()
         filter_location = request.args.get('location', '').strip()
         filter_type = request.args.get('type', '').strip()
-        user_id = request.args.get('user_id', 2, type=int)
+        user_id = request.args.get('user_id', type=int)
         
         conn = None
         try:
@@ -1526,13 +1534,25 @@ def save_simulation():
         data = request.get_json()
         
         # Extract data
-        user_id = data.get('user_id', 2)  # Default to planner1 (id=2)
+        user_id = data.get('user_id')  # Default to planner1 (id=2)
         simulation_data = data.get('simulation_data', {})
         results_data = data.get('results_data', {})
         
         # Validate required fields
         required_fields = ['scenario_name', 'disruption_type', 'area', 'road_corridor']
         missing_fields = [f for f in required_fields if f not in simulation_data]
+
+        # ✅ Parse datetime strings as-is (they're already in local time)
+        start_datetime_str = simulation_data.get('start_datetime')
+        end_datetime_str = simulation_data.get('end_datetime')
+        
+        # Parse without timezone conversion
+        start_time = datetime.fromisoformat(start_datetime_str) if start_datetime_str else None
+        end_time = datetime.fromisoformat(end_datetime_str) if end_datetime_str else None
+        
+        print(f"💾 Saving times:")
+        print(f"   Start: {start_time}")
+        print(f"   End: {end_time}")
         
         if missing_fields:
             return jsonify({
@@ -1580,7 +1600,7 @@ def get_my_simulations():
         - user_id: User ID (temporary - will use auth token later)
     """
     try:
-        user_id = request.args.get('user_id', 2, type=int)
+        user_id = request.args.get('user_id', type=int)
         
         simulations = db.get_user_simulations(user_id)
         
@@ -1655,7 +1675,7 @@ def publish_simulation():
         data = request.get_json()
         
         simulation_id = data.get('simulation_id')
-        user_id = data.get('user_id', 2)
+        user_id = data.get('user_id')
         title = data.get('title')
         public_description = data.get('public_description')
         
@@ -1712,7 +1732,7 @@ def unpublish_simulation():
         data = request.get_json()
         
         simulation_id = data.get('simulation_id')
-        user_id = data.get('user_id', 2)
+        user_id = data.get('user_id')
         
         if not simulation_id:
             return jsonify({
@@ -1749,31 +1769,162 @@ def get_published_disruptions():
     Get all published simulations for the public map
     This replaces the mock data in HomeMapWithSidebar.jsx
     """
+    conn = None
     try:
-        simulations = db.get_published_simulations()
+        conn = db._get_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
         
-        # Transform to match frontend format
+        # Get published disruptions with full details
+        query = """
+            SELECT 
+                pr.published_id,
+                pr.simulation_id,
+                pr.title,
+                pr.public_description,
+                pr.published_at,
+                pr.is_active,
+                pr.view_count,
+                pr.slug,
+                sr.simulation_name,
+                sr.description,
+                sr.disruption_type,
+                sr.disruption_location,
+                sr.start_time,
+                sr.end_time,
+                sr.severity_level,
+                sr.total_affected_segments,
+                sr.average_delay_ratio,
+                ST_Y(sr.disruption_geometry) as latitude,
+                ST_X(sr.disruption_geometry) as longitude,
+                sr.hourly_predictions::text as hourly_predictions_json,
+                u.organization,
+                u.full_name
+            FROM published_runs pr
+            INNER JOIN simulation_runs sr ON pr.simulation_id = sr.simulation_id
+            LEFT JOIN users u ON pr.published_by = u.user_id
+            WHERE pr.is_active = TRUE
+            AND sr.simulation_status != 'deleted'
+            ORDER BY pr.published_at DESC
+        """
+        
+        cursor.execute(query)
+        simulations = cursor.fetchall()
+        
+        print(f"\n📊 Fetched {len(simulations)} published disruptions")
+        
+        # Transform to frontend format
         disruptions = []
         for sim in simulations:
-            disruptions.append({
+            # Extract coordinates from simulation_data
+            # ✅ GET COORDINATES DIRECTLY FROM POSTGIS FUNCTIONS
+            latitude = sim.get('latitude')
+            longitude = sim.get('longitude')
+            road_coordinates = None
+
+            if latitude and longitude:
+                print(f"✅ {sim['title']}: lat={latitude}, lng={longitude}")
+            else:
+                print(f"❌ No coordinates for: {sim['title']}")
+                # Use fallback
+                location = sim.get('disruption_location', '')
+                coords = get_coordinates_for_location(location)
+                latitude = coords['lat']
+                longitude = coords['lng']
+
+            wkt = sim.get('disruption_geometry_wkt')
+            if wkt:
+                # Parse "POINT(121.1640 14.2096)"
+                import re
+                match = re.match(r'POINT\(([0-9.]+)\s+([0-9.]+)\)', wkt)
+                if match:
+                    longitude = float(match.group(1))
+                    latitude = float(match.group(2))
+                    print(f"✅ {sim['title']}: lat={latitude}, lng={longitude}")
+                else:
+                    print(f"❌ Could not parse WKT: {wkt}")
+            else:
+                print(f"⚠️ No geometry for: {sim['title']}")
+            
+            simulation_data = sim.get('simulation_data')
+            if simulation_data:
+                if isinstance(simulation_data, str):
+                    import json
+                    simulation_data = json.loads(simulation_data)
+                
+                coords = simulation_data.get('coordinates', {})
+                latitude = coords.get('lat')
+                longitude = coords.get('lng') or coords.get('lon')
+                
+                # Get road coordinates if available (for drawing lines)
+                road_coordinates = simulation_data.get('road_coordinates_json')
+            
+            # Fallback to location-based coordinates if not in simulation_data
+            if not latitude or not longitude:
+                location = sim.get('disruption_location', '')
+                coords = get_coordinates_for_location(location)
+                latitude = coords['lat']
+                longitude = coords['lng']
+            
+            # Extract hourly predictions from results_data
+            hourly_predictions = None
+            results_data = sim.get('results_data')
+            if results_data:
+                if isinstance(results_data, str):
+                    import json
+                    results_data = json.loads(results_data)
+                
+                # Get hourly predictions for active disruptions
+                hourly_predictions = results_data.get('hourly_predictions')
+            
+            # Calculate expected delay
+            avg_delay_ratio = float(sim.get('average_delay_ratio') or 1.0)
+            expected_delay = round(avg_delay_ratio * 10)
+            
+            # Determine congestion level
+            severity_level = sim.get('severity_level', '').lower()
+            if severity_level in ['heavy', 'high']:
+                congestion_level = 'Heavy'
+            elif severity_level in ['moderate', 'medium']:
+                congestion_level = 'Moderate'
+            elif severity_level in ['light', 'low']:
+                congestion_level = 'Light'
+            else:
+                if avg_delay_ratio >= 2.0:
+                    congestion_level = 'Heavy'
+                elif avg_delay_ratio >= 1.5:
+                    congestion_level = 'Moderate'
+                else:
+                    congestion_level = 'Light'
+            
+            disruption = {
                 'id': sim['published_id'],
                 'simulation_id': sim['simulation_id'],
-                'title': sim['title'],
-                'description': sim['public_description'],
-                'location': sim['disruption_location'],
-                'type': sim['disruption_type'],
+                'title': sim['title'] or sim['simulation_name'],
+                'description': sim['public_description'] or sim.get('description', ''),
+                'location': sim['disruption_location'] or 'Calamba City',
+                'type': sim['disruption_type'] or 'general',
                 'status': 'Active',
-                'start_date': sim['start_time'].isoformat() if sim['start_time'] else None,
-                'end_date': sim['end_time'].isoformat() if sim['end_time'] else None,
-                'severity_level': sim['severity_level'],
-                'congestion_level': sim['severity_level'].capitalize(),
-                'avg_severity': float(sim['average_delay_ratio']) if sim['average_delay_ratio'] else 1.0,
-                'expected_delay': round(float(sim['average_delay_ratio']) * 10) if sim['average_delay_ratio'] else 10,
-                'published_at': sim['published_at'].isoformat() if sim['published_at'] else None,
-                'slug': sim['slug'],
-                'view_count': sim['view_count'],
-                'organization': sim['organization']
-            })
+                'start_date': sim['start_time'].isoformat() if sim.get('start_time') else None,
+                'end_date': sim['end_time'].isoformat() if sim.get('end_time') else None,
+                'severity_level': severity_level,
+                'congestion_level': congestion_level,
+                'avg_severity': avg_delay_ratio,
+                'expected_delay': expected_delay,
+                'published_at': sim['published_at'].isoformat() if sim.get('published_at') else None,
+                'slug': sim.get('slug', ''),
+                'view_count': sim.get('view_count', 0),
+                'organization': sim.get('organization', 'DPWH'),
+                'latitude': latitude,
+                'longitude': longitude,
+                'road_coordinates': road_coordinates,  # For drawing road lines
+                'hourly_predictions': hourly_predictions  # For detailed visualization
+            }
+            
+            disruptions.append(disruption)
+        
+        print(f"✅ Returning {len(disruptions)} disruptions with coordinates")
+        for d in disruptions[:3]:
+            print(f"   - {d['title']}: ({d['latitude']}, {d['longitude']})")
         
         return jsonify({
             'success': True,
@@ -1783,11 +1934,75 @@ def get_published_disruptions():
         
     except Exception as e:
         import traceback
+        print(f"\n❌ Error in get_published_disruptions:")
+        traceback.print_exc()
         return jsonify({
             'success': False,
-            'error': str(e),
-            'traceback': traceback.format_exc()
+            'error': str(e)
         }), 500
+        
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_coordinates_for_location(location):
+    """
+    Get coordinates for a location string
+    This is a fallback when coordinates aren't in simulation_data
+    """
+    location_lower = location.lower()
+    
+    # Area to coordinates mapping
+    area_coordinates = {
+        'bucal': {'lat': 14.1894, 'lng': 121.1653},
+        'parian': {'lat': 14.2115, 'lng': 121.1653},
+        'turbina': {'lat': 14.2331, 'lng': 121.1653},
+        'bagong kalsada': {'lat': 14.2050, 'lng': 121.1620},
+        'real': {'lat': 14.2150, 'lng': 121.1580},
+        'halang': {'lat': 14.2200, 'lng': 121.1700},
+        'crossing': {'lat': 14.2120, 'lng': 121.1640},
+        'pansol': {'lat': 14.1980, 'lng': 121.1750},
+        'makiling': {'lat': 14.2450, 'lng': 121.1700},
+        'milagrosa': {'lat': 14.2280, 'lng': 121.1650},
+        'checkpoint': {'lat': 14.2180, 'lng': 121.1620}
+    }
+    
+    # Try to match area
+    for area, coords in area_coordinates.items():
+        if area in location_lower:
+            print(f"📍 Matched '{location}' to {area}: ({coords['lat']}, {coords['lng']})")
+            return coords
+    
+    # Default to Calamba center
+    print(f"📍 Using default coordinates for '{location}'")
+    return {'lat': 14.2096, 'lng': 121.1640}
+
+def get_coordinates_for_location(location):
+    """Get coordinates for a location string"""
+    location_lower = location.lower()
+    
+    # UPDATED coordinates for Calamba City areas
+    area_coordinates = {
+        'bucal': {'lat': 14.2118, 'lng': 121.1645},
+        'parian': {'lat': 14.2115, 'lng': 121.1635},
+        'turbina': {'lat': 14.2186, 'lng': 121.1580},
+        'bagong kalsada': {'lat': 14.2000, 'lng': 121.1755},
+        'real': {'lat': 14.2207, 'lng': 121.1567},
+        'halang': {'lat': 14.1985, 'lng': 121.1780},
+        'crossing': {'lat': 14.2096, 'lng': 121.1640},
+        'pansol': {'lat': 14.1947, 'lng': 121.1800},
+        'makiling': {'lat': 14.2331, 'lng': 121.1653},
+        'milagrosa': {'lat': 14.2280, 'lng': 121.1605},
+        'checkpoint': {'lat': 14.2148, 'lng': 121.1610},
+        'calamba': {'lat': 14.2096, 'lng': 121.1640}
+    }
+    
+    for area, coords in area_coordinates.items():
+        if area in location_lower:
+            return coords
+    
+    return {'lat': 14.2096, 'lng': 121.1640}
 
 # Alias route for frontend compatibility
 @app.route('/api/published-simulations', methods=['GET'])
@@ -1810,7 +2025,7 @@ def delete_simulation(simulation_id):
         - user_id: User ID (temporary - will use auth later)
     """
     try:
-        user_id = request.args.get('user_id', 2, type=int)
+        user_id = request.args.get('user_id', type=int)
         
         success = db.delete_simulation(simulation_id, user_id)
         
@@ -2117,122 +2332,59 @@ def simulate_disruption_realtime():
         # Smart Aggregation for Map Display
         # ============================================================
 
+        # ============================================================
+        # Smart Aggregation for Map Display
+        # ============================================================
+
         def aggregate_predictions_smart(hourly_predictions, start_datetime, end_datetime):
             """
-            Intelligently aggregate predictions based on duration
-            Returns appropriate time granularity for visualization
+            Aggregate predictions on a day-by-day basis
+            Always returns daily granularity regardless of duration
             """
-            duration_days = (end_datetime - start_datetime).days
+            # Always show day-by-day breakdown
+            daily_aggregates = []
+            current_date = start_datetime.date()
+            end_date = end_datetime.date()
             
-            if duration_days <= 1:
-                # Short disruption: Show hour-by-hour
-                return {
-                    'granularity': 'hourly',
-                    'display_label': 'Hour-by-Hour View',
-                    'map_data': hourly_predictions  # All hours
-                }
+            while current_date <= end_date:
+                # Get all predictions for this day
+                day_predictions = [
+                    p for p in hourly_predictions 
+                    if datetime.strptime(p['datetime'], '%Y-%m-%d %H:%M').date() == current_date
+                ]
+                
+                if day_predictions:
+                    # Calculate daily averages
+                    avg_severity = sum(p['severity'] for p in day_predictions) / len(day_predictions)
+                    avg_delay = sum(p['delay_info']['additional_delay_min'] for p in day_predictions) / len(day_predictions)
+                    
+                    # Determine dominant severity
+                    severity_counts = {
+                        'Light': sum(1 for p in day_predictions if p['severity'] < 0.5),
+                        'Moderate': sum(1 for p in day_predictions if 0.5 <= p['severity'] < 1.5),
+                        'Heavy': sum(1 for p in day_predictions if p['severity'] >= 1.5)
+                    }
+                    dominant_severity = max(severity_counts, key=severity_counts.get)
+                    
+                    daily_aggregates.append({
+                        'date': current_date.strftime('%Y-%m-%d'),
+                        'day_name': current_date.strftime('%A'),
+                        'avg_severity': round(avg_severity, 2),
+                        'avg_severity_label': dominant_severity,
+                        'avg_delay_min': round(avg_delay),
+                        'hour_count': len(day_predictions),
+                        'severity_breakdown': severity_counts,
+                        'peak_hour': max(day_predictions, key=lambda x: x['severity'])['hour'],
+                        'peak_severity': max(p['severity'] for p in day_predictions)
+                    })
+                
+                current_date += timedelta(days=1)
             
-            elif duration_days <= 7:
-                # Medium disruption: Show day-by-day
-                daily_aggregates = []
-                current_date = start_datetime.date()
-                end_date = end_datetime.date()
-                
-                while current_date <= end_date:
-                    # Get all predictions for this day
-                    day_predictions = [
-                        p for p in hourly_predictions 
-                        if datetime.strptime(p['datetime'], '%Y-%m-%d %H:%M').date() == current_date
-                    ]
-                    
-                    if day_predictions:
-                        # Calculate daily averages
-                        avg_severity = sum(p['severity'] for p in day_predictions) / len(day_predictions)
-                        avg_delay = sum(p['delay_info']['additional_delay_min'] for p in day_predictions) / len(day_predictions)
-                        
-                        # Determine dominant severity
-                        severity_counts = {
-                            'Light': sum(1 for p in day_predictions if p['severity'] < 0.5),
-                            'Moderate': sum(1 for p in day_predictions if 0.5 <= p['severity'] < 1.5),
-                            'Heavy': sum(1 for p in day_predictions if p['severity'] >= 1.5)
-                        }
-                        dominant_severity = max(severity_counts, key=severity_counts.get)
-                        
-                        daily_aggregates.append({
-                            'date': current_date.strftime('%Y-%m-%d'),
-                            'day_name': current_date.strftime('%A'),
-                            'avg_severity': round(avg_severity, 2),
-                            'avg_severity_label': dominant_severity,
-                            'avg_delay_min': round(avg_delay),
-                            'hour_count': len(day_predictions),
-                            'severity_breakdown': severity_counts,
-                            'peak_hour': max(day_predictions, key=lambda x: x['severity'])['hour'],
-                            'peak_severity': max(p['severity'] for p in day_predictions)
-                        })
-                    
-                    current_date += timedelta(days=1)
-                
-                return {
-                    'granularity': 'daily',
-                    'display_label': 'Day-by-Day View',
-                    'map_data': daily_aggregates
-                }
-            
-            elif duration_days <= 30:
-                # Long disruption: Show week-by-week
-                weekly_aggregates = []
-                current_date = start_datetime.date()
-                end_date = end_datetime.date()
-                week_num = 1
-                
-                while current_date <= end_date:
-                    week_end = min(current_date + timedelta(days=6), end_date)
-                    
-                    # Get all predictions for this week
-                    week_predictions = [
-                        p for p in hourly_predictions 
-                        if current_date <= datetime.strptime(p['datetime'], '%Y-%m-%d %H:%M').date() <= week_end
-                    ]
-                    
-                    if week_predictions:
-                        avg_severity = sum(p['severity'] for p in week_predictions) / len(week_predictions)
-                        avg_delay = sum(p['delay_info']['additional_delay_min'] for p in week_predictions) / len(week_predictions)
-                        
-                        severity_counts = {
-                            'Light': sum(1 for p in week_predictions if p['severity'] < 0.5),
-                            'Moderate': sum(1 for p in week_predictions if 0.5 <= p['severity'] < 1.5),
-                            'Heavy': sum(1 for p in week_predictions if p['severity'] >= 1.5)
-                        }
-                        dominant_severity = max(severity_counts, key=severity_counts.get)
-                        
-                        weekly_aggregates.append({
-                            'week_number': week_num,
-                            'date_range': f"{current_date.strftime('%b %d')} - {week_end.strftime('%b %d')}",
-                            'start_date': current_date.strftime('%Y-%m-%d'),
-                            'end_date': week_end.strftime('%Y-%m-%d'),
-                            'avg_severity': round(avg_severity, 2),
-                            'avg_severity_label': dominant_severity,
-                            'avg_delay_min': round(avg_delay),
-                            'hour_count': len(week_predictions),
-                            'severity_breakdown': severity_counts
-                        })
-                    
-                    current_date = week_end + timedelta(days=1)
-                    week_num += 1
-                
-                return {
-                    'granularity': 'weekly',
-                    'display_label': 'Week-by-Week View',
-                    'map_data': weekly_aggregates
-                }
-            
-            else:
-                # Very long disruption: Monthly view
-                return {
-                    'granularity': 'monthly',
-                    'display_label': 'Month-by-Month View',
-                    'map_data': []  # Implement if needed
-                }
+            return {
+                'granularity': 'daily',
+                'display_label': 'Day-by-Day View',
+                'map_data': daily_aggregates
+            }
 
 
         # ✅ ADD THIS AFTER CALCULATING hourly_predictions, BEFORE THE RETURN STATEMENT
@@ -2834,7 +2986,7 @@ def upload_file():
             }), 400
         
         # Validate file type
-        if not allowed_file(file.filename):
+        if not allowed_csv_file(file.filename):
             return jsonify({
                 'success': False,
                 'error': 'Only CSV files are allowed'
@@ -3078,7 +3230,7 @@ def send_publish_otp():
     """
     try:
         data = request.get_json()
-        user_id = data.get('user_id', 2)
+        user_id = data.get('user_id')
         simulation_id = data.get('simulation_id')
         
         if not simulation_id:
@@ -3090,6 +3242,9 @@ def send_publish_otp():
         # Generate 6-digit OTP
         otp_code = ''.join(random.choices(string.digits, k=6))
         
+        # Initialize variables to avoid linting warnings
+        user_email = None
+        user_name = None
         # Store OTP in database
         conn = None
         try:
@@ -3105,25 +3260,48 @@ def send_publish_otp():
             """, (user_id, simulation_id, otp_code, expires_at))
             
             # Get user email
-            cursor.execute("SELECT email, full_name FROM users WHERE user_id = %s", (user_id,))
+            cursor.execute("""
+                SELECT email, 
+                       CONCAT(first_name, ' ', last_name) as full_name 
+                FROM users 
+                WHERE user_id = %s
+            """, (user_id,))
             user = cursor.fetchone()
             
+            if not user:
+                return jsonify({
+                    'success': False,
+                    'error': 'User not found'
+                }), 404
+            
+            user_email, user_name = user
+
             conn.commit()
             
-            # TODO: In production, send email here using SendGrid/AWS SES
-            # For now, return OTP in response (REMOVE THIS IN PRODUCTION!)
-            
-            print(f"📧 OTP for simulation {simulation_id}: {otp_code}")
-            print(f"   User: {user[1]} ({user[0]})")
-            print(f"   Expires: {expires_at}")
-            
-            return jsonify({
-                'success': True,
-                'message': f'OTP sent to {user[0]}',
-                # REMOVE THIS IN PRODUCTION - only for testing:
-                'otp_for_testing': otp_code,  
-                'expires_in_minutes': 10
-            })
+            # Send actual email
+            try:
+                send_otp_email(user_email, user_name, otp_code, expires_minutes=10)
+                print(f"✓ OTP email sent to {user_email}")
+                
+                return jsonify({
+                    'success': True,
+                    'message': f'Verification code sent to {user_email}',
+                    'expires_in_minutes': 10
+                })
+                
+            except Exception as email_error:
+                # Rollback OTP if email fails
+                cursor.execute(
+                    "DELETE FROM verification_otps WHERE simulation_id = %s AND otp_code = %s",
+                    (simulation_id, otp_code)
+                )
+                conn.commit()
+                
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to send verification email. Please try again.',
+                    'details': str(email_error)
+                }), 500
             
         finally:
             if conn:
@@ -3132,12 +3310,11 @@ def send_publish_otp():
     except Exception as e:
         print(f"✗ Error sending OTP: {e}")
         import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
-            'error': str(e),
-            'traceback': traceback.format_exc()
+            'error': 'An error occurred while processing your request'
         }), 500
-
 
 @app.route('/api/verify-publish-otp', methods=['POST'])
 def verify_publish_otp():
@@ -3149,7 +3326,7 @@ def verify_publish_otp():
         
         simulation_id = data.get('simulation_id')
         otp_code = data.get('otp_code')
-        user_id = data.get('user_id', 2)
+        user_id = data.get('user_id')
         title = data.get('title')
         public_description = data.get('public_description')
         
@@ -3253,7 +3430,7 @@ def delete_simulations_batch():
     try:
         data = request.get_json()
         simulation_ids = data.get('simulation_ids', [])
-        user_id = data.get('user_id', 2)
+        user_id = data.get('user_id')
         
         if not simulation_ids:
             return jsonify({

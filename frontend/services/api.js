@@ -106,7 +106,7 @@ export const api = {
    * @param {number} userId - User ID (default: 2)
    * @returns {Promise<Object>} Response with slug (public URL)
    */
-  publishSimulation: (simulationId, title, description, userId = 2) =>
+  publishSimulation: (simulationId, title, description, userId) =>
     apiCall("/api/publish-simulation", {
       method: "POST",
       body: JSON.stringify({
@@ -123,7 +123,7 @@ export const api = {
    * @param {number} userId - User ID (default: 2)
    * @returns {Promise<Object>} Success response
    */
-  unpublishSimulation: (simulationId, userId = 2) =>
+  unpublishSimulation: (simulationId, userId) =>
     apiCall("/api/unpublish-simulation", {
       method: "POST",
       body: JSON.stringify({
@@ -137,7 +137,7 @@ export const api = {
    * @param {number} userId - User ID (default: 2)
    * @returns {Promise<Object>} List of user's simulations
    */
-  getMySimulations: (userId = 2) =>
+  getMySimulations: (userId) =>
     apiCall(`/api/my-simulations?user_id=${userId}`),
 
   /**
@@ -153,7 +153,7 @@ export const api = {
    * @param {number} userId - User ID (default: 2)
    * @returns {Promise<Object>} Success response
    */
-  deleteSimulation: (simulationId, userId = 2) =>
+  deleteSimulation: (simulationId, userId) =>
     apiCall(`/api/delete-simulation/${simulationId}?user_id=${userId}`, {
       method: "DELETE",
       }),
@@ -161,7 +161,7 @@ export const api = {
   /**
    * Send OTP for publishing verification
    */
-  sendPublishOTP: (simulationId, userId = 2) =>
+  sendPublishOTP: (simulationId, userId) =>
     apiCall("/api/send-publish-otp", {
       method: "POST",
       body: JSON.stringify({

@@ -1,18 +1,17 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import L from 'leaflet'
-import React, { useEffect, useState } from 'react'
-import { Circle, MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
-import api from '../services/api'
 
 // Fix Leaflet icons
-delete L.Icon.Default.prototype._getIconUrl
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
-  iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
-})
+if (typeof window !== 'undefined') {
+  delete L.Icon.Default.prototype._getIconUrl
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
+    iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
+    shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
+  })
+}
 
 export default function HomeMapWithSidebar() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -21,18 +20,15 @@ export default function HomeMapWithSidebar() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [selectedDisruption, setSelectedDisruption] = useState(null)
-  const [loadingRoads, setLoadingRoads] = useState(false)
   
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
   const layersRef = useRef([])
 
-  // Fetch disruptions on component mount
   useEffect(() => {
     fetchDisruptions()
   }, [])
 
-  // Initialize map
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return
 
@@ -57,10 +53,8 @@ export default function HomeMapWithSidebar() {
     }
   }, [])
 
-  // Draw disruptions on map
   useEffect(() => {
     if (!mapInstanceRef.current || disruptions.length === 0) return
-
     drawDisruptionsOnMap()
   }, [disruptions, selectedDisruption])
 
@@ -69,138 +63,223 @@ export default function HomeMapWithSidebar() {
       setLoading(true)
       setError(null)
       
-      const response = await api.getPublishedDisruptions()
+      const response = await fetch('http://localhost:5000/api/published-disruptions')
+      const data = await response.json()
 
-      if (response.success === false) {
-        setError('Unable to connect to server. Showing offline mode.')
+      if (!response.ok || data.success === false) {
+        setError('Unable to load disruptions')
         setDisruptions([])
       } else {
-        const disruptionData = disruptions.disruptions || []
-        setDisruptions(disruptionData)
+        const disruptionData = data.disruptions || []
+        
+        // Categorize disruptions
+        const now = new Date()
+        const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+        
+        const categorized = disruptionData.map(d => ({
+          ...d,
+          status: getDisruptionStatus(d, now, weekFromNow)
+        }))
+        
+        setDisruptions(categorized)
+        
+        // Fetch real-time data for active disruptions
+        categorized.forEach(d => {
+          if (d.status === 'active' && d.latitude && d.longitude) {
+            fetchRealtimeForDisruption(d)
+          }
+        })
       }
     } catch (err) {
-      console.error('Failed to fetch disruptions:', err)
-      setError('Failed to load disruptions. Please check your connection.')
+      setError('Failed to load disruptions')
       setDisruptions([])
     } finally {
       setLoading(false)
     }
   }
 
-  const drawDisruptionsOnMap = async () => {
+  const getDisruptionStatus = (disruption, now, weekFromNow) => {
+    if (!disruption.start_date || !disruption.end_date) return 'unknown'
+    
+    const start = new Date(disruption.start_date)
+    const end = new Date(disruption.end_date)
+    
+    if (now >= start && now <= end) return 'active'
+    if (start > now && start <= weekFromNow) return 'upcoming'
+    if (end < now) return 'past'
+    return 'future'
+  }
+
+  const fetchRealtimeForDisruption = async (disruption) => {
+    try {
+      const response = await fetch('http://localhost:5000/api/realtime-traffic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lat: disruption.latitude,
+          lng: disruption.longitude
+        })
+      })
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        // Update disruption with real-time data
+        setDisruptions(prev => prev.map(d => 
+          d.id === disruption.id 
+            ? { ...d, realtime: data }
+            : d
+        ))
+      }
+    } catch (err) {
+      console.warn(`Failed to fetch real-time data for ${disruption.title}`)
+    }
+  }
+
+  const drawDisruptionsOnMap = () => {
     if (!mapInstanceRef.current) return
 
     const map = mapInstanceRef.current
 
     // Clear old layers
-    layersRef.current.forEach(layer => map.removeLayer(layer))
+    layersRef.current.forEach(layer => {
+      try {
+        map.removeLayer(layer)
+      } catch (e) {}
+    })
     layersRef.current = []
 
-    // Draw all disruptions
-    for (const disruption of disruptions) {
-      await drawDisruption(disruption)
-    }
+    // Draw disruptions based on status
+    disruptions.forEach(disruption => {
+      if (disruption.status === 'active') {
+        drawActiveDisruption(disruption)
+      } else if (disruption.status === 'upcoming') {
+        drawUpcomingDisruption(disruption)
+      }
+    })
 
     // Fit map to show all disruptions
-    if (disruptions.length > 0) {
-      const bounds = disruptions
-        .filter(d => d.latitude && d.longitude)
-        .map(d => [d.latitude, d.longitude])
-      
-      if (bounds.length > 0) {
-        map.fitBounds(bounds, { padding: [50, 50] })
-      }
+    const validDisruptions = disruptions.filter(d => d.latitude && d.longitude && (d.status === 'active' || d.status === 'upcoming'))
+    if (validDisruptions.length > 0) {
+      const bounds = validDisruptions.map(d => [d.latitude, d.longitude])
+      try {
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 })
+      } catch (e) {}
     }
   }
 
-  const drawDisruption = async (disruption) => {
+  // FIND drawActiveDisruption function (around line 160):
+  const drawActiveDisruption = (disruption) => {
+  if (!disruption.latitude || !disruption.longitude) return
+
+  const map = mapInstanceRef.current
+  const isSelected = selectedDisruption?.id === disruption.id
+
+  // Use real-time severity if available
+  const severity = disruption.realtime?.congestion_ratio || disruption.avg_severity || 1.0
+  const color = getSeverityColor(severity)
+
+  // Draw circular impact zone (NO LINES)
+  const circle = L.circle([disruption.latitude, disruption.longitude], {
+    radius: 500,
+    color: color,
+    fillColor: color,
+    fillOpacity: isSelected ? 0.3 : 0.2,
+    weight: isSelected ? 3 : 2,
+  }).addTo(map)
+
+  layersRef.current.push(circle)
+
+  // Add marker
+  const marker = createMarker(disruption, color, isSelected, '🚧')
+  layersRef.current.push(marker)
+}
+ 
+  const drawUpcomingDisruption = (disruption) => {
     if (!disruption.latitude || !disruption.longitude) return
 
     const map = mapInstanceRef.current
-    const lat = disruption.latitude
-    const lng = disruption.longitude
     const isSelected = selectedDisruption?.id === disruption.id
 
-    // Get severity color
-    const severityColor = getSeverityColor(disruption.avg_severity || 1.0)
+    // Use gray/blue for upcoming
+    const color = '#3B82F6'
 
-    // If selected, fetch and draw detailed road info
-    if (isSelected && !disruption._roadsDrawn) {
-      setLoadingRoads(true)
-      
-      try {
-        // Fetch main road info
-        const roadInfo = await getRoadInfoFromOSM(lat, lng)
-        
-        if (roadInfo.success && roadInfo.coordinates?.length > 1) {
-          // Draw main road
-          const roadCoords = roadInfo.coordinates.map(c => [c.lat, c.lng])
-          
-          // Shadow
-          const shadow = L.polyline(roadCoords, {
-            color: '#000000',
-            weight: 14,
-            opacity: 0.2,
-            lineCap: 'round',
-          }).addTo(map)
-          layersRef.current.push(shadow)
+    // Draw as pulsing blob
+    const marker = L.marker([disruption.latitude, disruption.longitude], {
+      icon: L.divIcon({
+        className: 'upcoming-marker',
+        html: `
+          <div style="position: relative;">
+            <div style="
+              position: absolute;
+              top: 50%;
+              left: 50%;
+              transform: translate(-50%, -50%);
+              width: ${isSelected ? '60px' : '45px'};
+              height: ${isSelected ? '60px' : '45px'};
+              border: 2px solid ${color};
+              border-radius: 50%;
+              opacity: 0.4;
+              animation: pulse-upcoming 2s ease-out infinite;
+            "></div>
+            <div style="
+              background: white;
+              border: 2px solid ${color};
+              border-radius: 50%;
+              width: ${isSelected ? '40px' : '32px'};
+              height: ${isSelected ? '40px' : '32px'};
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: ${isSelected ? '20px' : '16px'};
+              box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+              cursor: pointer;
+              z-index: 1000;
+            ">📅</div>
+            <style>
+              @keyframes pulse-upcoming {
+                0% { transform: translate(-50%, -50%) scale(1); opacity: 0.4; }
+                100% { transform: translate(-50%, -50%) scale(1.8); opacity: 0; }
+              }
+            </style>
+          </div>
+        `,
+        iconSize: [isSelected ? 40 : 32, isSelected ? 40 : 32],
+        iconAnchor: [isSelected ? 20 : 16, isSelected ? 20 : 16],
+      })
+    }).addTo(map)
 
-          // Base
-          const base = L.polyline(roadCoords, {
-            color: '#9ca3af',
-            weight: 10,
-            opacity: 0.5,
-            lineCap: 'round',
-          }).addTo(map)
-          layersRef.current.push(base)
+    marker.on('click', () => handleViewOnMap(disruption))
+    marker.bindPopup(createUpcomingPopup(disruption))
 
-          // Colored layer
-          const mainRoad = L.polyline(roadCoords, {
-            color: severityColor,
-            weight: 8,
-            opacity: 1,
-            lineCap: 'round',
-            lineJoin: 'round',
-          }).addTo(map)
+    layersRef.current.push(marker)
+  }
 
-          mainRoad.bindPopup(`
-            <div style="font-family: -apple-system, sans-serif; padding: 10px; min-width: 200px;">
-              <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600;">
-                ${disruption.title}
-              </h3>
-              <p style="margin: 4px 0; font-size: 12px; color: #6b7280;">
-                📍 ${disruption.location}
-              </p>
-              <p style="margin: 4px 0; font-size: 12px; color: #6b7280;">
-                🛣️ ${roadInfo.road_name}
-              </p>
-              <div style="background: ${severityColor}20; padding: 6px; border-radius: 6px; margin-top: 8px;">
-                <p style="margin: 0; font-size: 12px; font-weight: 600; color: ${severityColor};">
-                  ${disruption.congestion_level} Congestion
-                </p>
-                <p style="margin: 4px 0 0 0; font-size: 11px; color: #4b5563;">
-                  +${disruption.expected_delay} min delay
-                </p>
-              </div>
-            </div>
-          `)
+  const drawCongestionSegments = (disruption, hourlyData, color) => {
+    const map = mapInstanceRef.current
+    
+    // Create polyline segments based on severity
+    const coordinates = disruption.road_coordinates || [
+      [disruption.latitude, disruption.longitude],
+      [disruption.latitude + 0.005, disruption.longitude + 0.005]
+    ]
 
-          layersRef.current.push(mainRoad)
+    const avgSeverity = hourlyData.reduce((sum, h) => sum + (h.severity || 0), 0) / hourlyData.length
 
-          // Fetch and draw nearby roads
-          await drawNearbyRoads(lat, lng, severityColor, disruption.avg_severity || 1.0)
-          
-          disruption._roadsDrawn = true
-        }
-      } catch (error) {
-        console.error('Error drawing roads:', error)
-      } finally {
-        setLoadingRoads(false)
-      }
-    }
+    const polyline = L.polyline(coordinates, {
+      color: getSeverityColor(avgSeverity),
+      weight: 8,
+      opacity: 0.8,
+      smoothFactor: 1
+    }).addTo(map)
 
-    // Draw disruption marker
-    const marker = L.marker([lat, lng], {
+    layersRef.current.push(polyline)
+  }
+
+  const createMarker = (disruption, color, isSelected, icon) => {
+    const map = mapInstanceRef.current
+
+    const marker = L.marker([disruption.latitude, disruption.longitude], {
       icon: L.divIcon({
         className: 'disruption-marker',
         html: `
@@ -212,14 +291,14 @@ export default function HomeMapWithSidebar() {
               transform: translate(-50%, -50%);
               width: ${isSelected ? '70px' : '50px'};
               height: ${isSelected ? '70px' : '50px'};
-              border: 3px solid ${severityColor};
+              border: 3px solid ${color};
               border-radius: 50%;
               opacity: 0.3;
               animation: pulse 2s ease-out infinite;
             "></div>
             <div style="
               background: white;
-              border: 3px solid ${severityColor};
+              border: 3px solid ${color};
               border-radius: 50%;
               width: ${isSelected ? '48px' : '36px'};
               height: ${isSelected ? '48px' : '36px'};
@@ -229,7 +308,8 @@ export default function HomeMapWithSidebar() {
               font-size: ${isSelected ? '24px' : '18px'};
               box-shadow: 0 4px 12px rgba(0,0,0,0.2);
               cursor: pointer;
-            ">${getTypeIcon(disruption.type)}</div>
+              z-index: 1000;
+            ">${icon}</div>
             <style>
               @keyframes pulse {
                 0% { transform: translate(-50%, -50%) scale(1); opacity: 0.3; }
@@ -243,14 +323,21 @@ export default function HomeMapWithSidebar() {
       })
     }).addTo(map)
 
-    marker.on('click', () => {
-      handleViewOnMap(disruption)
-    })
+    marker.on('click', () => handleViewOnMap(disruption))
+    marker.bindPopup(createActivePopup(disruption))
 
-    marker.bindPopup(`
-      <div style="font-family: -apple-system, sans-serif; padding: 10px;">
+    return marker
+  }
+
+  const createActivePopup = (disruption) => {
+    const realtimeTag = disruption.realtime ? 
+      '<span style="background: #10B981; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600;">LIVE</span>' : 
+      ''
+    
+     return `
+      <div style="font-family: -apple-system, sans-serif; padding: 10px; min-width: 200px;">
         <h3 style="margin: 0 0 8px 0; font-size: 15px; font-weight: 600;">
-          ${getTypeIcon(disruption.type)} ${disruption.title}
+          🚧 ${disruption.title} ${realtimeTag}
         </h3>
         <p style="margin: 4px 0; font-size: 12px; color: #6b7280;">
           📍 ${disruption.location}
@@ -265,112 +352,56 @@ export default function HomeMapWithSidebar() {
           <p style="margin: 2px 0; font-size: 11px;">
             <strong>Level:</strong> ${disruption.congestion_level}
           </p>
+          ${disruption.start_date ? `
+            <p style="margin: 2px 0; font-size: 11px;">
+              <strong>Started:</strong> ${new Date(disruption.start_date).toLocaleString('en-US', {
+                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+              })}
+            </p>
+          ` : ''}
+          ${disruption.end_date ? `
+            <p style="margin: 2px 0; font-size: 11px;">
+              <strong>Ends:</strong> ${new Date(disruption.end_date).toLocaleString('en-US', {
+                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+              })}
+            </p>
+          ` : ''}
+          ${disruption.realtime ? `
+            <p style="margin: 2px 0; font-size: 11px;">
+              <strong>Current Speed:</strong> ${Math.round(disruption.realtime.current_speed)} km/h
+            </p>
+          ` : ''}
         </div>
       </div>
-    `)
-
-    layersRef.current.push(marker)
-
-    // Draw impact circle
-    const circle = L.circle([lat, lng], {
-      radius: 500,
-      color: severityColor,
-      fillColor: severityColor,
-      fillOpacity: isSelected ? 0.2 : 0.15,
-      weight: isSelected ? 3 : 2,
-    }).addTo(map)
-
-    layersRef.current.push(circle)
+    `
   }
 
-  const drawNearbyRoads = async (centerLat, centerLng, mainColor, avgSeverity) => {
-    try {
-      const searchRadius = 500
-      const query = `
-        [out:json][timeout:20];
-        (
-          way["highway"~"^(primary|secondary|tertiary|residential)$"](around:${searchRadius},${centerLat},${centerLng});
-        );
-        out body;
-        >;
-        out skel qt;
+    const createUpcomingPopup = (disruption) => {
+      const startDate = new Date(disruption.start_date)
+      const daysUntil = Math.ceil((startDate - new Date()) / (1000 * 60 * 60 * 24))
+      
+      return `
+        <div style="font-family: -apple-system, sans-serif; padding: 10px; min-width: 200px;">
+          <h3 style="margin: 0 0 8px 0; font-size: 15px; font-weight: 600;">
+            📅 ${disruption.title}
+          </h3>
+          <p style="margin: 4px 0; font-size: 12px; color: #6b7280;">
+            📍 ${disruption.location}
+          </p>
+          <div style="background: #EFF6FF; padding: 6px; border-radius: 6px; margin-top: 6px;">
+            <p style="margin: 2px 0; font-size: 11px;">
+              <strong>Starts in:</strong> ${daysUntil} day${daysUntil !== 1 ? 's' : ''}
+            </p>
+            <p style="margin: 2px 0; font-size: 11px;">
+              <strong>Start Date:</strong> ${startDate.toLocaleDateString()}
+            </p>
+            <p style="margin: 2px 0; font-size: 11px;">
+              <strong>Expected Delay:</strong> +${disruption.expected_delay} min
+            </p>
+          </div>
+        </div>
       `
-
-      const response = await fetch('https://overpass-api.de/api/interpreter', {
-        method: 'POST',
-        body: query,
-      })
-
-      if (!response.ok) {
-        console.warn('OSM API unavailable for nearby roads')
-        return
-      }
-
-      const data = await response.json()
-
-      if (data.elements) {
-        const nodes = data.elements.filter(el => el.type === 'node')
-        const ways = data.elements
-          .filter(el => el.type === 'way' && el.tags?.highway)
-          .slice(0, 15) // Limit to 15 roads
-
-        const map = mapInstanceRef.current
-
-        ways.forEach(way => {
-          const coords = way.nodes
-            .map(nodeId => nodes.find(n => n.id === nodeId))
-            .filter(n => n)
-            .map(n => [n.lat, n.lon])
-
-          if (coords.length < 2) return
-
-          // Calculate distance
-          const distances = coords.map(coord => 
-            getDistance(centerLat, centerLng, coord[0], coord[1])
-          )
-          const minDist = Math.min(...distances)
-
-          // Determine impact based on distance
-          let impactColor, weight, opacity
-          if (minDist < 150) {
-            impactColor = mainColor
-            weight = 6
-            opacity = 0.8
-          } else if (minDist < 300) {
-            impactColor = getSeverityColor(avgSeverity * 0.6)
-            weight = 5
-            opacity = 0.7
-          } else {
-            impactColor = getSeverityColor(avgSeverity * 0.3)
-            weight = 4
-            opacity = 0.6
-          }
-
-          // Draw road
-          const road = L.polyline(coords, {
-            color: impactColor,
-            weight: weight,
-            opacity: opacity,
-            lineCap: 'round',
-          }).addTo(map)
-
-          const roadName = way.tags.name || 'Unnamed road'
-          road.bindPopup(`
-            <div style="padding: 8px;">
-              <p style="margin: 0; font-weight: 600; font-size: 12px;">${roadName}</p>
-              <p style="margin: 4px 0 0 0; font-size: 11px; color: #6b7280;">
-                ${Math.round(minDist)}m from disruption
-              </p>
-            </div>
-          `)
-
-          layersRef.current.push(road)
-        })
-      }
-    } catch (error) {
-      console.error('Error fetching nearby roads:', error)
     }
-  }
 
   const handleViewOnMap = (disruption) => {
     if (!disruption.latitude || !disruption.longitude) return
@@ -384,25 +415,13 @@ export default function HomeMapWithSidebar() {
         duration: 1
       })
     }
-
-    // Redraw to show detailed view
-    drawDisruptionsOnMap()
     
     setSidebarOpen(false)
   }
 
-  const getCongestionColor = (level) => {
-    switch(level) {
-      case 'Heavy': return '#ef4444'
-      case 'Moderate': return '#fbbf24'
-      case 'Light': return '#22c55e'
-      default: return '#9ca3af'
-    }
-  }
-
   const getSeverityColor = (severity) => {
-    if (severity < 0.5) return '#22c55e'
-    if (severity < 1.5) return '#fbbf24'
+    if (severity < 1.0) return '#22c55e'
+    if (severity < 2.0) return '#fbbf24'
     return '#ef4444'
   }
 
@@ -418,7 +437,7 @@ export default function HomeMapWithSidebar() {
 
   return (
     <div className="relative h-full w-full">
-      {/* Search Bar - Floating Left */}
+      {/* Search Bar */}
       <div className="absolute top-20 left-4 z-[1002]">
         <div className="bg-white rounded-lg shadow-lg p-2 w-80">
           <div className="flex items-center gap-2">
@@ -436,28 +455,17 @@ export default function HomeMapWithSidebar() {
         </div>
       </div>
 
-      {/* Sidebar Toggle Button */}
+      {/* Sidebar Toggle */}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
         className={`fixed top-20 z-[1002] bg-white p-3 rounded-lg shadow-lg hover:bg-gray-50 transition-all duration-300 ${
           sidebarOpen ? 'right-[25rem]' : 'right-4'
         }`}
-        title="Toggle disruptions list"
       >
         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
         </svg>
       </button>
-
-      {/* Loading Roads Indicator */}
-      {loadingRoads && (
-        <div className="absolute top-32 left-1/2 transform -translate-x-1/2 z-[1002] bg-white rounded-lg shadow-lg px-4 py-2">
-          <div className="flex items-center gap-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-500"></div>
-            <span className="text-sm text-gray-700">Loading road details...</span>
-          </div>
-        </div>
-      )}
 
       {/* Sidebar */}
       <div 
@@ -465,36 +473,29 @@ export default function HomeMapWithSidebar() {
           sidebarOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
         style={{
-          top: '64px', // Start below navbar (navbar height is typically 64px or 4rem)
-          height: 'calc(100vh - 64px)', // Full height minus navbar
-          top: '64px', // Start below navbar (navbar height is typically 64px or 4rem)
-          height: 'calc(100vh - 64px)', // Full height minus navbar
+          top: '64px',
+          height: 'calc(100vh - 64px)',
           backgroundColor: 'rgba(255, 255, 255, 0.95)',
           backdropFilter: 'blur(10px)',
         }}
       >
         <div className="p-6">
-          {/* Sidebar Header */}
           <div className="flex justify-between items-center mb-6">
             <div>
-              <h2 className="text-2xl font-bold text-gray-800">Active Disruptions</h2>
+              <h2 className="text-2xl font-bold text-gray-800">Disruptions</h2>
               {!loading && (
                 <p className="text-sm text-gray-600 mt-1">
-                  {disruptions.length} active {disruptions.length === 1 ? 'disruption' : 'disruptions'}
+                  {disruptions.filter(d => d.status === 'active' || d.status === 'upcoming').length} active
                 </p>
               )}
             </div>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="text-gray-500 hover:text-gray-700"
-            >
+            <button onClick={() => setSidebarOpen(false)} className="text-gray-500 hover:text-gray-700">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
 
-          {/* Loading State */}
           {loading && (
             <div className="text-center py-12">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
@@ -502,38 +503,27 @@ export default function HomeMapWithSidebar() {
             </div>
           )}
 
-          {/* Error State - Improved messaging */}
           {error && (
             <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
-              <div className="flex items-start gap-3">
-                <span className="text-2xl">⚠️</span>
-                <div className="flex-1">
-                  <p className="text-orange-800 font-semibold mb-1">Server Offline</p>
-                  <p className="text-red-700 text-sm">{error}</p>
-                  <button
-                    onClick={fetchDisruptions}
-                    className="mt-2 bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-orange-700 transition"
-                  >
-                    Try again
-                  </button>
-                </div>
-              </div>
+              <p className="text-orange-800">{error}</p>
+              <button onClick={fetchDisruptions} className="mt-2 bg-orange-600 text-white px-4 py-2 rounded-lg text-sm">
+                Try again
+              </button>
             </div>
           )}
 
-          {/* Empty State */}
           {!loading && !error && disruptions.length === 0 && (
             <div className="text-center py-12 text-gray-500">
               <div className="text-6xl mb-4">✅</div>
               <p className="text-lg font-semibold">No active disruptions</p>
-              <p className="text-sm mt-2">Traffic is flowing normally!</p>
             </div>
           )}
 
-          {/* Disruptions List */}
           {!loading && !error && disruptions.length > 0 && (
             <div className="space-y-4">
-              {disruptions.map((disruption) => (
+              {disruptions
+                .filter(d => d.status === 'active' || d.status === 'upcoming')
+                .map((disruption) => (
                 <div 
                   key={disruption.id} 
                   className={`bg-white border rounded-lg p-4 hover:shadow-md transition cursor-pointer ${
@@ -541,56 +531,62 @@ export default function HomeMapWithSidebar() {
                   }`}
                   onClick={() => handleViewOnMap(disruption)}
                 >
-                  {/* Title */}
                   <div className="flex items-start justify-between mb-2">
                     <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
-                      <span>{getTypeIcon(disruption.type)}</span>
+                      <span>{disruption.status === 'upcoming' ? '📅' : getTypeIcon(disruption.type)}</span>
                       {disruption.title}
                     </h3>
+                    {disruption.realtime && (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded font-semibold">LIVE</span>
+                    )}
                   </div>
 
-                  {/* Location */}
-                  <p className="text-sm text-gray-600 mb-2">
-                    📍 {disruption.location}
-                  </p>
+                  <p className="text-sm text-gray-600 mb-2">📍 {disruption.location}</p>
 
-                  {/* Type & Status */}
                   <div className="flex gap-2 mb-3">
-                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded capitalize">
-                      {disruption.type}
-                    </span>
                     <span className={`text-xs px-2 py-1 rounded font-semibold ${
-                      disruption.congestion_level === 'Heavy' ? 'bg-red-100 text-red-700' :
-                      disruption.congestion_level === 'Moderate' ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-green-100 text-green-700'
+                      disruption.status === 'upcoming' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
                     }`}>
-                      {disruption.congestion_level}
+                      {disruption.status === 'upcoming' ? 'Upcoming' : 'Active'}
                     </span>
-                  </div>
-
-                  {/* Expected Delay */}
-                  <div className="bg-gray-50 rounded-lg p-3 mb-3">
-                    <p className="text-sm text-gray-700 flex items-center gap-2">
-                      <span className="text-lg">⏱️</span>
-                      <span>
-                        <strong>Expected Delay:</strong> +{disruption.expected_delay} minutes
+                    {disruption.status === 'active' && (
+                      <span className={`text-xs px-2 py-1 rounded font-semibold ${
+                        disruption.congestion_level === 'Heavy' ? 'bg-red-100 text-red-700' :
+                        disruption.congestion_level === 'Moderate' ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-green-100 text-green-700'
+                      }`}>
+                        {disruption.congestion_level}
                       </span>
-                    </p>
+                    )}
                   </div>
 
-                  {/* Description */}
-                  {disruption.description && (
-                    <p className="text-sm text-gray-600 mb-3 italic">
-                      "{disruption.description}"
+                  <div className="bg-gray-50 rounded-lg p-3 mb-3">
+                    <p className="text-sm text-gray-700">
+                      ⏱️ <strong>Delay:</strong> +{disruption.expected_delay} min
                     </p>
-                  )}
+                    {disruption.status === 'active' && disruption.start_date && disruption.end_date && (
+                      <>
+                        <p className="text-sm text-gray-700 mt-1">
+                          📅 <strong>Started:</strong> {new Date(disruption.start_date).toLocaleString('en-US', {
+                            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                          })}
+                        </p>
+                        <p className="text-sm text-gray-700 mt-1">
+                          🏁 <strong>Ends:</strong> {new Date(disruption.end_date).toLocaleString('en-US', {
+                            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                          })}
+                        </p>
+                      </>
+                    )}
+                    {disruption.status === 'upcoming' && disruption.start_date && (
+                      <p className="text-sm text-gray-700 mt-1">
+                        📅 <strong>Starts:</strong> {new Date(disruption.start_date).toLocaleString('en-US', {
+                          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                        })}
+                      </p>
+                    )}
+                  </div>
 
-                  {/* Dates */}
-                  <p className="text-xs text-gray-500 mb-3">
-                    📅 {new Date(disruption.start_date).toLocaleDateString()} - {new Date(disruption.end_date).toLocaleDateString()}
-                  </p>
-
-                  {/* View on Map Button */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
@@ -605,7 +601,6 @@ export default function HomeMapWithSidebar() {
             </div>
           )}
 
-          {/* Refresh Button */}
           {!loading && (
             <button
               onClick={fetchDisruptions}
@@ -616,67 +611,30 @@ export default function HomeMapWithSidebar() {
           )}
         </div>
       </div>
-
-      {/* Map */}
-      <MapContainer
-        center={[14.2096, 121.164]}
-        zoom={13}
-        style={{ height: '100%', width: '100%' }}
-        zoomControl={false}
-      >
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution="&copy; OpenStreetMap contributors"
-        />
-
-        {/* Disruption Markers and Circles */}
-        {disruptions.map((d) => (
-          <React.Fragment key={d.id}>
-            <Marker position={[d.latitude, d.longitude]}>
-              <Popup>
-                <div className="p-2">
-                  <h3 className="font-bold text-lg">{d.title}</h3>
-                  <p className="text-sm text-gray-600">{d.location}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    <strong>Delay:</strong> +{d.expected_delay} min
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    <strong>Status:</strong> {d.congestion_level}
-                  </p>
-                </div>
-              </Popup>
-            </Marker>
-
-            {/* Congestion Circle (Blob) */}
-            <Circle
-              center={[d.latitude, d.longitude]}
-              radius={500}
-              pathOptions={{
-                color: getCongestionColor(d.congestion_level),
-                fillColor: getCongestionColor(d.congestion_level),
-                fillOpacity: 0.3,
-                weight: 2
-              }}
-            />
-          </React.Fragment>
-        ))}
-      </MapContainer>
+      
+      <div ref={mapRef} style={{ height: '100%', width: '100%', zIndex: 1 }} />
+      <style>{`
+        .traffic-flow-line {
+          z-index: 400;
+          filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+        
+        .traffic-pulse-line {
+          animation: traffic-pulse 2.5s ease-in-out infinite;
+          z-index: 399;
+        }
+        
+        @keyframes traffic-pulse {
+          0%, 100% {
+            opacity: 0.2;
+            stroke-width: 10;
+          }
+          50% {
+            opacity: 0.05;
+            stroke-width: 14;
+          }
+        }
+      `}</style>
     </div>
   )
-}
-
-// Helper function
-function getDistance(lat1, lng1, lat2, lng2) {
-  const R = 6371e3
-  const φ1 = lat1 * Math.PI / 180
-  const φ2 = lat2 * Math.PI / 180
-  const Δφ = (lat2 - lat1) * Math.PI / 180
-  const Δλ = (lng2 - lng1) * Math.PI / 180
-
-  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-          Math.cos(φ1) * Math.cos(φ2) *
-          Math.sin(Δλ/2) * Math.sin(Δλ/2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
-
-  return R * c
 }
