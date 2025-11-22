@@ -17,6 +17,7 @@ import {
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: authLoading, isAuthenticated } = useAuth();
+  const userId = user?.user_id || user?.id;
   const heatmapScrollRef = useRef(null);
 
   // State variables
@@ -321,7 +322,7 @@ export default function DashboardPage() {
 
     try {
       const savedResponse = await fetch(
-        "http://localhost:5000/api/my-simulations?user_id=2"
+        `http://localhost:5000/api/my-simulations?user_id=${userId}`
       );
       const savedData = await savedResponse.json();
 

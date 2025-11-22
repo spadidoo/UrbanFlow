@@ -178,18 +178,28 @@ class DatabaseService:
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
+
+            # ✅ Parse ISO datetime strings (these are already in UTC from frontend)
+            start_datetime_str = simulation_data.get('start_datetime')
+            end_datetime_str = simulation_data.get('end_datetime')
+            
+            start_time = None
+            end_time = None
             
             # Extract summary statistics
             summary = results_data.get('summary', {})
             
             # Convert datetime strings to datetime objects if needed
-            start_time = simulation_data.get('start_datetime')
-            if isinstance(start_time, str):
-                start_time = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
-                
-            end_time = simulation_data.get('end_datetime')
-            if isinstance(end_time, str):
-                end_time = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+            if start_datetime_str:
+                # Parse ISO format (2025-11-22T14:00:00.000Z)
+                start_time = datetime.fromisoformat(start_datetime_str.replace('Z', '+00:00'))
+        
+            if end_datetime_str:
+                end_time = datetime.fromisoformat(end_datetime_str.replace('Z', '+00:00'))
+
+            print(f"💾 Saving simulation with times:")
+            print(f"   Start: {start_time}")
+            print(f"   End: {end_time}")
             
             # Create disruption geometry in WKT format if coordinates provided
             disruption_geometry_wkt = None

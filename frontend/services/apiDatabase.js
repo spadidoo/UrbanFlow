@@ -16,7 +16,7 @@ const API_BASE_URL = 'http://localhost:5000/api';
 /**
  * Save a simulation to the database as a draft
  */
-export const saveSimulation = async (simulationData, resultsData, userId = 1) => {
+export const saveSimulation = async (simulationData, resultsData, userId) => {
   try {
     const response = await fetch(`${API_BASE_URL}/save-simulation`, {
       method: 'POST',
@@ -46,7 +46,7 @@ export const saveSimulation = async (simulationData, resultsData, userId = 1) =>
 /**
  * Publish a simulation to the public map
  */
-export const publishSimulation = async (runId, userId = 1) => {
+export const publishSimulation = async (runId, userId) => {
   try {
     const response = await fetch(`${API_BASE_URL}/publish-simulation`, {
       method: 'POST',
@@ -75,7 +75,7 @@ export const publishSimulation = async (runId, userId = 1) => {
 /**
  * Unpublish a simulation (remove from public map)
  */
-export const unpublishSimulation = async (runId, userId = 1) => {
+export const unpublishSimulation = async (runId, userId) => {
   try {
     const response = await fetch(`${API_BASE_URL}/unpublish-simulation`, {
       method: 'POST',
@@ -104,7 +104,7 @@ export const unpublishSimulation = async (runId, userId = 1) => {
 /**
  * Get all simulations for the current user
  */
-export const getMySimulations = async (userId = 1, status = null) => {
+export const getMySimulations = async (userId, status = null) => {
   try {
     const params = new URLSearchParams({ user_id: userId });
     if (status) {
@@ -166,7 +166,7 @@ export const getPublishedSimulations = async () => {
 /**
  * Delete a simulation
  */
-export const deleteSimulation = async (runId, userId = 1) => {
+export const deleteSimulation = async (runId, userId) => {
   try {
     const response = await fetch(`${API_BASE_URL}/delete-simulation/${runId}?user_id=${userId}`, {
       method: 'DELETE',
@@ -188,7 +188,7 @@ export const deleteSimulation = async (runId, userId = 1) => {
 /**
  * Run simulation and save in one request
  */
-export const simulateAndSave = async (formData, saveToDatabase = false, userId = 1) => {
+export const simulateAndSave = async (formData, saveToDatabase = false, userId) => {
   try {
     const response = await fetch(`${API_BASE_URL}/simulate-and-save`, {
       method: 'POST',

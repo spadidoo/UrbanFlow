@@ -4,9 +4,12 @@ import PlannerNavbar from "@/components/PlannerNavbar";
 import api from "@/services/api";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useAuth } from "@/context/AuthContext";
 
 export default function DataPage() {
   const router = useRouter();
+  const { user } = useAuth(); 
+
   const [activeTab, setActiveTab] = useState("disruptions");
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -33,13 +36,15 @@ export default function DataPage() {
   const [uploading, setUploading] = useState(false);
   const [success, setSuccess] = useState(null);
 
+  const userId = user?.user_id || user?.id;
+
   // Fetch simulations on mount
   useEffect(() => {
     fetchDisruptions();
   }, []);
 
   useEffect(() => {
-    if (activeTab !== "datasets") {
+    if (activeTab === "datasets") {
       fetchDatasets();
     }
   }, [activeTab]);
@@ -259,7 +264,7 @@ export default function DataPage() {
   const fetchDisruptions = async () => {
     try {
       setLoading(true);
-      const response = await api.getMySimulations(2); // user_id = 2
+      const response = await api.getMySimulations(userId); // user_id = 2
 
       if (response.success) {
         setDisruptions(response.simulations);
@@ -336,13 +341,13 @@ export default function DataPage() {
       setOTPLoading(true);
       setOTPError(null);
 
-      const response = await api.sendPublishOTP(otpSimulation.simulation_id, 2);
+      const response = await api.sendPublishOTP(otpSimulation.simulation_id, userId);
 
       if (response.success) {
         setOTPSent(true);
         setTestOTP(response.otp_for_testing); // For testing only
         alert(
-          `OTP sent to your email! (Test OTP: ${response.otp_for_testing})`
+          `OTP sent to your email!)`
         );
       } else {
         setOTPError(response.error || "Failed to send OTP");
@@ -371,12 +376,12 @@ export default function DataPage() {
         otpCode,
         otpSimulation.simulation_name || "Traffic Disruption",
         otpSimulation.description || "View predicted traffic impact",
-        2
+        userId
       );
 
       if (response.success) {
         alert(
-          `✅ Simulation published successfully!\nPublic URL: ${response.public_url}`
+          `✅ Simulation published successfully!`
         );
         setShowOTPModal(false);
         fetchDisruptions(); // Refresh list
@@ -400,7 +405,7 @@ export default function DataPage() {
     try {
       const response = await api.unpublishSimulation(
         simulation.simulation_id,
-        2
+        userId
       );
 
       if (response.success) {
@@ -426,7 +431,7 @@ export default function DataPage() {
 
   const handleConfirmDelete = async () => {
     try {
-      const response = await api.deleteSimulationsBatch(selectedDisruptions, 2);
+      const response = await api.deleteSimulationsBatch(selectedDisruptions, userId);
 
       if (response.success) {
         alert(
@@ -961,7 +966,6 @@ export default function DataPage() {
                 {testOTP && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-4">
                     <p className="text-xs text-yellow-800">
-                      <strong>Test OTP:</strong> {testOTP}
                     </p>
                   </div>
                 )}
