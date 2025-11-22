@@ -6,30 +6,30 @@ import { useEffect, useState } from "react";
 
 export default function ReportsPage() {
   const router = useRouter();
-  
+
   // Filters
   const [filterType, setFilterType] = useState("all");
   const [filterLocation, setFilterLocation] = useState("");
   const [filterDate, setFilterDate] = useState("");
   const [search, setSearch] = useState("");
-  
+
   // Data
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
   // Fetch reports on mount
   useEffect(() => {
     fetchReports();
   }, []);
-  
+
   const fetchReports = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const response = await api.getFinishedReports();
-      
+
       if (response.success) {
         setReports(response.reports || []);
       } else {
@@ -42,7 +42,7 @@ export default function ReportsPage() {
       setLoading(false);
     }
   };
-  
+
   // Apply filters client-side
   const filteredReports = reports.filter((r) => {
     const matchesType =
@@ -50,82 +50,85 @@ export default function ReportsPage() {
     const matchesLocation =
       !filterLocation ||
       r.location.toLowerCase().includes(filterLocation.toLowerCase());
-    const matchesDate = !filterDate || r.start_date === filterDate || r.end_date === filterDate;
+    const matchesDate =
+      !filterDate || r.start_date === filterDate || r.end_date === filterDate;
     const matchesSearch =
       r.title.toLowerCase().includes(search.toLowerCase()) ||
       r.location.toLowerCase().includes(search.toLowerCase());
     return matchesType && matchesLocation && matchesDate && matchesSearch;
   });
-  
+
   // Handle View Details
   const handleViewDetails = (reportId) => {
     // Keep existing behavior - navigate to the static details page
     router.push(`/reports/${reportId}`);
   };
-  
+
   // Handle Export
   const handleExport = async (reportId, format) => {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/reports/${reportId}/export?format=${format}`,
+        `${
+          process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+        }/api/reports/${reportId}/export?format=${format}`,
         {
-          method: 'GET',
+          method: "GET",
         }
       );
-      
+
       if (!response.ok) {
         throw new Error(`Export failed: ${response.status}`);
       }
-      
+
       // Get filename from Content-Disposition header or use default
-      const contentDisposition = response.headers.get('Content-Disposition');
+      const contentDisposition = response.headers.get("Content-Disposition");
       let filename = `report_${reportId}.${format}`;
-      
+
       if (contentDisposition) {
         const matches = /filename="(.+)"/.exec(contentDisposition);
         if (matches && matches[1]) {
           filename = matches[1];
         }
       }
-      
+
       // Download the file
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      
     } catch (err) {
       console.error(`Error exporting as ${format}:`, err);
       alert(`Failed to export as ${format.toUpperCase()}`);
     }
   };
-  
+
   // Get type icon
   const getTypeIcon = (type) => {
     const typeMap = {
-      'roadwork': '🚧',
-      'flood': '🌊',
-      'traffic': '🚗',
-      'infrastructure': '🏗️',
-      'event': '🎪',
-      'general': '🔔'
+      roadwork: "🚧",
+      flood: "🌊",
+      traffic: "🚗",
+      infrastructure: "🏗️",
+      event: "🎪",
+      general: "🔔",
     };
-    return typeMap[type.toLowerCase()] || '📍';
+    return typeMap[type.toLowerCase()] || "📍";
   };
-  
+
   // Get severity badge color
   const getSeverityColor = (severity) => {
     if (!severity) return "bg-gray-100 text-gray-700";
-    
+
     const level = severity.toLowerCase();
     if (level === "light") return "bg-green-100 text-green-700";
     if (level === "moderate") return "bg-yellow-100 text-yellow-700";
-    if (level === "heavy" || level === "severe") return "bg-red-100 text-red-700";
+    if (level === "heavy" || level === "severe")
+      return "bg-red-100 text-red-700";
     return "bg-gray-100 text-gray-700";
   };
 
@@ -138,7 +141,7 @@ export default function ReportsPage() {
           <h1 className="text-3xl font-bold text-black-600">
             Published Simulation Reports
           </h1>
-          
+
           <button
             onClick={fetchReports}
             className="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600 transition flex items-center gap-2"
@@ -205,9 +208,9 @@ export default function ReportsPage() {
               </select>
             </div>
           </div>
-          
+
           {/* Active Filters Summary */}
-          {(search || filterDate || filterLocation || filterType !== 'all') && (
+          {(search || filterDate || filterLocation || filterType !== "all") && (
             <div className="mt-4 flex gap-2 items-center flex-wrap">
               <span className="text-sm text-gray-600">Active filters:</span>
               {search && (
@@ -225,17 +228,17 @@ export default function ReportsPage() {
                   Location: "{filterLocation}"
                 </span>
               )}
-              {filterType !== 'all' && (
+              {filterType !== "all" && (
                 <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">
                   Type: {filterType}
                 </span>
               )}
               <button
                 onClick={() => {
-                  setSearch('');
-                  setFilterDate('');
-                  setFilterLocation('');
-                  setFilterType('all');
+                  setSearch("");
+                  setFilterDate("");
+                  setFilterLocation("");
+                  setFilterType("all");
                 }}
                 className="text-xs text-red-600 hover:underline ml-2"
               >
@@ -254,7 +257,7 @@ export default function ReportsPage() {
               <p className="text-gray-600">Loading reports...</p>
             </div>
           )}
-          
+
           {/* Error State */}
           {error && !loading && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
@@ -267,14 +270,17 @@ export default function ReportsPage() {
               </button>
             </div>
           )}
-          
+
           {/* Empty State */}
-          {!loading && !error && filteredReports.length === 0 && reports.length > 0 && (
-            <p className="text-gray-500 text-center py-10">
-              No reports found for your selected filters.
-            </p>
-          )}
-          
+          {!loading &&
+            !error &&
+            filteredReports.length === 0 &&
+            reports.length > 0 && (
+              <p className="text-gray-500 text-center py-10">
+                No reports found for your selected filters.
+              </p>
+            )}
+
           {!loading && !error && reports.length === 0 && (
             <div className="text-center py-12">
               <p className="text-gray-500 text-lg mb-4">
@@ -284,21 +290,21 @@ export default function ReportsPage() {
                 Completed simulations will appear here automatically.
               </p>
               <button
-                onClick={() => router.push('/simulation')}
+                onClick={() => router.push("/simulation")}
                 className="bg-orange-500 text-white px-6 py-2 rounded hover:bg-orange-600 transition"
               >
                 Create New Simulation
               </button>
             </div>
           )}
-          
+
           {/* Reports Cards */}
           {!loading && !error && filteredReports.length > 0 && (
             <>
               <div className="mb-4 text-sm text-gray-600">
                 Showing {filteredReports.length} of {reports.length} reports
               </div>
-              
+
               <div className="space-y-4">
                 {filteredReports.map((r) => (
                   <div
@@ -309,7 +315,9 @@ export default function ReportsPage() {
                       {/* Report Info */}
                       <div className="flex-1">
                         <div className="flex items-start gap-3">
-                          <span className="text-2xl">{getTypeIcon(r.type)}</span>
+                          <span className="text-2xl">
+                            {getTypeIcon(r.type)}
+                          </span>
                           <div>
                             <h3 className="font-semibold text-lg text-orange-600">
                               {r.title}
@@ -318,8 +326,14 @@ export default function ReportsPage() {
                               📍 {r.location} | 🗓 {r.date}
                             </p>
                             <div className="flex gap-2 mt-2">
-                              <span className={`px-2 py-1 rounded text-xs font-semibold ${getSeverityColor(r.severity_level)}`}>
-                                {r.severity_level ? r.severity_level.toUpperCase() : 'N/A'}
+                              <span
+                                className={`px-2 py-1 rounded text-xs font-semibold ${getSeverityColor(
+                                  r.severity_level
+                                )}`}
+                              >
+                                {r.severity_level
+                                  ? r.severity_level.toUpperCase()
+                                  : "N/A"}
                               </span>
                               <span className="px-2 py-1 rounded text-xs font-semibold bg-blue-100 text-blue-700">
                                 {r.type}
@@ -334,29 +348,29 @@ export default function ReportsPage() {
 
                       {/* Action Buttons */}
                       <div className="flex gap-2 ml-4">
-                        <button 
+                        <button
                           onClick={() => handleViewDetails(r.id)}
                           className="border border-blue-500 text-blue-600 px-3 py-1 text-sm rounded hover:bg-blue-500 hover:text-white transition-all duration-300"
                           title="View Details"
                         >
                           View Details
                         </button>
-                        <button 
-                          onClick={() => handleExport(r.id, 'pdf')}
+                        <button
+                          onClick={() => handleExport(r.id, "pdf")}
                           className="border border-red-500 text-red-600 px-3 py-1 text-sm rounded hover:bg-red-500 hover:text-white transition-all duration-300"
                           title="Download as PDF"
                         >
                           PDF
                         </button>
-                        <button 
-                          onClick={() => handleExport(r.id, 'csv')}
+                        <button
+                          onClick={() => handleExport(r.id, "csv")}
                           className="border border-green-500 text-green-600 px-3 py-1 text-sm rounded hover:bg-green-500 hover:text-white transition-all duration-300"
                           title="Download as CSV"
                         >
                           CSV
                         </button>
-                        <button 
-                          onClick={() => handleExport(r.id, 'excel')}
+                        <button
+                          onClick={() => handleExport(r.id, "excel")}
                           className="border border-yellow-500 text-yellow-600 px-3 py-1 text-sm rounded hover:bg-yellow-500 hover:text-white transition-all duration-300"
                           title="Download as Excel"
                         >
