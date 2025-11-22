@@ -30,6 +30,9 @@ from werkzeug.utils import secure_filename
 import os
 import base64
 from datetime import datetime, timedelta
+from flask import Blueprint, request, jsonify
+from flask_mail import Message
+import os
 
 load_dotenv()
 
@@ -137,6 +140,116 @@ def save_avatar_to_db(user_id, image_data, filename):
     finally:
         if conn:
             conn.close()
+            
+contact_bp = Blueprint('contact', __name__)
+
+@contact_bp.route('/api/contact', methods=['POST'])
+def contact_form():
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        errors = {}
+        name = data.get('name', '').strip()
+        email = data.get('email', '').strip()
+        subject = data.get('subject', '').strip()
+        message = data.get('message', '').strip()
+        
+        if not name:
+            errors['name'] = 'Name is required'
+        if not email:
+            errors['email'] = 'Email is required'
+        elif '@' not in email or '.' not in email:
+            errors['email'] = 'Please enter a valid email address'
+        if not subject:
+            errors['subject'] = 'Subject is required'
+        if not message:
+            errors['message'] = 'Message is required'
+        
+        if errors:
+            return jsonify({'success': False, 'errors': errors}), 400
+        
+        # Send email using smtplib (simpler, no Flask-Mail needed)
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+        
+        smtp_email = os.getenv('SMTP_EMAIL')
+        smtp_password = os.getenv('SMTP_PASSWORD')
+        smtp_server = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
+        smtp_port = int(os.getenv('SMTP_PORT', 587))
+        
+        # Create message
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = f'[UrbanFlow Contact] {subject}'
+        msg['From'] = smtp_email
+        msg['To'] = smtp_email  # Send to yourself
+        msg['Reply-To'] = email
+        
+        # Plain text version
+        text_content = f"""
+New contact form submission from UrbanFlow:
+
+Name: {name}
+Email: {email}
+Subject: {subject}
+
+Message:
+{message}
+        """
+        
+        # HTML version
+        html_content = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #2563eb;">New Contact Form Submission</h2>
+            <p style="color: #666;">You have received a new message from the UrbanFlow website.</p>
+            
+            <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                <tr>
+                    <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold; width: 100px;">Name:</td>
+                    <td style="padding: 10px; border-bottom: 1px solid #eee;">{name}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold;">Email:</td>
+                    <td style="padding: 10px; border-bottom: 1px solid #eee;">
+                        <a href="mailto:{email}">{email}</a>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold;">Subject:</td>
+                    <td style="padding: 10px; border-bottom: 1px solid #eee;">{subject}</td>
+                </tr>
+            </table>
+            
+            <div style="margin-top: 20px; padding: 15px; background-color: #f9fafb; border-radius: 8px;">
+                <p style="font-weight: bold; margin-bottom: 10px;">Message:</p>
+                <p style="white-space: pre-wrap; margin: 0;">{message}</p>
+            </div>
+            
+            <hr style="margin-top: 30px; border: none; border-top: 1px solid #eee;" />
+            <p style="color: #999; font-size: 12px;">
+                This email was sent from the UrbanFlow contact form.
+            </p>
+        </div>
+        """
+        
+        msg.attach(MIMEText(text_content, 'plain'))
+        msg.attach(MIMEText(html_content, 'html'))
+        
+        # Send email
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_email, smtp_password)
+            server.send_message(msg)
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        print(f"Contact form error: {e}")
+        return jsonify({
+            'success': False, 
+            'error': 'Failed to send message. Please try again later.'
+        }), 500
 
 # ============================================================
 # NEW ROUTE: Upload Avatar
@@ -1747,33 +1860,71 @@ def unpublish_simulation():
 def get_published_disruptions():
     """
     Get all published simulations for the public map
-    This replaces the mock data in HomeMapWithSidebar.jsx
     """
+    conn = None
     try:
+        print("📡 GET /api/published-disruptions called")
+        
         simulations = db.get_published_simulations()
+        print(f"✅ Retrieved {len(simulations)} published simulations from DB")
         
         # Transform to match frontend format
         disruptions = []
         for sim in simulations:
-            disruptions.append({
-                'id': sim['published_id'],
-                'simulation_id': sim['simulation_id'],
-                'title': sim['title'],
-                'description': sim['public_description'],
-                'location': sim['disruption_location'],
-                'type': sim['disruption_type'],
-                'status': 'Active',
-                'start_date': sim['start_time'].isoformat() if sim['start_time'] else None,
-                'end_date': sim['end_time'].isoformat() if sim['end_time'] else None,
-                'severity_level': sim['severity_level'],
-                'congestion_level': sim['severity_level'].capitalize(),
-                'avg_severity': float(sim['average_delay_ratio']) if sim['average_delay_ratio'] else 1.0,
-                'expected_delay': round(float(sim['average_delay_ratio']) * 10) if sim['average_delay_ratio'] else 10,
-                'published_at': sim['published_at'].isoformat() if sim['published_at'] else None,
-                'slug': sim['slug'],
-                'view_count': sim['view_count'],
-                'organization': sim['organization']
-            })
+            try:
+                # Safely get coordinates
+                lat = sim.get('latitude')
+                lng = sim.get('longitude')
+                
+                # Skip if no coordinates
+                if not lat or not lng:
+                    print(f"⚠️ Skipping simulation {sim.get('simulation_id')} - missing coordinates")
+                    continue
+                
+                # Safely calculate expected delay
+                avg_delay_ratio = sim.get('average_delay_ratio')
+                if avg_delay_ratio:
+                    expected_delay = round(float(avg_delay_ratio) * 10)
+                else:
+                    expected_delay = 10
+                
+                # Safely get avg severity
+                if avg_delay_ratio:
+                    avg_severity = float(avg_delay_ratio)
+                else:
+                    avg_severity = 1.0
+                
+                disruptions.append({
+                    'id': sim.get('published_id'),
+                    'simulation_id': sim.get('simulation_id'),
+                    'title': sim.get('title') or 'Untitled Disruption',
+                    'description': sim.get('public_description') or '',
+                    'location': sim.get('disruption_location') or 'Unknown Location',
+                    'type': sim.get('disruption_type') or 'general',
+                    'status': 'Active',
+                    'start_date': sim['start_time'].isoformat() if sim.get('start_time') else None,
+                    'end_date': sim['end_time'].isoformat() if sim.get('end_time') else None,
+                    'severity_level': sim.get('severity_level') or 'moderate',
+                    'congestion_level': (sim.get('severity_level') or 'moderate').capitalize(),
+                    'avg_severity': avg_severity,
+                    'expected_delay': expected_delay,
+                    'published_at': sim['published_at'].isoformat() if sim.get('published_at') else None,
+                    'slug': sim.get('slug'),
+                    'view_count': sim.get('view_count', 0),
+                    'organization': sim.get('organization'),
+                    'latitude': float(lat),
+                    'longitude': float(lng)
+                })
+                
+                print(f"✅ Added disruption: {sim.get('title')} at ({lat}, {lng})")
+                
+            except Exception as e:
+                print(f"⚠️ Error processing simulation {sim.get('simulation_id', 'unknown')}: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
+        
+        print(f"✅ Returning {len(disruptions)} disruptions to frontend")
         
         return jsonify({
             'success': True,
@@ -1782,12 +1933,16 @@ def get_published_disruptions():
         })
         
     except Exception as e:
+        print(f"❌ ERROR in get_published_disruptions: {e}")
         import traceback
+        traceback.print_exc()
+        
         return jsonify({
             'success': False,
             'error': str(e),
-            'traceback': traceback.format_exc()
-        }), 500
+            'disruptions': [],
+            'count': 0
+        }), 500     
 
 # Alias route for frontend compatibility
 @app.route('/api/published-simulations', methods=['GET'])
