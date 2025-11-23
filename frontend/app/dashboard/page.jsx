@@ -4,6 +4,7 @@ import PlannerNavbar from "@/components/PlannerNavbar";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
+import SimulationPreviewModal from "@/components/SimulationPreviewModal";
 import {
   CartesianGrid,
   Line,
@@ -19,6 +20,10 @@ export default function DashboardPage() {
   const { user, loading: authLoading, isAuthenticated } = useAuth();
   const userId = user?.user_id || user?.id;
   const heatmapScrollRef = useRef(null);
+
+  // Add these new state variables for the modal
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedSimulation, setSelectedSimulation] = useState(null);
 
   // State variables
   const [savedSimulations, setSavedSimulations] = useState([]);
@@ -326,6 +331,7 @@ export default function DashboardPage() {
       );
       const savedData = await savedResponse.json();
 
+
       if (savedData.success) {
         setSavedSimulations(savedData.simulations);
 
@@ -378,6 +384,16 @@ export default function DashboardPage() {
       setLoading(false);
       setLastUpdate(new Date());
     }
+  };
+
+  const handleOpenPreview = (simulation) => {
+    setSelectedSimulation(simulation);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedSimulation(null);
   };
 
   // ============================================
@@ -654,9 +670,7 @@ export default function DashboardPage() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            router.push(
-                              `/planner/simulation/${sim.simulation_id}`
-                            );
+                            handleOpenPreview(sim);
                           }}
                           className="px-4 py-1 bg-orange-500 text-white text-sm rounded hover:bg-orange-600 transition"
                         >
@@ -1025,6 +1039,12 @@ export default function DashboardPage() {
           </div>
         </div>
       </main>
+       {/* Simulation Preview Modal */}
+        <SimulationPreviewModal
+          simulation={selectedSimulation}
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+        />
     </div>
   );
 }
