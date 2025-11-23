@@ -24,7 +24,7 @@ class DatabaseService:
             'user': 'postgres.ndozyvnrmryyidehykmu',  # Your Supabase user
             'password': 'urbanflow123',  # Replace with your password
             'host': 'aws-1-ap-south-1.pooler.supabase.com',  # Pooler host
-            'port': '5432'  # Must be 6543 for pooler
+            'port': '6543'  # Must be 6543 for pooler
         }
         self._test_connection()
 
