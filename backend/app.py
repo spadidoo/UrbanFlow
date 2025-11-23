@@ -33,6 +33,8 @@ import base64
 from datetime import datetime, timedelta
 import pytz
 import smtplib
+from flask import Blueprint, request, jsonify
+from flask_mail import Message
 
 load_dotenv()
 
@@ -145,6 +147,117 @@ def save_avatar_to_db(user_id, image_data, filename):
     finally:
         if conn:
             conn.close()
+
+contact_bp = Blueprint('contact', __name__)
+
+@contact_bp.route('/api/contact', methods=['POST'])
+def contact_form():
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        errors = {}
+        name = data.get('name', '').strip()
+        email = data.get('email', '').strip()
+        subject = data.get('subject', '').strip()
+        message = data.get('message', '').strip()
+        
+        if not name:
+            errors['name'] = 'Name is required'
+        if not email:
+            errors['email'] = 'Email is required'
+        elif '@' not in email or '.' not in email:
+            errors['email'] = 'Please enter a valid email address'
+        if not subject:
+            errors['subject'] = 'Subject is required'
+        if not message:
+            errors['message'] = 'Message is required'
+        
+        if errors:
+            return jsonify({'success': False, 'errors': errors}), 400
+        
+        # Send email using smtplib (simpler, no Flask-Mail needed)
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+        
+        smtp_email = os.getenv('SMTP_EMAIL')
+        smtp_password = os.getenv('SMTP_PASSWORD')
+        smtp_server = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
+        smtp_port = int(os.getenv('SMTP_PORT', 587))
+        
+        # Create message
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = f'[UrbanFlow Contact] {subject}'
+        msg['From'] = smtp_email
+        msg['To'] = smtp_email  # Send to yourself
+        msg['Reply-To'] = email
+        
+        # Plain text version
+        text_content = f"""
+New contact form submission from UrbanFlow:
+
+Name: {name}
+Email: {email}
+Subject: {subject}
+
+Message:
+{message}
+        """
+        
+        # HTML version
+        html_content = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #2563eb;">New Contact Form Submission</h2>
+            <p style="color: #666;">You have received a new message from the UrbanFlow website.</p>
+            
+            <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                <tr>
+                    <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold; width: 100px;">Name:</td>
+                    <td style="padding: 10px; border-bottom: 1px solid #eee;">{name}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold;">Email:</td>
+                    <td style="padding: 10px; border-bottom: 1px solid #eee;">
+                        <a href="mailto:{email}">{email}</a>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 10px; border-bottom: 1px solid #eee; font-weight: bold;">Subject:</td>
+                    <td style="padding: 10px; border-bottom: 1px solid #eee;">{subject}</td>
+                </tr>
+            </table>
+            
+            <div style="margin-top: 20px; padding: 15px; background-color: #f9fafb; border-radius: 8px;">
+                <p style="font-weight: bold; margin-bottom: 10px;">Message:</p>
+                <p style="white-space: pre-wrap; margin: 0;">{message}</p>
+            </div>
+            
+            <hr style="margin-top: 30px; border: none; border-top: 1px solid #eee;" />
+            <p style="color: #999; font-size: 12px;">
+                This email was sent from the UrbanFlow contact form.
+            </p>
+        </div>
+        """
+        
+        msg.attach(MIMEText(text_content, 'plain'))
+        msg.attach(MIMEText(html_content, 'html'))
+        
+        # Send email
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_email, smtp_password)
+            server.send_message(msg)
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        print(f"Contact form error: {e}")
+        return jsonify({
+            'success': False, 
+            'error': 'Failed to send message. Please try again later.'
+        }), 500
+
 
 # ============================================================
 # NEW ROUTE: Upload Avatar
