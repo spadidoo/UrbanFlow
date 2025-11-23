@@ -41,7 +41,7 @@ def generate_token(user_id):
         'iat': datetime.utcnow()
     }
     
-    secret = os.getenv('JWT_SECRET', 'your-secret-key-change-this')
+    secret = os.getenv('JWT_SECRET', 'UE9gLj0sRJjJlRDYNcyOoAKzuim95SQM3OdrPHzQ7ho')
     token = jwt.encode(payload, secret, algorithm='HS256')
     
     return token
@@ -49,7 +49,7 @@ def generate_token(user_id):
 def decode_token(token):
     """Decode JWT token"""
     try:
-        secret = os.getenv('JWT_SECRET', 'your-secret-key-change-this')
+        secret = os.getenv('JWT_SECRET', 'UE9gLj0sRJjJlRDYNcyOoAKzuim95SQM3OdrPHzQ7ho')
         payload = jwt.decode(token, secret, algorithms=['HS256'])
         return payload
     except jwt.ExpiredSignatureError:
