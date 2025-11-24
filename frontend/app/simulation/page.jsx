@@ -11,6 +11,13 @@ import dynamic from "next/dynamic";
 import { use, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 
+// OTP Modal State (ADD THESE)
+const [showOTPModal, setShowOTPModal] = useState(false);
+const [otpCode, setOTPCode] = useState("");
+const [otpSent, setOTPSent] = useState(false);
+const [otpLoading, setOTPLoading] = useState(false);
+const [otpError, setOTPError] = useState(null);
+
 const SmartResultsMap = dynamic(() => import("@/components/SmartResultsMap"), {
   ssr: false,
   loading: () => (
@@ -565,52 +572,90 @@ export default function SimulationPage() {
     setError(null);
     setPublishSuccess(false);
 
+    // Open OTP modal instead of publishing directly
+    setOTPCode("");
+    setOTPSent(false);
+    setOTPError(null);
+    setTestOTP("");
+    setShowOTPModal(true);
+  };
+
+  // Send OTP
+  const handleSendOTP = async () => {
     try {
-      const publishPayload = {
-        simulation_id: savedSimulationId,
-        user_id: userId, // Default planner user - will use auth later
-        title:
-          formData.scenarioName ||
-          `Traffic Disruption - ${new Date().toLocaleDateString()}`,
-        public_description:
-          formData.description ||
-          `${formData.disruptionType} disruption affecting ${
-            roadInfo?.area || "the area"
-          }. ` +
+      setOTPLoading(true);
+      setOTPError(null);
+
+      const response = await fetch('http://localhost:5000/api/send-publish-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          simulation_id: savedSimulationId,
+          user_id: userId,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setOTPSent(true);
+        setTestOTP(data.otp_for_testing); // For testing only
+        alert(`OTP sent to your email!`);
+      } else {
+        setOTPError(data.error || 'Failed to send OTP');
+      }
+    } catch (error) {
+      console.error('Error sending OTP:', error);
+      setOTPError('Failed to send OTP. Please try again.');
+    } finally {
+      setOTPLoading(false);
+    }
+  };
+
+  // Verify OTP and Publish
+  const handleVerifyAndPublish = async () => {
+    if (!otpCode || otpCode.length !== 6) {
+      setOTPError('Please enter a valid 6-digit OTP');
+      return;
+    }
+
+    try {
+      setOTPLoading(true);
+      setOTPError(null);
+
+      const response = await fetch('http://localhost:5000/api/verify-publish-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          simulation_id: savedSimulationId,
+          otp: otpCode,
+          title: formData.scenarioName || `Traffic Disruption - ${new Date().toLocaleDateString()}`,
+          public_description: formData.description || 
+            `${formData.disruptionType} disruption affecting ${roadInfo?.area || "the area"}. ` +
             `Expected ${results.summary.avg_severity_label} congestion with average delays of ` +
             `${results.summary.avg_delay_minutes} minutes.`,
-      };
-
-      const response = await fetch(
-        "http://localhost:5000/api/publish-simulation",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(publishPayload),
-        }
-      );
+          user_id: userId,
+        }),
+      });
 
       const data = await response.json();
 
       if (data.success) {
         setPublishSuccess(true);
-        alert(
-          `✅ Simulation published successfully!\n\n` +
-            `Public URL: ${data.public_url}\n` +
-            `Slug: ${data.slug}\n\n` +
-            `This simulation is now visible on the public map.`
-        );
+        setShowOTPModal(false);
+        alert(`✅ Simulation published successfully!`);
       } else {
-        throw new Error(data.error || "Failed to publish simulation");
+        setOTPError(data.error || 'Invalid OTP');
       }
-    } catch (err) {
-      console.error("Error publishing simulation:", err);
-      setError(`Failed to publish simulation: ${err.message}`);
-      alert(`❌ Error: ${err.message}`);
+    } catch (error) {
+      console.error('Error verifying OTP:', error);
+      setOTPError('Verification failed. Please check your OTP.');
     } finally {
-      setPublishing(false);
+      setOTPLoading(false);
     }
   };
 
@@ -1575,6 +1620,89 @@ export default function SimulationPage() {
           </div>
         )}
       </main>
+        {/* OTP MODAL */}
+        {showOTPModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-8 max-w-md w-full">
+              <h2 className="text-2xl font-bold mb-4">Verify & Publish</h2>
+
+              {!otpSent ? (
+                <>
+                  <p className="text-gray-600 mb-6">
+                    To publish "{formData.scenarioName || 'this simulation'}", we'll send a
+                    verification code to your email.
+                  </p>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowOTPModal(false)}
+                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSendOTP}
+                      disabled={otpLoading}
+                      className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:bg-gray-300"
+                    >
+                      {otpLoading ? 'Sending...' : 'Send OTP'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-gray-600 mb-4">
+                    Enter the 6-digit code sent to your email:
+                  </p>
+
+                  {testOTP && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-4">
+                      <p className="text-xs text-yellow-800">
+                        🧪 <strong>Testing Mode:</strong> Your OTP is <strong>{testOTP}</strong>
+                      </p>
+                    </div>
+                  )}
+
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={(e) => setOTPCode(e.target.value.replace(/\D/g, ''))}
+                    placeholder="000000"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg text-center text-2xl tracking-widest mb-4"
+                  />
+
+                  {otpError && (
+                    <p className="text-red-600 text-sm mb-4">{otpError}</p>
+                  )}
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowOTPModal(false)}
+                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleVerifyAndPublish}
+                      disabled={otpLoading || otpCode.length !== 6}
+                      className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300"
+                    >
+                      {otpLoading ? 'Verifying...' : 'Verify & Publish'}
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={handleSendOTP}
+                    disabled={otpLoading}
+                    className="w-full mt-3 text-sm text-orange-600 hover:underline"
+                  >
+                    Resend OTP
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
     </div>
   );
 }
