@@ -11,12 +11,6 @@ import dynamic from "next/dynamic";
 import { use, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 
-// OTP Modal State (ADD THESE)
-const [showOTPModal, setShowOTPModal] = useState(false);
-const [otpCode, setOTPCode] = useState("");
-const [otpSent, setOTPSent] = useState(false);
-const [otpLoading, setOTPLoading] = useState(false);
-const [otpError, setOTPError] = useState(null);
 
 const SmartResultsMap = dynamic(() => import("@/components/SmartResultsMap"), {
   ssr: false,
@@ -76,6 +70,15 @@ export default function SimulationPage() {
   const [publishing, setPublishing] = useState(false);
   const [publishSuccess, setPublishSuccess] = useState(false);
 
+  // OTP Modal State (ADD THESE)
+  const [showOTPModal, setShowOTPModal] = useState(false);
+  const [otpCode, setOTPCode] = useState("");
+  const [otpSent, setOTPSent] = useState(false);
+  const [otpLoading, setOTPLoading] = useState(false);
+  const [otpError, setOTPError] = useState(null);
+  const [testOTP, setTestOTP] = useState(""); 
+  const [otpSimulation, setOTPSimulation] = useState(null);
+  
   //=======================================
   // Load simulation data if editing
   //=======================================
@@ -484,101 +487,125 @@ export default function SimulationPage() {
   };
 
   const handleSaveSimulation = async () => {
-  setSaving(true);
-  setError(null);
-  setSaveSuccess(false);
+    setSaving(true);
+    setError(null);
+    setSaveSuccess(false);
 
-  try {
-    // ✅ Create Date objects from form inputs (these are in LOCAL time)
-    const startDate = new Date(`${formData.startDate}T${formData.startTime}:00`);
-    const endDate = new Date(`${formData.endDate}T${formData.endTime}:00`);
+    try {
 
-    // ✅ Convert to ISO string (this converts to UTC automatically)
-    const startDatetime = startDate.toISOString();
-    const endDatetime = endDate.toISOString();
-
-    // ✅ GET THE ACTUAL COORDINATES FROM selectedLocation
-    const coords = selectedLocation?.center || { lat: 14.2096, lng: 121.1640 };
+      const currentUserId = user?.user_id || user?.id;
     
-    console.log("💾 Saving with coordinates:", coords);
-    
-    console.log("💾 Saving times:");
-    console.log("   Local input:", `${formData.startDate} ${formData.startTime}`);
-    console.log("   Sending to DB (UTC):", startDatetime);
-    console.log("   Will display as:", startDate.toLocaleString());
-    console.log("💾 Saving with local times:", {
-      start: startDatetime,
-      end: endDatetime
-    });
-
-    const savePayload = {
-      user_id: userId,
-      simulation_data: {
-        scenario_name: formData.scenarioName || `Simulation ${new Date().toLocaleString()}`,
-        description: formData.description || 'No description provided',
-        disruption_type: formData.disruptionType,
-        area: roadInfo?.area || 'Unknown Area',
-        road_corridor: roadInfo?.road_name || 'Unknown Road',
-        start_datetime: startDatetime,  // ✅ Local time
-        end_datetime: endDatetime,      // ✅ Local time
-        disruption_location: `${roadInfo?.area || 'Unknown'} - ${roadInfo?.road_name || 'Unknown'}`,
-        coordinates: selectedLocation?.center || null,
-        severity_level: results.summary.avg_severity < 0.5 ? 'light' : 
-                      results.summary.avg_severity < 1.5 ? 'moderate' : 'severe'
-      },
-      results_data: {
-        summary: results.summary,
-        hourly_predictions: results.hourly_predictions,
-        aggregated_view: results.aggregated_view || null,
-        time_segments: results.time_segments,
-        road_info: results.road_info || roadInfo 
+      if (!currentUserId) {
+        throw new Error("User not authenticated. Please log in again.");
       }
-    };
 
-    const response = await fetch('http://localhost:5000/api/save-simulation', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(savePayload),
-    });
+      console.log("💾 Using user_id:", currentUserId);
 
-    const data = await response.json();
+      // ✅ Create Date objects from form inputs (these are in LOCAL time)
+      const startDate = new Date(`${formData.startDate}T${formData.startTime}:00`);
+      const endDate = new Date(`${formData.endDate}T${formData.endTime}:00`);
 
-    if (data.success) {
-      setSaveSuccess(true);
-      setSavedSimulationId(data.simulation_id);
-      alert(`✅ Simulation saved successfully!\nSimulation ID: ${data.simulation_id}`);
-    } else {
-      throw new Error(data.error || 'Failed to save simulation');
+      // ✅ Convert to ISO string (this converts to UTC automatically)
+      const startDatetime = startDate.toISOString();
+      const endDatetime = endDate.toISOString();
+
+      // ✅ GET THE ACTUAL COORDINATES FROM selectedLocation
+      const coords = selectedLocation?.center || { lat: 14.2096, lng: 121.1640 };
+      
+      console.log("💾 Saving with coordinates:", coords);
+      
+      console.log("💾 Saving times:");
+      console.log("   Local input:", `${formData.startDate} ${formData.startTime}`);
+      console.log("   Sending to DB (UTC):", startDatetime);
+      console.log("   Will display as:", startDate.toLocaleString());
+      console.log("💾 Saving with local times:", {
+        start: startDatetime,
+        end: endDatetime
+      });
+
+      const savePayload = {
+        user_id: userId,
+        simulation_data: {
+          scenario_name: formData.scenarioName || `Simulation ${new Date().toLocaleString()}`,
+          description: formData.description || 'No description provided',
+          disruption_type: formData.disruptionType,
+          area: roadInfo?.area || 'Unknown Area',
+          road_corridor: roadInfo?.road_name || 'Unknown Road',
+          start_datetime: startDatetime,  // ✅ Local time
+          end_datetime: endDatetime,      // ✅ Local time
+          disruption_location: `${roadInfo?.area || 'Unknown'} - ${roadInfo?.road_name || 'Unknown'}`,
+          coordinates: selectedLocation?.center || null,
+          severity_level: results.summary.avg_severity < 0.5 ? 'light' : 
+                        results.summary.avg_severity < 1.5 ? 'moderate' : 'severe'
+        },
+        results_data: {
+          summary: results.summary,
+          hourly_predictions: results.hourly_predictions,
+          aggregated_view: results.aggregated_view || null,
+          time_segments: results.time_segments,
+          road_info: results.road_info || roadInfo 
+        }
+      };
+
+      const response = await fetch('http://localhost:5000/api/save-simulation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(savePayload),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setSaveSuccess(true);
+        setSavedSimulationId(data.simulation_id);
+        alert(`✅ Simulation saved successfully!\nSimulation ID: ${data.simulation_id}`);
+      } else {
+        throw new Error(data.error || 'Failed to save simulation');
+      }
+    } catch (err) {
+      console.error('Error saving simulation:', err);
+      setError(`Failed to save simulation: ${err.message}`);
+      alert(`❌ Error: ${err.message}`);
+    } finally {
+      setSaving(false);
     }
-  } catch (err) {
-    console.error('Error saving simulation:', err);
-    setError(`Failed to save simulation: ${err.message}`);
-    alert(`❌ Error: ${err.message}`);
-  } finally {
-    setSaving(false);
-  }
-};
+  };
 
   const handlePublishSimulation = async () => {
     // Check if simulation is saved first
     if (!savedSimulationId) {
-      alert("⚠️ Please save the simulation first before publishing!");
-      return;
-    }
+    alert("⚠️ Please save the simulation first before publishing!");
+    return;
+  }
 
-    setPublishing(true);
-    setError(null);
-    setPublishSuccess(false);
-
-    // Open OTP modal instead of publishing directly
-    setOTPCode("");
-    setOTPSent(false);
-    setOTPError(null);
-    setTestOTP("");
-    setShowOTPModal(true);
+  // Prepare publish payload
+  const publishPayload = {
+    simulation_id: savedSimulationId,
+    user_id: userId,
+    title: formData.scenarioName || `Traffic Disruption - ${new Date().toLocaleDateString()}`,
+    public_description: formData.description || 
+      `${formData.disruptionType} disruption affecting ${roadInfo?.area || "the area"}. ` +
+      `Expected ${results.summary.avg_severity_label} congestion with average delays of ` +
+      `${results.summary.avg_delay_minutes} minutes.`,
   };
+
+  // Store payload in sessionStorage for OTP modal
+  sessionStorage.setItem('publishPayload', JSON.stringify({
+    payload: publishPayload,
+    originPage: 'simulation',
+    type: 'simulation'
+  }));
+
+  // Trigger OTP modal
+  setShowOTPModal(true);
+  setOTPSimulation({
+    simulation_id: savedSimulationId,
+    simulation_name: formData.scenarioName
+  });
+};
+
 
   // Send OTP
   const handleSendOTP = async () => {
@@ -616,48 +643,62 @@ export default function SimulationPage() {
 
   // Verify OTP and Publish
   const handleVerifyAndPublish = async () => {
-    if (!otpCode || otpCode.length !== 6) {
-      setOTPError('Please enter a valid 6-digit OTP');
-      return;
+  if (!otpCode || otpCode.length !== 6) {	
+    setOTPError("Please enter a valid 6-digit OTP");
+    return;
+  }
+
+  try {
+    setOTPLoading(true);
+    setOTPError(null);
+
+    // Get stored publish payload
+    const storedData = sessionStorage.getItem('publishPayload');
+    if (!storedData) {
+      throw new Error("Publish data not found. Please try again.");
     }
 
-    try {
-      setOTPLoading(true);
-      setOTPError(null);
+    const { payload, originPage, type } = JSON.parse(storedData);
 
-      const response = await fetch('http://localhost:5000/api/verify-publish-otp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          simulation_id: savedSimulationId,
-          otp: otpCode,
-          title: formData.scenarioName || `Traffic Disruption - ${new Date().toLocaleDateString()}`,
-          public_description: formData.description || 
-            `${formData.disruptionType} disruption affecting ${roadInfo?.area || "the area"}. ` +
-            `Expected ${results.summary.avg_severity_label} congestion with average delays of ` +
-            `${results.summary.avg_delay_minutes} minutes.`,
-          user_id: userId,
-        }),
-      });
+    // Verify OTP first
+    const response = await api.verifyPublishOTP(
+      payload.simulation_id,
+      otpCode,
+      payload.title,
+      payload.public_description,
+      payload.user_id
+    );
 
-      const data = await response.json();
+    if (response.success) {
+      // Clear stored payload
+      sessionStorage.removeItem('publishPayload');
+      
+      // Close modal
+      setShowOTPModal(false);
+      
+      // Show success message
+      alert(
+        `✅ ${type === 'simulation' ? 'Simulation' : 'Data'} published successfully!\n\n` +
+        `Public URL: ${response.public_url || ''}\n` +
+        `This ${type} is now visible on the public map.`
+      );
 
-      if (data.success) {
+      // Update local state
+      if (originPage === 'simulation') {
         setPublishSuccess(true);
-        setShowOTPModal(false);
-        alert(`✅ Simulation published successfully!`);
-      } else {
-        setOTPError(data.error || 'Invalid OTP');
+      } else if (originPage === 'data') {
+        fetchDisruptions(); // Refresh list
       }
-    } catch (error) {
-      console.error('Error verifying OTP:', error);
-      setOTPError('Verification failed. Please check your OTP.');
-    } finally {
-      setOTPLoading(false);
+    } else {
+      setOTPError(response.error || "Invalid OTP");
     }
-  };
+  } catch (error) {
+    console.error("Error verifying OTP:", error);
+    setOTPError(error.message || "Verification failed. Please check your OTP.");
+  } finally {
+    setOTPLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -1576,33 +1617,32 @@ export default function SimulationPage() {
                     <>💾 Save Simulation</>
                   )}
                 </button>
-
-                <button
-                  onClick={handlePublishSimulation}
-                  disabled={publishing || !savedSimulationId || !results}
-                  className={`flex-1 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
-                    publishSuccess
-                      ? "bg-green-700 text-white"
-                      : publishing
-                      ? "bg-gray-400 text-white cursor-not-allowed"
-                      : !savedSimulationId
-                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                      : "bg-green-600 text-white hover:bg-green-700"
-                  }`}
-                >
-                  {publishing ? (
-                    <>
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Publishing...
-                    </>
-                  ) : publishSuccess ? (
-                    <>✅ Published to Public Map</>
-                  ) : !savedSimulationId ? (
-                    <>🔒 Save First to Publish</>
-                  ) : (
-                    <>📢 Publish to Public Map</>
-                  )}
-                </button>
+                  <button
+                    onClick={handlePublishSimulation}
+                    disabled={publishing || !savedSimulationId || !results}
+                    className={`flex-1 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
+                      publishSuccess
+                        ? "bg-green-700 text-white"
+                        : publishing
+                        ? "bg-gray-400 text-white cursor-not-allowed"
+                        : !savedSimulationId
+                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                        : "bg-green-600 text-white hover:bg-green-700"
+                    }`}
+                  >
+                    {publishing ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Preparing to Publish...
+                      </>
+                    ) : publishSuccess ? (
+                      <>✅ Published to Public Map</>
+                    ) : !savedSimulationId ? (
+                      <>🔒 Save First to Publish</>
+                    ) : (
+                      <>📢 Publish (OTP Required)</>
+                    )}
+                  </button>
               </div>
 
               {/* Help Text */}
@@ -1634,11 +1674,17 @@ export default function SimulationPage() {
                   </p>
                   <div className="flex gap-3">
                     <button
-                      onClick={() => setShowOTPModal(false)}
-                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                    >
-                      Cancel
-                    </button>
+                        onClick={() => {
+                          setShowOTPModal(false);
+                          sessionStorage.removeItem('publishPayload'); // Clean up
+                          setOTPCode("");
+                          setOTPSent(false);
+                          setOTPError(null);
+                        }}
+                        className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
                     <button
                       onClick={handleSendOTP}
                       disabled={otpLoading}

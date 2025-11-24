@@ -49,6 +49,26 @@ export default function DataPage() {
     }
   }, [activeTab]);
 
+  useEffect(() => {
+    // Clean up any stale publish payloads on mount
+    const storedPayload = sessionStorage.getItem('publishPayload');
+    if (storedPayload) {
+      try {
+        const { originPage } = JSON.parse(storedPayload);
+        // Only keep if we're on the same page
+        const currentPage = window.location.pathname.includes('simulation') 
+          ? 'simulation' 
+          : 'data';
+        if (originPage !== currentPage) {
+          sessionStorage.removeItem('publishPayload');
+        }
+      } catch (e) {
+        sessionStorage.removeItem('publishPayload');
+      }
+    }
+  }, []);
+
+
   //fetch datasets from backend
   const fetchDatasets = async () => {
     setLoading(true);
@@ -327,6 +347,20 @@ export default function DataPage() {
 
   // Handle Publish - Show OTP Modal
   const handlePublishClick = (simulation) => {
+     const publishPayload = {
+      simulation_id: simulation.simulation_id,
+      user_id: userId,
+      title: simulation.simulation_name || "Traffic Disruption",
+      public_description: simulation.description || "View predicted traffic impact",
+    };
+
+    // Store payload in sessionStorage
+    sessionStorage.setItem('publishPayload', JSON.stringify({
+      payload: publishPayload,
+      originPage: 'data',
+      type: 'simulation'
+    }));
+
     setOTPSimulation(simulation);
     setOTPCode("");
     setOTPSent(false);
@@ -334,7 +368,6 @@ export default function DataPage() {
     setTestOTP("");
     setShowOTPModal(true);
   };
-
   // Send OTP
   const handleSendOTP = async () => {
     try {
@@ -362,39 +395,62 @@ export default function DataPage() {
 
   // Verify OTP and Publish
   const handleVerifyAndPublish = async () => {
-    if (!otpCode || otpCode.length !== 6) {
-      setOTPError("Please enter a valid 6-digit OTP");
-      return;
+  if (!otpCode || otpCode.length !== 6) {	
+    setOTPError("Please enter a valid 6-digit OTP");
+    return;
+  }
+
+  try {
+    setOTPLoading(true);
+    setOTPError(null);
+
+    // Get stored publish payload
+    const storedData = sessionStorage.getItem('publishPayload');
+    if (!storedData) {
+      throw new Error("Publish data not found. Please try again.");
     }
 
-    try {
-      setOTPLoading(true);
-      setOTPError(null);
+    const { payload, originPage, type } = JSON.parse(storedData);
 
-      const response = await api.verifyPublishOTP(
-        otpSimulation.simulation_id,
-        otpCode,
-        otpSimulation.simulation_name || "Traffic Disruption",
-        otpSimulation.description || "View predicted traffic impact",
-        userId
+    // Verify OTP first
+    const response = await api.verifyPublishOTP(
+      payload.simulation_id,
+      otpCode,
+      payload.title,
+      payload.public_description,
+      payload.user_id
+    );
+
+    if (response.success) {
+      // Clear stored payload
+      sessionStorage.removeItem('publishPayload');
+      
+      // Close modal
+      setShowOTPModal(false);
+      
+      // Show success message
+      alert(
+        `✅ ${type === 'simulation' ? 'Simulation' : 'Data'} published successfully!\n\n` +
+        `Public URL: ${response.public_url || ''}\n` +
+        `This ${type} is now visible on the public map.`
       );
 
-      if (response.success) {
-        alert(
-          `✅ Simulation published successfully!`
-        );
-        setShowOTPModal(false);
+      // Update local state
+      if (originPage === 'simulation') {
+        setPublishSuccess(true);
+      } else if (originPage === 'data') {
         fetchDisruptions(); // Refresh list
-      } else {
-        setOTPError(response.error || "Invalid OTP");
       }
-    } catch (error) {
-      console.error("Error verifying OTP:", error);
-      setOTPError("Verification failed. Please check your OTP.");
-    } finally {
-      setOTPLoading(false);
+    } else {
+      setOTPError(response.error || "Invalid OTP");
     }
-  };
+  } catch (error) {
+    console.error("Error verifying OTP:", error);
+    setOTPError(error.message || "Verification failed. Please check your OTP.");
+  } finally {
+    setOTPLoading(false);
+  }
+};
 
   // Handle Unpublish
   const handleUnpublish = async (simulation) => {
@@ -1049,11 +1105,17 @@ export default function DataPage() {
 
             <div className="flex gap-3">
               <button
-                onClick={() => setShowDeleteModal(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-              >
-                Cancel
-              </button>
+                  onClick={() => {
+                    setShowOTPModal(false);
+                    sessionStorage.removeItem('publishPayload'); // Clean up
+                    setOTPCode("");
+                    setOTPSent(false);
+                    setOTPError(null);
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
               <button
                 onClick={handleConfirmDelete}
                 className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
