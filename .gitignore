@@ -5,6 +5,9 @@
 __pycache__/
 *.pyc
 
+# Ignore model files
+*.pkl
+
 # Node dependencies (ignore in root and nested folders)
 node_modules/
 **/node_modules/
