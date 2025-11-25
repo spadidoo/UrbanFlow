@@ -15,6 +15,233 @@ import {
   YAxis,
 } from "recharts";
 
+// Leaflet imports with SSR check
+let L;
+if (typeof window !== 'undefined') {
+  L = require('leaflet');
+  delete L.Icon.Default.prototype._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
+    iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
+    shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
+  });
+}
+
+// ============================================
+// MINI ONGOING DISRUPTIONS MAP COMPONENT
+// ============================================
+function MiniOngoingMap() {
+  const mapRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const layersRef = useRef([]);
+  const [disruptions, setDisruptions] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch ongoing disruptions
+  useEffect(() => {
+    fetchOngoingDisruptions();
+  }, []);
+
+  // Initialize map
+  useEffect(() => {
+    if (typeof window === 'undefined' || !mapRef.current || mapInstanceRef.current) return;
+
+    const map = L.map(mapRef.current, {
+      center: [14.2096, 121.164],
+      zoom: 13,
+      zoomControl: true,
+    });
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap",
+      maxZoom: 19,
+    }).addTo(map);
+
+    L.control.zoom({
+      position: "bottomright",
+    }).addTo(map);
+
+    mapInstanceRef.current = map;
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, []);
+
+  // Draw disruptions when data changes
+  useEffect(() => {
+    if (!mapInstanceRef.current || disruptions.length === 0) return;
+    drawDisruptionsOnMap();
+  }, [disruptions]);
+
+  const fetchOngoingDisruptions = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('http://localhost:5000/api/published-disruptions');
+      const data = await response.json();
+
+      if (data.success) {
+        const now = new Date();
+        const activeDisruptions = (data.disruptions || []).filter(d => {
+          if (!d.start_date || !d.end_date) return false;
+          const start = new Date(d.start_date);
+          const end = new Date(d.end_date);
+          return now >= start && now <= end;
+        });
+        setDisruptions(activeDisruptions);
+      }
+    } catch (err) {
+      console.error("Failed to fetch disruptions:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const drawDisruptionsOnMap = () => {
+    if (!mapInstanceRef.current || typeof window === 'undefined') return;
+
+    const map = mapInstanceRef.current;
+
+    // Clear old layers
+    layersRef.current.forEach(layer => {
+      try {
+        map.removeLayer(layer);
+      } catch (e) {}
+    });
+    layersRef.current = [];
+
+    // Draw each disruption
+    disruptions.forEach(disruption => {
+      if (!disruption.latitude || !disruption.longitude) return;
+
+      const severity = disruption.avg_severity || 1.0;
+      const color = getSeverityColor(severity);
+
+      // Draw circular impact zone
+      const circle = L.circle([disruption.latitude, disruption.longitude], {
+        radius: 500,
+        color: color,
+        fillColor: color,
+        fillOpacity: 0.2,
+        weight: 2,
+      }).addTo(map);
+
+      layersRef.current.push(circle);
+
+      // Add marker
+      const marker = L.marker([disruption.latitude, disruption.longitude], {
+        icon: L.divIcon({
+          className: 'disruption-marker',
+          html: `
+            <div style="position: relative;">
+              <div style="
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                width: 50px;
+                height: 50px;
+                border: 3px solid ${color};
+                border-radius: 50%;
+                opacity: 0.3;
+                animation: pulse 2s ease-out infinite;
+              "></div>
+              <div style="
+                background: white;
+                border: 3px solid ${color};
+                border-radius: 50%;
+                width: 36px;
+                height: 36px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 18px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                cursor: pointer;
+                z-index: 1000;
+              ">🚧</div>
+              <style>
+                @keyframes pulse {
+                  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.3; }
+                  100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+                }
+              </style>
+            </div>
+          `,
+          iconSize: [36, 36],
+          iconAnchor: [18, 18],
+        })
+      }).addTo(map);
+
+      marker.bindPopup(createPopup(disruption));
+      layersRef.current.push(marker);
+    });
+
+    // Fit map to show all disruptions
+    if (disruptions.length > 0) {
+      const bounds = disruptions.map(d => [d.latitude, d.longitude]);
+      try {
+        map.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 });
+      } catch (e) {}
+    }
+  };
+
+  const createPopup = (disruption) => {
+    return `
+      <div style="font-family: -apple-system, sans-serif; padding: 10px; min-width: 200px;">
+        <h3 style="margin: 0 0 8px 0; font-size: 15px; font-weight: 600;">
+          🚧 ${disruption.title}
+        </h3>
+        <p style="margin: 4px 0; font-size: 12px; color: #6b7280;">
+          📍 ${disruption.location}
+        </p>
+        <div style="background: #f9fafb; padding: 6px; border-radius: 6px; margin-top: 6px;">
+          <p style="margin: 2px 0; font-size: 11px;">
+            <strong>Type:</strong> ${disruption.type}
+          </p>
+          <p style="margin: 2px 0; font-size: 11px;">
+            <strong>Delay:</strong> +${disruption.expected_delay} min
+          </p>
+          <p style="margin: 2px 0; font-size: 11px;">
+            <strong>Level:</strong> ${disruption.congestion_level}
+          </p>
+        </div>
+      </div>
+    `;
+  };
+
+  const getSeverityColor = (severity) => {
+    if (severity < 1.0) return '#22c55e';
+    if (severity < 2.0) return '#fbbf24';
+    return '#ef4444';
+  };
+
+  return (
+    <div className="relative w-full h-full">
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 z-[1000]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-2"></div>
+            <p className="text-sm text-gray-600">Loading map...</p>
+          </div>
+        </div>
+      )}
+      {!loading && disruptions.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 z-[1000]">
+          <div className="text-center text-gray-500">
+            <div className="text-4xl mb-2">✅</div>
+            <p className="text-sm">No active disruptions</p>
+          </div>
+        </div>
+      )}
+      <div ref={mapRef} className="w-full h-full rounded-lg" />
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: authLoading, isAuthenticated } = useAuth();
@@ -1034,6 +1261,30 @@ export default function DashboardPage() {
                 >
                   View all →
                 </button>
+              </div>
+            </div>
+
+            {/* Ongoing Disruptions Map - BELOW NOTIFICATIONS */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800">
+                    Ongoing Disruptions Map
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Live view of active traffic disruptions
+                  </p>
+                </div>
+                <button
+                  onClick={() => router.push("/")}
+                  className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded-full font-semibold hover:bg-blue-200 transition"
+                >
+                  View Full Map
+                </button>
+              </div>
+              
+              <div className="h-[400px] rounded-lg overflow-hidden border border-gray-200">
+                <MiniOngoingMap />
               </div>
             </div>
           </div>

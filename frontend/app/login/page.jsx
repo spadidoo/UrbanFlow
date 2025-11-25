@@ -1,54 +1,53 @@
-"use client"
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import Navbar from '@/components/Navbar';
-import { useAuth } from '@/context/AuthContext';
-import LoadingScreen from '@/components/LoadingScreen'
+import Navbar from "@/components/Navbar";
+import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
 export default function LoginPage() {
-  const router = useRouter()
-  const { login, isAuthenticated, loading: authLoading } = useAuth()
-  
+  const router = useRouter();
+  const { login, isAuthenticated, loading: authLoading } = useAuth();
+
   const [formData, setFormData] = useState({
-    email: '',
-    password: ''
-  })
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-  
+    email: "",
+    password: "",
+  });
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
   // Use ref to track if we've already redirected
-  const hasRedirected = useRef(false)
+  const hasRedirected = useRef(false);
 
   // FIXED: Only redirect if authenticated AND not currently loading
   useEffect(() => {
     if (!authLoading && isAuthenticated && !hasRedirected.current) {
       hasRedirected.current = true;
-      router.replace('/dashboard');
+      router.replace("/dashboard");
     }
-  }, [isAuthenticated, authLoading, router])
+  }, [isAuthenticated, authLoading, router]);
 
   const handleChange = (e) => {
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
-    })
-    setError('')
-  }
+      [e.target.name]: e.target.value,
+    });
+    setError("");
+  };
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
+    e.preventDefault();
+    setLoading(true);
+    setError("");
 
-    const result = await login(formData.email, formData.password)
-    
+    const result = await login(formData.email, formData.password);
+
     if (!result.success) {
-      setError(result.error || 'Invalid email or password')
-      setLoading(false)
+      setError(result.error || "Invalid email or password");
+      setLoading(false);
     }
     // If success, the AuthContext will handle the redirect to dashboard
-  }
+  };
 
   // Show loading spinner while checking authentication
   if (authLoading) {
@@ -59,24 +58,22 @@ export default function LoginPage() {
           <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
-    <div
-      className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 relative"
-    >
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 relative">
       <div
         className="absolute inset-0"
         style={{
           backgroundImage: "url('map.jpg')",
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
+          backgroundSize: "cover",
+          backgroundPosition: "center",
           opacity: 0.5,
         }}
       ></div>
       <Navbar />
-      
+
       <main className="container mx-auto px-4 py-20 relative z-10">
         <div className="max-w-md mx-auto">
           {/* Login Card */}
@@ -84,7 +81,11 @@ export default function LoginPage() {
             {/* Header */}
             <div className="text-center mb-10">
               <div className="mx-auto w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mb-4">
-                <img src="urban_planner_icon.png" alt="Urban Planner Icon" className="h-20 w-20" />
+                <img
+                  src="urban_planner_icon.png"
+                  alt="Urban Planner Icon"
+                  className="h-20 w-20"
+                />
               </div>
               <h1 className="text-3xl font-bold text-gray-800 mb-2">
                 Urban Planner Login
@@ -95,8 +96,17 @@ export default function LoginPage() {
             {error && (
               <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
                 <div className="flex items-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                      clipRule="evenodd"
+                    />
                   </svg>
                   <span>{error}</span>
                 </div>
@@ -148,12 +158,12 @@ export default function LoginPage() {
                 type="submit"
                 disabled={loading}
                 className={`w-full bg-[#242424] text-[#FFA611] py-3 rounded-full font-semibold transition ${
-                  loading 
-                    ? 'opacity-50 cursor-not-allowed' 
-                    : 'hover:bg-[#FFA611] hover:text-[#242424]'
+                  loading
+                    ? "opacity-50 cursor-not-allowed"
+                    : "hover:bg-[#FFA611] hover:text-[#242424]"
                 }`}
               >
-                {loading ? 'Logging in...' : 'Login'}
+                {loading ? "Logging in..." : "Login"}
               </button>
             </form>
 
@@ -163,18 +173,27 @@ export default function LoginPage() {
                 🔑 Test Credentials:
               </p>
               <p className="text-sm text-yellow-700">
-                Email: <code className="bg-yellow-100 px-2 py-1 rounded">planner_calamba@example.gov</code>
+                Email:{" "}
+                <code className="bg-yellow-100 px-2 py-1 rounded">
+                  planner_calamba@example.gov
+                </code>
               </p>
               <p className="text-sm text-yellow-700">
-                Password: <code className="bg-yellow-100 px-2 py-1 rounded">password123</code>
+                Password:{" "}
+                <code className="bg-yellow-100 px-2 py-1 rounded">
+                  password123
+                </code>
               </p>
             </div>
 
             {/* Footer Links */}
             <div className="mt-6 text-center">
               <p className="text-sm text-gray-600">
-                Not a planner?{' '}
-                <a href="/" className="text-blue-600 hover:underline font-semibold">
+                Not a planner?{" "}
+                <a
+                  href="/"
+                  className="text-blue-600 hover:underline font-semibold"
+                >
                   View public map
                 </a>
               </p>
@@ -190,5 +209,5 @@ export default function LoginPage() {
         </div>
       </main>
     </div>
-  )
+  );
 }

@@ -1,4 +1,4 @@
-import Navbar from '@/components/Navbar'
+import Navbar from "@/components/NavBar"
 
 export default function AboutPage() {
   return (
@@ -92,8 +92,8 @@ export default function AboutPage() {
               Our Mission
             </h2>
             <p className="text-gray-600 leading-relaxed">
-              To provide Calamba City residents and urban planners with accurate, 
-              data-driven insights that improve traffic flow, reduce congestion, 
+              To provide the road users, traffic authorities, and urban planners of Calamba City  
+              with accurate, data-driven insights that improve traffic flow, reduce congestion, 
               and enhance the overall quality of urban transportation.
             </p>
           </div>
@@ -104,7 +104,7 @@ export default function AboutPage() {
       <footer className="bg-gray-800 text-white py-8 mt-16">
         <div className="container mx-auto px-4 text-center">
           <p>&copy; 2025 UrbanFlow - Calamba City Traffic Prediction System</p>
-          <p className="text-sm text-gray-400 mt-2">Thesis Project</p>
+          <p className="text-sm text-gray-400 mt-2">CS 1 Thesis</p>
         </div>
       </footer>
     </div>

@@ -136,7 +136,7 @@ export default function ReportsPage() {
       <main className="container mx-auto px-8 py-10">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-black-600">
-            Published Simulation Reports
+            Completed Published Simulation Reports
           </h1>
           
           <button

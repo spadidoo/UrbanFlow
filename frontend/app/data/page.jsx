@@ -533,7 +533,7 @@ export default function DataPage() {
 
         {/* Tabs */}
         <div className="flex gap-4 mb-6">
-          {["disruptions", "datasets", "completed"].map((tab) => (
+          {["disruptions", "datasets"].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -948,41 +948,7 @@ export default function DataPage() {
           </div>
         )}
 
-        {/* COMPLETED TAB (Keep existing code) */}
-        {activeTab === "completed" && (
-          <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-xl font-semibold text-orange-600 mb-4">
-              Completed Projects
-            </h2>
-            {completedProjects.length === 0 ? (
-              <p className="text-gray-500">No completed projects yet.</p>
-            ) : (
-              <div className="grid md:grid-cols-2 gap-4">
-                {completedProjects.map((d) => (
-                  <div
-                    key={d.id}
-                    className="border rounded-lg p-4 bg-green-50 hover:shadow-lg transition transform hover:scale-[1.02]"
-                  >
-                    <h3 className="font-bold text-lg text-green-700">
-                      {d.title}
-                    </h3>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Type: {d.type} | Date Completed: {d.date}
-                    </p>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Congestion Level: {d.congestion}
-                    </p>
-                    <div className="flex justify-end mt-3">
-                      <button className="border border-blue-500 text-blue-600 px-3 py-1 text-sm rounded hover:bg-blue-500 hover:text-white transition-all duration-300">
-                        View Details
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+       
       </main>
 
       {/* OTP MODAL */}

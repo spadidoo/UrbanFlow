@@ -1,6 +1,6 @@
 "use client";
 
-import Navbar from "@/components/Navbar";
+import Navbar from "@/components/NavBar";
 import dynamic from "next/dynamic";
 
 const HomeMapWithSidebar = dynamic(

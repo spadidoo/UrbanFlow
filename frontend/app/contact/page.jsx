@@ -1,6 +1,6 @@
 "use client";
 
-import Navbar from "@/components/Navbar";
+import Navbar from "@/components/NavBar"
 import { useState } from "react";
 
 export default function ContactPage() {
@@ -107,35 +107,15 @@ export default function ContactPage() {
                   </div>
                 </div>
                 <div className="flex items-start gap-4">
-                  <div className="text-blue-600 text-2xl">📱</div>
-                  <div>
-                    <h3 className="font-semibold text-gray-800">Phone</h3>
-                    <p className="text-gray-600">+63 (049) 123-4567</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-4">
                   <div className="text-blue-600 text-2xl">📍</div>
                   <div>
                     <h3 className="font-semibold text-gray-800">Address</h3>
                     <p className="text-gray-600">
-                      Calamba City Hall
+                      Ipil-ipil Street
                       <br />
-                      Calamba, Laguna
+                      Bucal, Calamba Laguna
                       <br />
                       Philippines 4027
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-4">
-                  <div className="text-blue-600 text-2xl">⏰</div>
-                  <div>
-                    <h3 className="font-semibold text-gray-800">
-                      Office Hours
-                    </h3>
-                    <p className="text-gray-600">
-                      Monday - Friday: 8:00 AM - 5:00 PM
-                      <br />
-                      Saturday - Sunday: Closed
                     </p>
                   </div>
                 </div>
