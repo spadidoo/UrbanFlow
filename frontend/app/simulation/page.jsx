@@ -3,14 +3,10 @@
 "use client";
 
 import PlannerNavbar from "@/components/PlannerNavbar";
-import {
-  getRoadInfoFromOSM,
-  getRoadSegmentsInArea,
-} from "@/services/osmService";
-import dynamic from "next/dynamic";
-import { use, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-
+import { getRoadInfoFromOSM } from "@/services/osmService";
+import dynamic from "next/dynamic";
+import { useEffect, useState } from "react";
 
 const SmartResultsMap = dynamic(() => import("@/components/SmartResultsMap"), {
   ssr: false,
@@ -44,7 +40,7 @@ export default function SimulationPage() {
   const userId = user?.user_id || user?.id;
 
   const [isMapExpanded, setIsMapExpanded] = useState(false);
-  const [drawMode, setDrawMode] = useState("point"); // 'point', 'line', 'polygon'
+  const [drawMode, setDrawMode] = useState("point"); // 'point', 'line'
 
   const [formData, setFormData] = useState({
     scenarioName: "",
@@ -76,13 +72,13 @@ export default function SimulationPage() {
   const [otpSent, setOTPSent] = useState(false);
   const [otpLoading, setOTPLoading] = useState(false);
   const [otpError, setOTPError] = useState(null);
-  const [testOTP, setTestOTP] = useState(""); 
+  const [testOTP, setTestOTP] = useState("");
   const [otpSimulation, setOTPSimulation] = useState(null);
-  
+
   //=======================================
   // Load simulation data if editing
   //=======================================
-  // Replace your existing useEffect in simulation/page.jsx with this:
+  // Replaced your existing useEffect in simulation/page.jsx:
 
   useEffect(() => {
     const editData = sessionStorage.getItem("editSimulation");
@@ -93,23 +89,23 @@ export default function SimulationPage() {
 
         // ✅ FIXED: Properly parse datetime strings
         const parseDateTime = (datetimeStr) => {
-          if (!datetimeStr) return { date: '', time: '06:00' };
-          
+          if (!datetimeStr) return { date: "", time: "06:00" };
+
           // ✅ Parse as local time, not UTC
           const dt = new Date(datetimeStr);
-          
+
           // Get local date/time components
           const year = dt.getFullYear();
-          const month = String(dt.getMonth() + 1).padStart(2, '0');
-          const day = String(dt.getDate()).padStart(2, '0');
-          const hours = String(dt.getHours()).padStart(2, '0');
-          const minutes = String(dt.getMinutes()).padStart(2, '0');
-          
+          const month = String(dt.getMonth() + 1).padStart(2, "0");
+          const day = String(dt.getDate()).padStart(2, "0");
+          const hours = String(dt.getHours()).padStart(2, "0");
+          const minutes = String(dt.getMinutes()).padStart(2, "0");
+
           const date = `${year}-${month}-${day}`;
           const time = `${hours}:${minutes}`;
-          
+
           console.log(`📅 Parsed ${datetimeStr} -> ${date} ${time}`);
-          
+
           return { date, time };
         };
 
@@ -338,61 +334,98 @@ export default function SimulationPage() {
     }
   };
 
-  // Handle line/polygon drawing
+  // Handle line drawing
   const handleAreaSelect = async (coordinates) => {
     setLoadingRoadInfo(true);
     setError(null);
 
     try {
-      // Get all road segments in the drawn area
-      const osmData = await getRoadSegmentsInArea(coordinates);
+      // ✅ For 2-point line: Get road info from the midpoint
+      if (coordinates.length === 2) {
+        // Calculate midpoint between the 2 points
+        const midLat = (coordinates[0].lat + coordinates[1].lat) / 2;
+        const midLng = (coordinates[0].lng + coordinates[1].lng) / 2;
 
-      if (!osmData.success || osmData.roads.length === 0) {
-        setError("No roads found in selected area");
+        // Get road info from OSM using the midpoint
+        const osmData = await getRoadInfoFromOSM(midLat, midLng);
+
+        if (!osmData.success) {
+          setError(osmData.message || "No road found at this location");
+          setLoadingRoadInfo(false);
+          return;
+        }
+
+        // Calculate center for selected location
+        const center = {
+          lat: midLat,
+          lng: midLng,
+        };
+
+        setSelectedLocation({
+          type: "line",
+          coordinates: coordinates,
+          center: center,
+        });
+
+        // Process road info through backend
+        const response = await fetch(
+          "http://localhost:5000/api/process-road-info",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(osmData),
+          }
+        );
+
+        const processedData = await response.json();
+
+        if (processedData.success) {
+          // ✅ Calculate actual line distance for more accurate road info
+          const distance = calculateDistance(
+            coordinates[0].lat,
+            coordinates[0].lng,
+            coordinates[1].lat,
+            coordinates[1].lng
+          );
+
+          setRoadInfo({
+            ...processedData.road_info,
+            length_km: distance.toFixed(2), // Override with actual line distance
+            line_distance: distance,
+          });
+        } else {
+          throw new Error(data.error || "Failed to process road information");
+        }
+      } else {
+        // Fallback for other cases (shouldn't happen with 2-point limit)
+        setError("Please select exactly 2 points");
         setLoadingRoadInfo(false);
         return;
       }
-
-      setSelectedLocation({
-        type: drawMode,
-        coordinates: coordinates,
-        center: {
-          lat:
-            coordinates.reduce((sum, c) => sum + c.lat, 0) / coordinates.length,
-          lng:
-            coordinates.reduce((sum, c) => sum + c.lng, 0) / coordinates.length,
-        },
-      });
-
-      // Aggregate road information (take primary road or average)
-      const mainRoad = osmData.roads[0]; // Primary road in area
-
-      const response = await fetch(
-        "http://localhost:5000/api/process-road-info",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...mainRoad,
-            total_roads_affected: osmData.roads.length,
-          }),
-        }
-      );
-
-      const processedData = await response.json();
-
-      if (processedData.success) {
-        setRoadInfo({
-          ...processedData.road_info,
-          affected_roads: osmData.roads.length,
-        });
-      }
     } catch (err) {
-      console.error("Error fetching area road info:", err);
-      setError("Failed to analyze selected area. Please try again.");
+      console.error("Error fetching road info:", err);
+      setError(
+        err.message ||
+          "Failed to get road information. Please try another location."
+      );
     } finally {
       setLoadingRoadInfo(false);
     }
+  };
+
+  // ✅ Helper function to calculate distance between two points (Haversine formula)
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Earth's radius in km
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Distance in km
   };
 
   const handleSimulate = async () => {
@@ -406,11 +439,17 @@ export default function SimulationPage() {
       return;
     }
 
-    // ✅ ADD DATE VALIDATION
+    // ✅ CREATE PROPER DATE OBJECTS
     const startDateTime = new Date(
-      `${formData.startDate}T${formData.startTime}`
+      `${formData.startDate}T${formData.startTime}:00`
     );
-    const endDateTime = new Date(`${formData.endDate}T${formData.endTime}`);
+    const endDateTime = new Date(`${formData.endDate}T${formData.endTime}:00`);
+
+    // ✅ VALIDATE DATES
+    if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) {
+      setError("Invalid date/time format");
+      return;
+    }
 
     if (endDateTime <= startDateTime) {
       setError("End date/time must be after start date/time");
@@ -437,10 +476,19 @@ export default function SimulationPage() {
         area: roadInfo.area,
         road_corridor: roadInfo.road_name,
         disruption_type: formData.disruptionType,
+        // ✅ SEND AS SEPARATE COMPONENTS
         start_date: formData.startDate,
         start_time: formData.startTime,
         end_date: formData.endDate,
         end_time: formData.endTime,
+        // ✅ ALSO SEND AS ISO STRINGS FOR BACKEND
+        start_datetime: startDateTime.toISOString(),
+        end_datetime: endDateTime.toISOString(),
+        // ✅ SEND NUMERIC VALUES
+        start_hour: startDateTime.getHours(),
+        end_hour: endDateTime.getHours(),
+        day_of_week: startDateTime.getDay(),
+        duration_hours: Math.round(durationHours),
         description: formData.description,
         road_info: {
           lanes: roadInfo.lanes,
@@ -492,9 +540,8 @@ export default function SimulationPage() {
     setSaveSuccess(false);
 
     try {
-
       const currentUserId = user?.user_id || user?.id;
-    
+
       if (!currentUserId) {
         throw new Error("User not authenticated. Please log in again.");
       }
@@ -502,7 +549,9 @@ export default function SimulationPage() {
       console.log("💾 Using user_id:", currentUserId);
 
       // ✅ Create Date objects from form inputs (these are in LOCAL time)
-      const startDate = new Date(`${formData.startDate}T${formData.startTime}:00`);
+      const startDate = new Date(
+        `${formData.startDate}T${formData.startTime}:00`
+      );
       const endDate = new Date(`${formData.endDate}T${formData.endTime}:00`);
 
       // ✅ Convert to ISO string (this converts to UTC automatically)
@@ -510,62 +559,78 @@ export default function SimulationPage() {
       const endDatetime = endDate.toISOString();
 
       // ✅ GET THE ACTUAL COORDINATES FROM selectedLocation
-      const coords = selectedLocation?.center || { lat: 14.2096, lng: 121.1640 };
-      
+      const coords = selectedLocation?.center || { lat: 14.2096, lng: 121.164 };
+
       console.log("💾 Saving with coordinates:", coords);
-      
+
       console.log("💾 Saving times:");
-      console.log("   Local input:", `${formData.startDate} ${formData.startTime}`);
+      console.log(
+        "   Local input:",
+        `${formData.startDate} ${formData.startTime}`
+      );
       console.log("   Sending to DB (UTC):", startDatetime);
       console.log("   Will display as:", startDate.toLocaleString());
       console.log("💾 Saving with local times:", {
         start: startDatetime,
-        end: endDatetime
+        end: endDatetime,
       });
 
       const savePayload = {
         user_id: userId,
         simulation_data: {
-          scenario_name: formData.scenarioName || `Simulation ${new Date().toLocaleString()}`,
-          description: formData.description || 'No description provided',
+          scenario_name:
+            formData.scenarioName ||
+            `Simulation ${new Date().toLocaleString()}`,
+          description: formData.description || "No description provided",
           disruption_type: formData.disruptionType,
-          area: roadInfo?.area || 'Unknown Area',
-          road_corridor: roadInfo?.road_name || 'Unknown Road',
-          start_datetime: startDatetime,  // ✅ Local time
-          end_datetime: endDatetime,      // ✅ Local time
-          disruption_location: `${roadInfo?.area || 'Unknown'} - ${roadInfo?.road_name || 'Unknown'}`,
+          area: roadInfo?.area || "Unknown Area",
+          road_corridor: roadInfo?.road_name || "Unknown Road",
+          start_datetime: startDatetime, // ✅ Local time
+          end_datetime: endDatetime, // ✅ Local time
+          disruption_location: `${roadInfo?.area || "Unknown"} - ${
+            roadInfo?.road_name || "Unknown"
+          }`,
           coordinates: selectedLocation?.center || null,
-          severity_level: results.summary.avg_severity < 0.5 ? 'light' : 
-                        results.summary.avg_severity < 1.5 ? 'moderate' : 'severe'
+          severity_level:
+            results.summary.avg_severity < 0.5
+              ? "light"
+              : results.summary.avg_severity < 1.5
+              ? "moderate"
+              : "severe",
         },
         results_data: {
           summary: results.summary,
           hourly_predictions: results.hourly_predictions,
           aggregated_view: results.aggregated_view || null,
           time_segments: results.time_segments,
-          road_info: results.road_info || roadInfo 
-        }
+          road_info: results.road_info || roadInfo,
+        },
       };
 
-      const response = await fetch('http://localhost:5000/api/save-simulation', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(savePayload),
-      });
+      const response = await fetch(
+        "http://localhost:5000/api/save-simulation",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(savePayload),
+        }
+      );
 
       const data = await response.json();
 
       if (data.success) {
         setSaveSuccess(true);
         setSavedSimulationId(data.simulation_id);
-        alert(`✅ Simulation saved successfully!\nSimulation ID: ${data.simulation_id}`);
+        alert(
+          `✅ Simulation saved successfully!\nSimulation ID: ${data.simulation_id}`
+        );
       } else {
-        throw new Error(data.error || 'Failed to save simulation');
+        throw new Error(data.error || "Failed to save simulation");
       }
     } catch (err) {
-      console.error('Error saving simulation:', err);
+      console.error("Error saving simulation:", err);
       setError(`Failed to save simulation: ${err.message}`);
       alert(`❌ Error: ${err.message}`);
     } finally {
@@ -576,36 +641,43 @@ export default function SimulationPage() {
   const handlePublishSimulation = async () => {
     // Check if simulation is saved first
     if (!savedSimulationId) {
-    alert("⚠️ Please save the simulation first before publishing!");
-    return;
-  }
+      alert("⚠️ Please save the simulation first before publishing!");
+      return;
+    }
 
-  // Prepare publish payload
-  const publishPayload = {
-    simulation_id: savedSimulationId,
-    user_id: userId,
-    title: formData.scenarioName || `Traffic Disruption - ${new Date().toLocaleDateString()}`,
-    public_description: formData.description || 
-      `${formData.disruptionType} disruption affecting ${roadInfo?.area || "the area"}. ` +
-      `Expected ${results.summary.avg_severity_label} congestion with average delays of ` +
-      `${results.summary.avg_delay_minutes} minutes.`,
+    // Prepare publish payload
+    const publishPayload = {
+      simulation_id: savedSimulationId,
+      user_id: userId,
+      title:
+        formData.scenarioName ||
+        `Traffic Disruption - ${new Date().toLocaleDateString()}`,
+      public_description:
+        formData.description ||
+        `${formData.disruptionType} disruption affecting ${
+          roadInfo?.area || "the area"
+        }. ` +
+          `Expected ${results.summary.avg_severity_label} congestion with average delays of ` +
+          `${results.summary.avg_delay_minutes} minutes.`,
+    };
+
+    // Store payload in sessionStorage for OTP modal
+    sessionStorage.setItem(
+      "publishPayload",
+      JSON.stringify({
+        payload: publishPayload,
+        originPage: "simulation",
+        type: "simulation",
+      })
+    );
+
+    // Trigger OTP modal
+    setShowOTPModal(true);
+    setOTPSimulation({
+      simulation_id: savedSimulationId,
+      simulation_name: formData.scenarioName,
+    });
   };
-
-  // Store payload in sessionStorage for OTP modal
-  sessionStorage.setItem('publishPayload', JSON.stringify({
-    payload: publishPayload,
-    originPage: 'simulation',
-    type: 'simulation'
-  }));
-
-  // Trigger OTP modal
-  setShowOTPModal(true);
-  setOTPSimulation({
-    simulation_id: savedSimulationId,
-    simulation_name: formData.scenarioName
-  });
-};
-
 
   // Send OTP
   const handleSendOTP = async () => {
@@ -613,16 +685,19 @@ export default function SimulationPage() {
       setOTPLoading(true);
       setOTPError(null);
 
-      const response = await fetch('http://localhost:5000/api/send-publish-otp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          simulation_id: savedSimulationId,
-          user_id: userId,
-        }),
-      });
+      const response = await fetch(
+        "http://localhost:5000/api/send-publish-otp",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            simulation_id: savedSimulationId,
+            user_id: userId,
+          }),
+        }
+      );
 
       const data = await response.json();
 
@@ -631,74 +706,88 @@ export default function SimulationPage() {
         setTestOTP(data.otp_for_testing); // For testing only
         alert(`OTP sent to your email!`);
       } else {
-        setOTPError(data.error || 'Failed to send OTP');
+        setOTPError(data.error || "Failed to send OTP");
       }
     } catch (error) {
-      console.error('Error sending OTP:', error);
-      setOTPError('Failed to send OTP. Please try again.');
+      console.error("Error sending OTP:", error);
+      setOTPError("Failed to send OTP. Please try again.");
     } finally {
       setOTPLoading(false);
     }
   };
 
   // Verify OTP and Publish
+  // Replace your existing handleVerifyAndPublish function:
   const handleVerifyAndPublish = async () => {
-  if (!otpCode || otpCode.length !== 6) {	
-    setOTPError("Please enter a valid 6-digit OTP");
-    return;
-  }
-
-  try {
-    setOTPLoading(true);
-    setOTPError(null);
-
-    // Get stored publish payload
-    const storedData = sessionStorage.getItem('publishPayload');
-    if (!storedData) {
-      throw new Error("Publish data not found. Please try again.");
+    if (!otpCode || otpCode.length !== 6) {
+      setOTPError("Please enter a valid 6-digit OTP");
+      return;
     }
 
-    const { payload, originPage, type } = JSON.parse(storedData);
+    try {
+      setOTPLoading(true);
+      setOTPError(null);
 
-    // Verify OTP first
-    const response = await api.verifyPublishOTP(
-      payload.simulation_id,
-      otpCode,
-      payload.title,
-      payload.public_description,
-      payload.user_id
-    );
+      // Get stored publish payload
+      const storedData = sessionStorage.getItem("publishPayload");
+      if (!storedData) {
+        throw new Error("Publish data not found. Please try again.");
+      }
 
-    if (response.success) {
-      // Clear stored payload
-      sessionStorage.removeItem('publishPayload');
-      
-      // Close modal
-      setShowOTPModal(false);
-      
-      // Show success message
-      alert(
-        `✅ ${type === 'simulation' ? 'Simulation' : 'Data'} published successfully!\n\n` +
-        `Public URL: ${response.public_url || ''}\n` +
-        `This ${type} is now visible on the public map.`
+      const { payload } = JSON.parse(storedData);
+
+      // Verify OTP and publish
+      const response = await fetch(
+        "http://localhost:5000/api/verify-publish-otp",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            simulation_id: payload.simulation_id,
+            otp: otpCode,
+            title: payload.title,
+            public_description: payload.public_description,
+            user_id: payload.user_id,
+          }),
+        }
       );
 
-      // Update local state
-      if (originPage === 'simulation') {
+      const data = await response.json();
+
+      if (data.success) {
+        // Clear stored payload
+        sessionStorage.removeItem("publishPayload");
+
+        // Close modal
+        setShowOTPModal(false);
+        setOTPCode("");
+        setOTPSent(false);
+
+        // Update publish success state
         setPublishSuccess(true);
-      } else if (originPage === 'data') {
-        fetchDisruptions(); // Refresh list
+
+        // Show success message
+        alert(
+          `✅ Simulation published successfully!\n\n` +
+            `Public URL: ${
+              data.public_url || window.location.origin + "/map"
+            }\n` +
+            `This simulation is now visible on the public map.`
+        );
+      } else {
+        setOTPError(data.error || "Invalid OTP");
       }
-    } else {
-      setOTPError(response.error || "Invalid OTP");
+    } catch (error) {
+      console.error("Error verifying OTP:", error);
+      setOTPError(
+        error.message || "Verification failed. Please check your OTP."
+      );
+    } finally {
+      setOTPLoading(false);
     }
-  } catch (error) {
-    console.error("Error verifying OTP:", error);
-    setOTPError(error.message || "Verification failed. Please check your OTP.");
-  } finally {
-    setOTPLoading(false);
-  }
-};
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -711,8 +800,7 @@ export default function SimulationPage() {
             Traffic Disruption Simulation
           </h1>
           <p className="text-gray-600 mt-2">
-            Select disruption area on the map and configure simulation
-            parameters
+            Select disruption area on the map and add simulation parameters
           </p>
         </div>
 
@@ -749,23 +837,12 @@ export default function SimulationPage() {
                 >
                   ➖ Line
                 </button>
-                <button
-                  onClick={() => setDrawMode("polygon")}
-                  className={`flex-1 px-4 py-2 rounded-lg font-semibold transition ${
-                    drawMode === "polygon"
-                      ? "bg-orange-500 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  ⬟ Area
-                </button>
               </div>
-              <p className="text-xs text-gray-500 mt-2">
-                {drawMode === "point" && "• Click on the map to select a point"}
+              <p className="text-xs text-gray-500 mt-3">
+                {drawMode === "point" &&
+                  "• Click on the map to select a disruption point location"}
                 {drawMode === "line" &&
-                  "• Click multiple points to draw a line (double-click to finish)"}
-                {drawMode === "polygon" &&
-                  "• Click to draw an area boundary (double-click to close)"}
+                  "• Click the start point, then click the end point to select the road segment"}
               </p>
             </div>
 
@@ -873,6 +950,10 @@ export default function SimulationPage() {
                       onChange={handleChange}
                       placeholder="Enter scenario name"
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      style={{
+                        color: "#303030",
+                        "::placeholder": { color: "#555" },
+                      }}
                     />
                   </div>
 
@@ -885,6 +966,7 @@ export default function SimulationPage() {
                       value={formData.disruptionType}
                       onChange={handleChange}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      style={{ color: "#303030" }}
                     >
                       <option value="roadwork">🚧 Roadwork</option>
                       <option value="event">🎉 Event</option>
@@ -904,6 +986,10 @@ export default function SimulationPage() {
                         value={formData.startDate}
                         onChange={handleChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        style={{
+                          color: "#303030",
+                          "::placeholder": { color: "#555" },
+                        }}
                       />
                     </div>
                     <div>
@@ -916,6 +1002,10 @@ export default function SimulationPage() {
                         value={formData.startTime}
                         onChange={handleChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        style={{
+                          color: "#303030",
+                          "::placeholder": { color: "#555" },
+                        }}
                       />
                     </div>
                   </div>
@@ -931,6 +1021,10 @@ export default function SimulationPage() {
                         value={formData.endDate}
                         onChange={handleChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        style={{
+                          color: "#303030",
+                          "::placeholder": { color: "#555" },
+                        }}
                       />
                     </div>
                     <div>
@@ -943,6 +1037,10 @@ export default function SimulationPage() {
                         value={formData.endTime}
                         onChange={handleChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        style={{
+                          color: "#303030",
+                          "::placeholder": { color: "#555" },
+                        }}
                       />
                     </div>
                   </div>
@@ -958,6 +1056,10 @@ export default function SimulationPage() {
                       rows="3"
                       placeholder="Describe the disruption..."
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      style={{
+                        color: "#303030",
+                        "::placeholder": { color: "#555" },
+                      }}
                     ></textarea>
                   </div>
 
@@ -1180,7 +1282,6 @@ export default function SimulationPage() {
             <div className="bg-white rounded-lg shadow-md p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <span>🗺️</span>
                   <span>Predicted Congestion Map</span>
                 </h3>
 
@@ -1236,7 +1337,7 @@ export default function SimulationPage() {
               <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-orange-500">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-semibold text-gray-600">
-                    Avg Severity
+                    Average Severity
                   </span>
                   <span className="text-2xl">📊</span>
                 </div>
@@ -1263,7 +1364,7 @@ export default function SimulationPage() {
               <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-red-500">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-semibold text-gray-600">
-                    Avg Delay
+                    Average Delay
                   </span>
                   <span className="text-2xl">⏱️</span>
                 </div>
@@ -1617,32 +1718,32 @@ export default function SimulationPage() {
                     <>💾 Save Simulation</>
                   )}
                 </button>
-                  <button
-                    onClick={handlePublishSimulation}
-                    disabled={publishing || !savedSimulationId || !results}
-                    className={`flex-1 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
-                      publishSuccess
-                        ? "bg-green-700 text-white"
-                        : publishing
-                        ? "bg-gray-400 text-white cursor-not-allowed"
-                        : !savedSimulationId
-                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                        : "bg-green-600 text-white hover:bg-green-700"
-                    }`}
-                  >
-                    {publishing ? (
-                      <>
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        Preparing to Publish...
-                      </>
-                    ) : publishSuccess ? (
-                      <>✅ Published to Public Map</>
-                    ) : !savedSimulationId ? (
-                      <>🔒 Save First to Publish</>
-                    ) : (
-                      <>📢 Publish (OTP Required)</>
-                    )}
-                  </button>
+                <button
+                  onClick={handlePublishSimulation}
+                  disabled={publishing || !savedSimulationId || !results}
+                  className={`flex-1 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
+                    publishSuccess
+                      ? "bg-green-700 text-white"
+                      : publishing
+                      ? "bg-gray-400 text-white cursor-not-allowed"
+                      : !savedSimulationId
+                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                      : "bg-green-600 text-white hover:bg-green-700"
+                  }`}
+                >
+                  {publishing ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Preparing to Publish...
+                    </>
+                  ) : publishSuccess ? (
+                    <>✅ Published to Public Map</>
+                  ) : !savedSimulationId ? (
+                    <>🔒 Save First to Publish</>
+                  ) : (
+                    <>📢 Publish (OTP Required)</>
+                  )}
+                </button>
               </div>
 
               {/* Help Text */}
@@ -1660,95 +1761,98 @@ export default function SimulationPage() {
           </div>
         )}
       </main>
-        {/* OTP MODAL */}
-        {showOTPModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-8 max-w-md w-full">
-              <h2 className="text-2xl font-bold mb-4">Verify & Publish</h2>
+      {/* OTP MODAL */}
+      {showOTPModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 max-w-md w-full">
+            <h2 className="text-2xl font-bold mb-4">Verify & Publish</h2>
 
-              {!otpSent ? (
-                <>
-                  <p className="text-gray-600 mb-6">
-                    To publish "{formData.scenarioName || 'this simulation'}", we'll send a
-                    verification code to your email.
-                  </p>
-                  <div className="flex gap-3">
-                    <button
-                        onClick={() => {
-                          setShowOTPModal(false);
-                          sessionStorage.removeItem('publishPayload'); // Clean up
-                          setOTPCode("");
-                          setOTPSent(false);
-                          setOTPError(null);
-                        }}
-                        className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                      >
-                        Cancel
-                      </button>
-                    <button
-                      onClick={handleSendOTP}
-                      disabled={otpLoading}
-                      className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:bg-gray-300"
-                    >
-                      {otpLoading ? 'Sending...' : 'Send OTP'}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <p className="text-gray-600 mb-4">
-                    Enter the 6-digit code sent to your email:
-                  </p>
-
-                  {testOTP && (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-4">
-                      <p className="text-xs text-yellow-800">
-                        🧪 <strong>Testing Mode:</strong> Your OTP is <strong>{testOTP}</strong>
-                      </p>
-                    </div>
-                  )}
-
-                  <input
-                    type="text"
-                    maxLength={6}
-                    value={otpCode}
-                    onChange={(e) => setOTPCode(e.target.value.replace(/\D/g, ''))}
-                    placeholder="000000"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg text-center text-2xl tracking-widest mb-4"
-                  />
-
-                  {otpError && (
-                    <p className="text-red-600 text-sm mb-4">{otpError}</p>
-                  )}
-
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setShowOTPModal(false)}
-                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleVerifyAndPublish}
-                      disabled={otpLoading || otpCode.length !== 6}
-                      className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300"
-                    >
-                      {otpLoading ? 'Verifying...' : 'Verify & Publish'}
-                    </button>
-                  </div>
-
+            {!otpSent ? (
+              <>
+                <p className="text-gray-600 mb-6">
+                  To publish "{formData.scenarioName || "this simulation"}",
+                  we'll send a verification code to your email.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowOTPModal(false);
+                      sessionStorage.removeItem("publishPayload"); // Clean up
+                      setOTPCode("");
+                      setOTPSent(false);
+                      setOTPError(null);
+                    }}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
                   <button
                     onClick={handleSendOTP}
                     disabled={otpLoading}
-                    className="w-full mt-3 text-sm text-orange-600 hover:underline"
+                    className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:bg-gray-300"
                   >
-                    Resend OTP
+                    {otpLoading ? "Sending..." : "Send OTP"}
                   </button>
-                </>
-              )}
-            </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-gray-600 mb-4">
+                  Enter the 6-digit code sent to your email:
+                </p>
+
+                {testOTP && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-4">
+                    <p className="text-xs text-yellow-800">
+                      🧪 <strong>Testing Mode:</strong> Your OTP is{" "}
+                      <strong>{testOTP}</strong>
+                    </p>
+                  </div>
+                )}
+
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={otpCode}
+                  onChange={(e) =>
+                    setOTPCode(e.target.value.replace(/\D/g, ""))
+                  }
+                  placeholder="000000"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-center text-2xl tracking-widest mb-4"
+                />
+
+                {otpError && (
+                  <p className="text-red-600 text-sm mb-4">{otpError}</p>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowOTPModal(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleVerifyAndPublish}
+                    disabled={otpLoading || otpCode.length !== 6}
+                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300"
+                  >
+                    {otpLoading ? "Verifying..." : "Verify & Publish"}
+                  </button>
+                </div>
+
+                <button
+                  onClick={handleSendOTP}
+                  disabled={otpLoading}
+                  className="w-full mt-3 text-sm text-orange-600 hover:underline"
+                >
+                  Resend OTP
+                </button>
+              </>
+            )}
           </div>
-        )}
+        </div>
+      )}
     </div>
   );
 }
