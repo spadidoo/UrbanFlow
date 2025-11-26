@@ -282,9 +282,18 @@ export default function DataPage() {
   };
 
   const fetchDisruptions = async () => {
+    if (!userId) {
+      console.log("⚠️ No userId found");
+      setLoading(false);
+      return;
+    }
+    
     try {
       setLoading(true);
-      const response = await api.getMySimulations(userId); // user_id = 2
+      console.log("🔄 Fetching simulations for user:", userId);
+      const response = await api.getMySimulations(userId);
+      
+      console.log("✅ API Response:", response);
 
       if (response.success) {
         setDisruptions(response.simulations);
@@ -638,114 +647,198 @@ export default function DataPage() {
               </div>
             )}
 
-            {/* Disruptions Grid */}
+            {/* Disruptions Grid - Grouped by Status */}
             {!loading && !error && filteredDisruptions.length > 0 && (
-              <div className="grid md:grid-cols-2 gap-4">
-                {filteredDisruptions.map((d) => (
-                  <div
-                    key={d.simulation_id}
-                    className="border rounded-lg p-4 hover:shadow-lg transition transform hover:scale-[1.02] bg-gray-50"
-                  >
-                    {/* Header with Checkbox */}
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex items-center gap-2 flex-1">
-                        <input
-                          type="checkbox"
-                          checked={selectedDisruptions.includes(
-                            d.simulation_id
-                          )}
-                          onChange={() => toggleSelect(d.simulation_id)}
-                          className="w-4 h-4"
-                        />
-                        <h3 className="font-bold text-lg text-orange-600 flex-1">
-                          {d.simulation_name || "Untitled Simulation"}
-                        </h3>
+              <div className="space-y-6">
+                {/* ACTIVE SCENARIOS */}
+                {(() => {
+                  const now = new Date();
+                  const active = filteredDisruptions.filter(d => {
+                    if (!d.start_time || !d.end_time) return false;
+                    const start = new Date(d.start_time);
+                    const end = new Date(d.end_time);
+                    return start <= now && end >= now;
+                  });
+                  
+                  if (active.length === 0) return null;
+                  
+                  return (
+                    <div className="bg-gradient-to-r from-green-50 to-white rounded-lg p-6 border-l-4 border-green-500">
+                      <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-2xl font-bold text-green-700 flex items-center gap-2">
+                          <span className="text-3xl">🟢</span> 
+                          <span>Active Scenarios</span>
+                          <span className="text-lg font-normal text-green-600">({active.length})</span>
+                        </h2>
+                        <p className="text-sm text-green-600">Currently ongoing</p>
                       </div>
-                      <div className="flex gap-2">
-                        <span
-                          className={`px-2 py-1 text-xs rounded font-semibold ${getStatusColor(
-                            d.simulation_status
-                          )}`}
-                        >
-                          {d.simulation_status === "published"
-                            ? "Published"
-                            : "Draft"}
-                        </span>
-                        <span
-                          className={`px-2 py-1 text-xs rounded font-semibold ${getSeverityColor(
-                            d.severity_level
-                          )}`}
-                        >
-                          {d.severity_level || "N/A"}
-                        </span>
+                      
+                      <div className="grid md:grid-cols-2 gap-4">
+                        {active.map((d) => (
+                          <div
+                            key={d.simulation_id}
+                            className="bg-white border-2 border-green-200 rounded-lg p-4 hover:shadow-xl transition-all transform hover:scale-[1.02]"
+                          >
+                            <div className="flex justify-between items-start mb-3">
+                              <div className="flex items-center gap-3 flex-1">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedDisruptions.includes(d.simulation_id)}
+                                  onChange={() => toggleSelect(d.simulation_id)}
+                                  className="w-5 h-5 text-green-600 rounded focus:ring-green-500"
+                                />
+                                <div className="flex-1">
+                                  <h3 className="font-bold text-lg text-gray-800">
+                                    {d.simulation_name || "Untitled Simulation"}
+                                  </h3>
+                                  <p className="text-xs text-green-600 font-semibold mt-1">● ACTIVE NOW</p>
+                                </div>
+                              </div>
+                              <div className="flex flex-col gap-1">
+                                {d.simulation_status === "published" && (
+                                  <span className="px-2 py-1 text-xs rounded-full font-semibold bg-purple-100 text-purple-700">
+                                    Published ✓
+                                  </span>
+                                )}
+                                <span className={`px-2 py-1 text-xs rounded-full font-semibold ${getSeverityColor(d.severity_level)}`}>
+                                  {d.severity_level || "N/A"}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="text-sm text-gray-600 space-y-2 mb-4 bg-gray-50 rounded p-3">
+                              <p className="flex items-center gap-2">
+                                <span className="font-semibold">📍 Location:</span> {d.disruption_location || "Unknown"}
+                              </p>
+                              <p className="flex items-center gap-2">
+                                <span className="font-semibold">🚧 Type:</span> {d.disruption_type || "N/A"}
+                              </p>
+                              {d.start_time && (
+                                <p className="flex items-center gap-2">
+                                  <span className="font-semibold">📅 Period:</span>
+                                  {new Date(d.start_time).toLocaleDateString()} - {new Date(d.end_time).toLocaleDateString()}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="flex justify-end gap-2">
+                              <button onClick={() => handleEdit(d)} className="px-4 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-semibold">
+                                ✏️ Edit
+                              </button>
+                              {d.simulation_status === "published" ? (
+                                <button onClick={() => handleUnpublish(d)} className="px-4 py-2 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition font-semibold">
+                                  🔒 Unpublish
+                                </button>
+                              ) : (
+                                <button onClick={() => handlePublishClick(d)} className="px-4 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-semibold">
+                                  🌐 Publish
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
+                  );
+                })()}
 
-                    {/* Details */}
-                    <div className="text-sm text-gray-600 space-y-1 mb-3">
-                      <p>
-                        <strong>Type:</strong> {d.disruption_type || "N/A"}
-                      </p>
-                      <p>
-                        <strong>Location:</strong>{" "}
-                        {d.disruption_location || "Unknown"}
-                      </p>
-                      <p>
-                        <strong>Last Modified:</strong>{" "}
-                        {d.updated_at
-                          ? new Date(d.updated_at).toLocaleDateString()
-                          : "N/A"}
-                      </p>
-                      {d.start_time && (
-                        <p>
-                          <strong>Period:</strong>{" "}
-                          {new Date(d.start_time).toLocaleDateString()} -{" "}
-                          {new Date(d.end_time).toLocaleDateString()}
-                        </p>
-                      )}
-                      {d.average_delay_ratio != null &&
-                        !isNaN(d.average_delay_ratio) && (
-                          <p>
-                            <strong>Avg Severity:</strong>{" "}
-                            {d.average_delay_ratio != null &&
-                            !isNaN(d.average_delay_ratio)
-                              ? Number(d.average_delay_ratio).toFixed(2)
-                              : "N/A"}
-                          </p>
-                        )}
-                    </div>
+                {/* UPCOMING SCENARIOS */}
+                {(() => {
+                  const now = new Date();
+                  const upcoming = filteredDisruptions.filter(d => {
+                    if (!d.start_time) return false;
+                    const start = new Date(d.start_time);
+                    return start > now;
+                  });
+                  
+                  if (upcoming.length === 0) return null;
+                  
+                  return (
+                    <div className="bg-gradient-to-r from-blue-50 to-white rounded-lg p-6 border-l-4 border-blue-500">
+                      <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-2xl font-bold text-blue-700 flex items-center gap-2">
+                          <span className="text-3xl">🔵</span> 
+                          <span>Upcoming Scenarios</span>
+                          <span className="text-lg font-normal text-blue-600">({upcoming.length})</span>
+                        </h2>
+                        <p className="text-sm text-blue-600">Scheduled for future</p>
+                      </div>
+                      
+                      <div className="grid md:grid-cols-2 gap-4">
+                        {upcoming.map((d) => (
+                          <div key={d.simulation_id} className="bg-white border-2 border-blue-200 rounded-lg p-4 hover:shadow-xl transition-all transform hover:scale-[1.02]">
+                            <div className="flex justify-between items-start mb-3">
+                              <div className="flex items-center gap-3 flex-1">
+                                <input type="checkbox" checked={selectedDisruptions.includes(d.simulation_id)} onChange={() => toggleSelect(d.simulation_id)} className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" />
+                                <div className="flex-1">
+                                  <h3 className="font-bold text-lg text-gray-800">{d.simulation_name || "Untitled Simulation"}</h3>
+                                  <p className="text-xs text-blue-600 font-semibold mt-1">
+                                    ⏰ Starts {new Date(d.start_time).toLocaleDateString()}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex flex-col gap-1">
+                                {d.simulation_status === "published" && (
+                                  <span className="px-2 py-1 text-xs rounded-full font-semibold bg-purple-100 text-purple-700">Published ✓</span>
+                                )}
+                                <span className={`px-2 py-1 text-xs rounded-full font-semibold ${getSeverityColor(d.severity_level)}`}>{d.severity_level || "N/A"}</span>
+                              </div>
+                            </div>
 
-                    {/* Actions */}
-                    <div className="flex justify-end gap-2 mt-3">
-                      <button
-                        onClick={() => handleEdit(d)}
-                        className="px-3 py-1 text-sm border border-orange-500 text-orange-600 rounded hover:bg-orange-500 hover:text-white transition-all duration-300"
-                      >
-                        Edit
-                      </button>
-                      {d.simulation_status === "published" ? (
-                        <button
-                          onClick={() => handleUnpublish(d)}
-                          className="px-3 py-1 text-sm border border-gray-500 text-gray-600 rounded hover:bg-gray-500 hover:text-white transition-all duration-300"
-                        >
-                          Unpublish
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handlePublishClick(d)}
-                          className="px-3 py-1 text-sm border border-green-500 text-green-600 rounded hover:bg-green-500 hover:text-white transition-all duration-300"
-                        >
-                          Publish
-                        </button>
-                      )}
+                            <div className="text-sm text-gray-600 space-y-2 mb-4 bg-gray-50 rounded p-3">
+                              <p className="flex items-center gap-2"><span className="font-semibold">📍 Location:</span> {d.disruption_location || "Unknown"}</p>
+                              <p className="flex items-center gap-2"><span className="font-semibold">🚧 Type:</span> {d.disruption_type || "N/A"}</p>
+                              {d.start_time && (
+                                <p className="flex items-center gap-2">
+                                  <span className="font-semibold">📅 Period:</span>
+                                  {new Date(d.start_time).toLocaleDateString()} - {new Date(d.end_time).toLocaleDateString()}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="flex justify-end gap-2">
+                              <button onClick={() => handleEdit(d)} className="px-4 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-semibold">✏️ Edit</button>
+                              {d.simulation_status === "published" ? (
+                                <button onClick={() => handleUnpublish(d)} className="px-4 py-2 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition font-semibold">🔒 Unpublish</button>
+                              ) : (
+                                <button onClick={() => handlePublishClick(d)} className="px-4 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-semibold">🌐 Publish</button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })()}
+
+                {/* NO ACTIVE/UPCOMING SCENARIOS */}
+                {(() => {
+                  const now = new Date();
+                  const active = filteredDisruptions.filter(d => {
+                    if (!d.start_time || !d.end_time) return false;
+                    const start = new Date(d.start_time);
+                    const end = new Date(d.end_time);
+                    return start <= now && end >= now;
+                  });
+                  const upcoming = filteredDisruptions.filter(d => {
+                    if (!d.start_time) return false;
+                    return new Date(d.start_time) > now;
+                  });
+                  
+                  if (active.length === 0 && upcoming.length === 0) {
+                    return (
+                      <div className="text-center py-12 bg-gray-50 rounded-lg">
+                        <p className="text-gray-500 text-lg">📭 No active or upcoming scenarios</p>
+                        <p className="text-sm text-gray-400 mt-2">Finished scenarios are available in the Reports tab</p>
+                      </div>
+                    );
+                  }
+                })()}
               </div>
             )}
-          </div>
-        )}
-
+                      </div>
+                    )}
+               
         {/* ============================================================ */}
         {/* DATASETS TAB - UPDATED WITH REAL FUNCTIONALITY */}
         {/* ============================================================ */}

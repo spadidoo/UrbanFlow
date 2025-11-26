@@ -57,7 +57,9 @@ export default function SimulationPreviewModal({ simulation, isOpen, onClose }) 
   // Handle View Full Report
   const handleViewReport = () => {
     onClose();
-    router.push(`/simulation/${simulation.simulation_id}`);
+    // Navigate to the public report page for this simulation
+    // Use simulation.simulation_id if your backend uses that field as the primary key
+    router.push(`/reports/${simulation.simulation_id}`);
   };
 
   return (
