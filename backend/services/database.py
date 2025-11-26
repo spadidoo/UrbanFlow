@@ -804,6 +804,8 @@ class DatabaseService:
                     sr.max_delay_ratio,
                     sr.hourly_predictions,
                     sr.aggregated_view,
+                    sr.road_info,
+                    sr.time_segments_data,
                     u.username,
                     u.full_name
                 FROM simulation_runs sr
@@ -831,6 +833,16 @@ class DatabaseService:
                     del simulation['aggregated_view_json']
                 except:
                     simulation['aggregated_view'] = None
+
+            # ✅ ADD THESE TWO NEW BLOCKS:
+            if simulation.get('road_info'):
+                # road_info is already parsed by psycopg2
+                pass  # Already a dict, no need to parse
+
+            if simulation.get('time_segments_data'):
+                # time_segments_data is already parsed by psycopg2
+                simulation['time_segments'] = simulation['time_segments_data']
+                del simulation['time_segments_data']
             
             # Get time segment results
             cursor.execute("""

@@ -2,7 +2,7 @@
 
 "use client";
 
-import PlannerNavbar from "@/components/PlannerNavbar";
+import PlannerNavbar from "@/components/PlannerNavBar";
 import {
   getRoadInfoFromOSM,
   getRoadSegmentsInArea,
@@ -10,6 +10,7 @@ import {
 import dynamic from "next/dynamic";
 import { use, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { api } from "@/services/api";
 
 
 const SmartResultsMap = dynamic(() => import("@/components/SmartResultsMap"), {
@@ -78,6 +79,7 @@ export default function SimulationPage() {
   const [otpError, setOTPError] = useState(null);
   const [testOTP, setTestOTP] = useState(""); 
   const [otpSimulation, setOTPSimulation] = useState(null);
+
   
   //=======================================
   // Load simulation data if editing

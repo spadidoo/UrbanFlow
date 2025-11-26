@@ -1,6 +1,6 @@
 "use client";
 
-import PlannerNavbar from "@/components/PlannerNavbar";
+import PlannerNavbar from "@/components/PlannerNavBar";
 import api from "@/services/api";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
