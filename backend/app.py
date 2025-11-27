@@ -2134,7 +2134,7 @@ def get_published_disruptions():
         if conn:
             conn.close()
 
-
+'''
 def get_coordinates_for_location(location):
     """
     Get coordinates for a location string
@@ -2166,6 +2166,7 @@ def get_coordinates_for_location(location):
     # Default to Calamba center
     print(f"📍 Using default coordinates for '{location}'")
     return {'lat': 14.2096, 'lng': 121.1640}
+'''
 
 def get_coordinates_for_location(location):
     """Get coordinates for a location string"""
@@ -2591,6 +2592,28 @@ def simulate_disruption_realtime():
                     }
                     dominant_severity = max(severity_counts, key=severity_counts.get)
                     
+                    # ✅ FIX: Find ALL peak hours and calculate peak delay
+                    max_severity = max(p['severity'] for p in day_predictions)
+                    # Consider hours within 0.1 of max severity as "peak hours"
+                    peak_threshold = max_severity - 0.1
+                    peak_hour_predictions = [p for p in day_predictions if p['severity'] >= peak_threshold]
+                    
+                    # Get the peak hours (sorted)
+                    peak_hours_list = sorted([p['hour'] for p in peak_hour_predictions])
+                    
+                    # Calculate average delay during peak hours
+                    peak_delay = sum(p['delay_info']['additional_delay_min'] for p in peak_hour_predictions) / len(peak_hour_predictions) if peak_hour_predictions else 0
+                    
+                    # Format peak hour display
+                    if len(peak_hours_list) == 1:
+                        peak_hour_display = peak_hours_list[0]
+                    elif len(peak_hours_list) <= 3:
+                        # Show as range or list for 2-3 hours
+                        peak_hour_display = peak_hours_list[0] if len(peak_hours_list) == 1 else f"{peak_hours_list[0]}-{peak_hours_list[-1]}"
+                    else:
+                        # Multiple peak hours - show first and last
+                        peak_hour_display = f"{peak_hours_list[0]}-{peak_hours_list[-1]}"
+                    
                     daily_aggregates.append({
                         'date': current_date.strftime('%Y-%m-%d'),
                         'day_name': current_date.strftime('%A'),
@@ -2599,8 +2622,11 @@ def simulate_disruption_realtime():
                         'avg_delay_min': round(avg_delay),
                         'hour_count': len(day_predictions),
                         'severity_breakdown': severity_counts,
-                        'peak_hour': int(max(day_predictions, key=lambda x: x['severity'])['hour']),  # ✅ ENSURE INT
-                        'peak_severity': round(max(p['severity'] for p in day_predictions), 2)
+                        'peak_hour': peak_hour_display,  # ✅ Now shows formatted hour(s)
+                        'peak_hours': peak_hours_list,  # ✅ Array of all peak hours
+                        'peak_severity': round(max_severity, 2),
+                        'peak_delay': round(peak_delay),  # ✅ Average delay during peak hours
+                        'avg_peak_delay': round(peak_delay)  # ✅ Alternative field name for compatibility
                     })
                 
                 current_date += timedelta(days=1)
