@@ -1,14 +1,23 @@
 "use client";
 
-import { useState } from "react";
 import dynamic from "next/dynamic";
+import { useState } from "react";
 
 const SmartResultsMap = dynamic(() => import("@/components/SmartResultsMap"), {
   ssr: false,
-  loading: () => <div className="h-[500px] bg-gray-200 flex items-center justify-center">Loading...</div>,
+  loading: () => (
+    <div className="h-[500px] bg-gray-200 flex items-center justify-center">
+      Loading...
+    </div>
+  ),
 });
 
-export default function AggregatedResultsMaps({ aggregatedView, selectedLocation, roadInfo, simulationResults }) {
+export default function AggregatedResultsMaps({
+  aggregatedView,
+  selectedLocation,
+  roadInfo,
+  simulationResults,
+}) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const mapData = aggregatedView.map_data;
 
@@ -24,9 +33,13 @@ export default function AggregatedResultsMaps({ aggregatedView, selectedLocation
     summary: {
       ...simulationResults.summary,
       avg_severity: currentData.avg_severity || currentData.severity,
-      avg_severity_label: currentData.avg_severity_label || currentData.severity_label,
-      avg_delay_minutes: currentData.avg_delay_min || currentData.delay_info?.additional_delay_min || 0,
-    }
+      avg_severity_label:
+        currentData.avg_severity_label || currentData.severity_label,
+      avg_delay_minutes:
+        currentData.avg_delay_min ||
+        currentData.delay_info?.additional_delay_min ||
+        0,
+    },
   };
 
   return (
@@ -39,9 +52,12 @@ export default function AggregatedResultsMaps({ aggregatedView, selectedLocation
               {aggregatedView.display_label}
             </h3>
             <p className="text-sm text-gray-600">
-              {aggregatedView.granularity === 'hourly' && `Hour ${currentIndex + 1} of ${mapData.length}`}
-              {aggregatedView.granularity === 'daily' && `Day ${currentIndex + 1} of ${mapData.length}`}
-              {aggregatedView.granularity === 'weekly' && `Week ${currentIndex + 1} of ${mapData.length}`}
+              {aggregatedView.granularity === "hourly" &&
+                `Hour ${currentIndex + 1} of ${mapData.length}`}
+              {aggregatedView.granularity === "daily" &&
+                `Day ${currentIndex + 1} of ${mapData.length}`}
+              {aggregatedView.granularity === "weekly" &&
+                `Week ${currentIndex + 1} of ${mapData.length}`}
             </p>
           </div>
 
@@ -52,24 +68,26 @@ export default function AggregatedResultsMaps({ aggregatedView, selectedLocation
               disabled={currentIndex === 0}
               className={`px-4 py-2 rounded-lg font-semibold transition ${
                 currentIndex === 0
-                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  : 'bg-orange-500 text-white hover:bg-orange-600'
+                  ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                  : "bg-orange-500 text-white hover:bg-orange-600"
               }`}
             >
               ← Previous
             </button>
-            
+
             <span className="text-sm font-semibold text-gray-700 px-4">
               {currentIndex + 1} / {mapData.length}
             </span>
 
             <button
-              onClick={() => setCurrentIndex(Math.min(mapData.length - 1, currentIndex + 1))}
+              onClick={() =>
+                setCurrentIndex(Math.min(mapData.length - 1, currentIndex + 1))
+              }
               disabled={currentIndex === mapData.length - 1}
               className={`px-4 py-2 rounded-lg font-semibold transition ${
                 currentIndex === mapData.length - 1
-                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  : 'bg-orange-500 text-white hover:bg-orange-600'
+                  ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                  : "bg-orange-500 text-white hover:bg-orange-600"
               }`}
             >
               Next →
@@ -78,21 +96,25 @@ export default function AggregatedResultsMaps({ aggregatedView, selectedLocation
         </div>
 
         {/* Current Period Info */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg">
-          {aggregatedView.granularity === 'hourly' && (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 p-4 bg-gray-50 rounded-lg">
+          {aggregatedView.granularity === "hourly" && (
             <>
               <div>
                 <p className="text-xs text-gray-600">Time</p>
-                <p className="font-bold text-gray-800">{currentData.datetime}</p>
+                <p className="font-bold text-gray-800">
+                  {currentData.datetime}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-gray-600">Day</p>
-                <p className="font-bold text-gray-800">{currentData.day_of_week}</p>
+                <p className="font-bold text-gray-800">
+                  {currentData.day_of_week}
+                </p>
               </div>
             </>
           )}
-          
-          {aggregatedView.granularity === 'daily' && (
+
+          {aggregatedView.granularity === "daily" && (
             <>
               <div>
                 <p className="text-xs text-gray-600">Date</p>
@@ -100,38 +122,59 @@ export default function AggregatedResultsMaps({ aggregatedView, selectedLocation
               </div>
               <div>
                 <p className="text-xs text-gray-600">Day</p>
-                <p className="font-bold text-gray-800">{currentData.day_name}</p>
+                <p className="font-bold text-gray-800">
+                  {currentData.day_name}
+                </p>
               </div>
               <div>
-                <p className="text-xs text-gray-600">Peak Hour</p>
-                <p className="font-bold text-gray-800">{currentData.peak_hour}:00</p>
+                <p className="text-xs text-gray-600">Peak Hour(s)</p>
+                <p className="font-bold text-orange-600">
+                  {currentData.peak_hour}
+                </p>
+              </div>
+              {/* ✅ NEW: Show avg delay during peak hours */}
+              <div>
+                <p className="text-xs text-gray-600">Peak Hour Delay</p>
+                <p className="font-bold text-red-600">
+                  +{currentData.avg_peak_delay || 0} min
+                </p>
               </div>
             </>
           )}
 
-          {aggregatedView.granularity === 'weekly' && (
+          {aggregatedView.granularity === "weekly" && (
             <>
               <div>
-                <p className="text-xs text-gray-600">Week {currentData.week_number}</p>
-                <p className="font-bold text-gray-800">{currentData.date_range}</p>
+                <p className="text-xs text-gray-600">
+                  Week {currentData.week_number}
+                </p>
+                <p className="font-bold text-gray-800">
+                  {currentData.date_range}
+                </p>
               </div>
             </>
           )}
 
           <div>
-            <p className="text-xs text-gray-600">Avg Congestion</p>
-            <p className={`font-bold ${
-              currentData.avg_severity_label === 'Heavy' ? 'text-red-600' :
-              currentData.avg_severity_label === 'Moderate' ? 'text-yellow-600' :
-              'text-green-600'
-            }`}>
+            <p className="text-xs text-gray-600">Average Congestion</p>
+            <p
+              className={`font-bold ${
+                currentData.avg_severity_label === "Heavy"
+                  ? "text-red-600"
+                  : currentData.avg_severity_label === "Moderate"
+                  ? "text-yellow-600"
+                  : "text-green-600"
+              }`}
+            >
               {currentData.avg_severity_label}
             </p>
           </div>
 
           <div>
-            <p className="text-xs text-gray-600">Avg Delay</p>
-            <p className="font-bold text-gray-800">+{currentData.avg_delay_min} min</p>
+            <p className="text-xs text-gray-600">Average Delay</p>
+            <p className="font-bold text-gray-800">
+              +{currentData.avg_delay_min} min
+            </p>
           </div>
         </div>
 
@@ -143,15 +186,17 @@ export default function AggregatedResultsMaps({ aggregatedView, selectedLocation
               onClick={() => setCurrentIndex(idx)}
               className={`w-3 h-3 rounded-full transition ${
                 idx === currentIndex
-                  ? 'bg-orange-500 scale-125'
+                  ? "bg-orange-500 scale-125"
                   : idx < currentIndex
-                  ? 'bg-gray-400'
-                  : 'bg-gray-300'
+                  ? "bg-gray-400"
+                  : "bg-gray-300"
               }`}
               title={
-                aggregatedView.granularity === 'hourly' ? `Hour ${idx + 1}` :
-                aggregatedView.granularity === 'daily' ? `Day ${idx + 1}` :
-                `Week ${idx + 1}`
+                aggregatedView.granularity === "hourly"
+                  ? `Hour ${idx + 1}`
+                  : aggregatedView.granularity === "daily"
+                  ? `Day ${idx + 1}`
+                  : `Week ${idx + 1}`
               }
             />
           ))}
@@ -169,8 +214,12 @@ export default function AggregatedResultsMaps({ aggregatedView, selectedLocation
       {currentData.severity_breakdown && (
         <div className="bg-white rounded-lg shadow-md p-4">
           <h4 className="font-bold text-gray-800 mb-3">
-            {aggregatedView.granularity === 'hourly' ? 'This Hour' :
-             aggregatedView.granularity === 'daily' ? 'This Day' : 'This Week'} - Congestion Breakdown
+            {aggregatedView.granularity === "hourly"
+              ? "This Hour"
+              : aggregatedView.granularity === "daily"
+              ? "This Day"
+              : "This Week"}{" "}
+            - Congestion Breakdown
           </h4>
           <div className="grid grid-cols-3 gap-4">
             <div className="bg-green-50 rounded-lg p-3 text-center">
@@ -190,6 +239,46 @@ export default function AggregatedResultsMaps({ aggregatedView, selectedLocation
                 {currentData.severity_breakdown.Heavy || 0}
               </p>
               <p className="text-xs text-gray-600">Heavy Hours</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ NEW: Peak Hour Analysis - only show for daily view */}
+      {aggregatedView.granularity === "daily" && currentData.peak_hours && (
+        <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-lg shadow-md p-4 border-l-4 border-orange-500">
+          <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+            <span>🚨</span>
+            Peak Congestion Analysis
+          </h4>
+          <div className="space-y-2">
+            <div className="flex items-start gap-3">
+              <div className="bg-white rounded-lg px-4 py-2 flex-1">
+                <p className="text-xs text-gray-600 mb-1">
+                  Worst Traffic Hours
+                </p>
+                <p className="text-lg font-bold text-orange-600">
+                  {currentData.peak_hour}
+                </p>
+              </div>
+              <div className="bg-white rounded-lg px-4 py-2 flex-1">
+                <p className="text-xs text-gray-600 mb-1">
+                  Average Delay During Peak
+                </p>
+                <p className="text-lg font-bold text-red-600">
+                  +{currentData.avg_peak_delay || 0} min
+                </p>
+              </div>
+            </div>
+            <div className="bg-white/50 rounded p-3 text-sm text-gray-700">
+              <p className="flex items-start gap-2">
+                <span className="text-orange-600 font-bold">💡</span>
+                <span>
+                  {currentData.peak_hours.length > 1
+                    ? `Multiple hours experience peak congestion. Avoid traveling during ${currentData.peak_hour} to minimize delays.`
+                    : `Peak congestion occurs at ${currentData.peak_hour}. Consider traveling before or after this hour.`}
+                </span>
+              </p>
             </div>
           </div>
         </div>
