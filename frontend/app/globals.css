@@ -109,3 +109,38 @@ body {
   }
 }
 
+/* Leaflet map styles */
+.leaflet-container {
+  z-index: 1;
+}
+
+.leaflet-pane {
+  z-index: 2;
+}
+
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 1000 !important;
+}
+
+/* Pulse animation for disruption markers */
+@keyframes pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.3;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2);
+    opacity: 0;
+  }
+}
+
+.disruption-marker {
+  animation: pulse 2s ease-out infinite;
+}
+
+/* Prevent map from capturing modal clicks */
+.leaflet-container.leaflet-touch-drag {
+  -ms-touch-action: pan-x pan-y;
+  touch-action: pan-x pan-y;
+}

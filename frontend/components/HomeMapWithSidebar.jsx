@@ -47,6 +47,12 @@ export default function HomeMapWithSidebar() {
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
 
+    // ✅ Check if container already initialized
+    if (mapRef.current._leaflet_id) {
+      console.log('🗺️ Main map already initialized, skipping...');
+      return;
+    }
+
     const map = L.map(mapRef.current, {
       center: [14.2096, 121.164],
       zoom: 13,
@@ -67,10 +73,32 @@ export default function HomeMapWithSidebar() {
 
     mapInstanceRef.current = map;
 
+    console.log('✅ Main map initialized successfully');
+
     return () => {
+      console.log('🧹 Cleaning up main map...');
+      
+      // Clear layers first
+      layersRef.current.forEach(layer => {
+        try {
+          if (mapInstanceRef.current && mapInstanceRef.current.hasLayer(layer)) {
+            mapInstanceRef.current.removeLayer(layer);
+          }
+        } catch (e) {}
+      });
+      layersRef.current = [];
+      
       if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
+        try {
+          mapInstanceRef.current.off();
+          mapInstanceRef.current.remove();
+          mapInstanceRef.current = null;
+        } catch (e) {}
+      }
+      
+      // Clear the _leaflet_id
+      if (mapRef.current) {
+        delete mapRef.current._leaflet_id;
       }
     };
   }, []);
@@ -430,30 +458,83 @@ export default function HomeMapWithSidebar() {
 
   // FIND drawActiveDisruption function (around line 160):
   const drawActiveDisruption = (disruption) => {
-  if (!disruption.latitude || !disruption.longitude) return
+    if (!disruption.latitude || !disruption.longitude) {
+      console.warn('⚠️ Disruption missing coordinates:', disruption.title)
+      return
+    }
 
-  const map = mapInstanceRef.current
-  const isSelected = selectedDisruption?.id === disruption.id
+    const map = mapInstanceRef.current
+    const isSelected = selectedDisruption?.id === disruption.id
 
-  // Use real-time severity if available
-  const severity = disruption.realtime?.congestion_ratio || disruption.avg_severity || 1.0
-  const color = getSeverityColor(severity)
+    // Use real-time severity if available
+    const severity = disruption.realtime?.congestion_ratio || disruption.avg_severity || 1.5
+    const color = getSeverityColor(severity)
 
-  // Draw circular impact zone (NO LINES)
-  const circle = L.circle([disruption.latitude, disruption.longitude], {
-    radius: 500,
-    color: color,
-    fillColor: color,
-    fillOpacity: isSelected ? 0.3 : 0.2,
-    weight: isSelected ? 3 : 2,
-  }).addTo(map)
+    console.log('✅ Drawing active disruption:', disruption.title, 'at', disruption.latitude, disruption.longitude, 'color:', color)
 
-  layersRef.current.push(circle)
+    // Draw circular impact zone
+    const circle = L.circle([disruption.latitude, disruption.longitude], {
+      radius: 500,
+      color: color,
+      fillColor: color,
+      fillOpacity: isSelected ? 0.3 : 0.2,
+      weight: isSelected ? 3 : 2,
+    }).addTo(map)
 
-  // Add marker
-  const marker = createMarker(disruption, color, isSelected, '🚧')
-  layersRef.current.push(marker)
-}
+    layersRef.current.push(circle)
+
+    // Add marker with explicit z-index
+    const marker = L.marker([disruption.latitude, disruption.longitude], {
+      icon: L.divIcon({
+        className: 'disruption-marker-active',
+        html: `
+          <div style="position: relative; width: ${isSelected ? '48px' : '36px'}; height: ${isSelected ? '48px' : '36px'};">
+            <div style="
+              position: absolute;
+              top: 50%;
+              left: 50%;
+              transform: translate(-50%, -50%);
+              width: ${isSelected ? '70px' : '50px'};
+              height: ${isSelected ? '70px' : '50px'};
+              border: 3px solid ${color};
+              border-radius: 50%;
+              opacity: 0.3;
+              animation: pulse-active 2s ease-out infinite;
+            "></div>
+            <div style="
+              background: white;
+              border: 3px solid ${color};
+              border-radius: 50%;
+              width: ${isSelected ? '48px' : '36px'};
+              height: ${isSelected ? '48px' : '36px'};
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: ${isSelected ? '24px' : '18px'};
+              box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+              cursor: pointer;
+              position: relative;
+              z-index: 1000;
+            ">🚧</div>
+            <style>
+              @keyframes pulse-active {
+                0% { transform: translate(-50%, -50%) scale(1); opacity: 0.3; }
+                100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+              }
+            </style>
+          </div>
+        `,
+        iconSize: [isSelected ? 48 : 36, isSelected ? 48 : 36],
+        iconAnchor: [isSelected ? 24 : 18, isSelected ? 24 : 18],
+      }),
+      zIndexOffset: 1000
+    }).addTo(map)
+
+    marker.on('click', () => handleViewOnMap(disruption))
+    marker.bindPopup(createActivePopup(disruption))
+    
+    layersRef.current.push(marker)
+  }
  
   const drawUpcomingDisruption = (disruption) => {
     if (!disruption.latitude || !disruption.longitude) return
@@ -465,11 +546,12 @@ export default function HomeMapWithSidebar() {
     const color = '#3B82F6'
 
     // Draw as pulsing blob
+    // Draw as pulsing marker
     const marker = L.marker([disruption.latitude, disruption.longitude], {
       icon: L.divIcon({
-        className: 'upcoming-marker',
+        className: 'disruption-marker-upcoming',
         html: `
-          <div style="position: relative;">
+          <div style="position: relative; width: ${isSelected ? '40px' : '32px'}; height: ${isSelected ? '40px' : '32px'};">
             <div style="
               position: absolute;
               top: 50%;
@@ -494,19 +576,21 @@ export default function HomeMapWithSidebar() {
               font-size: ${isSelected ? '20px' : '16px'};
               box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
               cursor: pointer;
+              position: relative;
               z-index: 1000;
             ">📅</div>
             <style>
               @keyframes pulse-upcoming {
                 0% { transform: translate(-50%, -50%) scale(1); opacity: 0.4; }
-                100% { transform: translate(-50%, -50%) scale(1.8); opacity: 0; }
+                100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
               }
             </style>
           </div>
         `,
         iconSize: [isSelected ? 40 : 32, isSelected ? 40 : 32],
         iconAnchor: [isSelected ? 20 : 16, isSelected ? 20 : 16],
-      })
+      }),
+      zIndexOffset: 1000
     }).addTo(map)
 
     marker.on('click', () => handleViewOnMap(disruption))

@@ -1,11 +1,14 @@
 "use client";
-import PlannerNavbar from "@/components/PlannerNavbar";
+import PlannerNavbar from "@/components/PlannerNavBar";
 import api from "@/services/api";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useAuth } from "@/context/AuthContext";
 
 export default function ReportsPage() {
   const router = useRouter();
+  const { user } = useAuth();
+  const userId = user?.user_id || user?.id;
   
   // Filters
   const [filterType, setFilterType] = useState("all");
@@ -20,23 +23,51 @@ export default function ReportsPage() {
   
   // Fetch reports on mount
   useEffect(() => {
-    fetchReports();
-  }, []);
+    if (userId) {
+      fetchReports();
+    }
+  }, [userId]);
   
   const fetchReports = async () => {
     setLoading(true);
     setError(null);
     
     try {
-      const response = await api.getFinishedReports();
+      console.log("🔄 Fetching reports for userId:", userId);
+      
+      const response = await api.getMySimulations(userId);
+      
+      console.log("📦 API Response:", response);
       
       if (response.success) {
-        setReports(response.reports || []);
+        const now = new Date();
+        const finished = response.simulations.filter(s => {
+          if (!s.end_time) return false;
+          const endDate = new Date(s.end_time);
+          console.log(`Checking ${s.simulation_name}: end=${endDate}, now=${now}, finished=${endDate < now}`);
+          return endDate < now;
+        });
+        
+        console.log("✅ Finished scenarios:", finished.length);
+        
+        const transformedReports = finished.map(s => ({
+          id: s.simulation_id,
+          title: s.simulation_name,
+          location: s.disruption_location,
+          type: s.disruption_type,
+          severity_level: s.severity_level,
+          status: s.simulation_status === 'published' ? 'Published' : 'Completed',
+          date: new Date(s.end_time).toLocaleDateString(),
+          start_date: s.start_time ? new Date(s.start_time).toISOString().split('T')[0] : '',
+          end_date: s.end_time ? new Date(s.end_time).toISOString().split('T')[0] : ''
+        }));
+        
+        setReports(transformedReports);
       } else {
         setError("Failed to load reports");
       }
     } catch (err) {
-      console.error("Error fetching reports:", err);
+      console.error("❌ Error:", err);
       setError("Failed to connect to server");
     } finally {
       setLoading(false);

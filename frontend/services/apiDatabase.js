@@ -126,11 +126,52 @@ export const getMySimulations = async (userId, status = null) => {
 };
 
 /**
+ * Get all scenarios grouped by status (for Data tab)
+ */
+export const getAllScenarios = async (userId) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/scenarios/all?user_id=${userId}`);
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to fetch scenarios');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error fetching all scenarios:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get finished reports only (for Reports tab)
+ */
+export const getFinishedReports = async (userId) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/reports/finished?user_id=${userId}`);
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to fetch finished reports');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error fetching finished reports:', error);
+    throw error;
+  }
+};
+
+/**
  * Get detailed information about a specific simulation
  */
-export const getSimulationDetails = async (runId) => {
+/**
+ * Get detailed information about a specific simulation
+ */
+export const getSimulationDetails = async (simulationId) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/simulation/${runId}`);
+    const response = await fetch(`${API_BASE_URL}/simulation/${simulationId}`);
     const data = await response.json();
 
     if (!response.ok) {
@@ -226,4 +267,6 @@ export default {
   getPublishedSimulations,
   deleteSimulation,
   simulateAndSave,
+  getAllScenarios,     
+  getFinishedReports,
 };

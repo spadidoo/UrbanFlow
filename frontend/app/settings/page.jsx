@@ -1,6 +1,6 @@
 "use client";
 
-import PlannerNavbar from "@/components/PlannerNavbar";
+import PlannerNavbar from "@/components/PlannerNavBar";
 import { useAuth } from "@/context/AuthContext";
 import { useEffect, useState } from "react";
 

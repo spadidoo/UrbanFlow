@@ -1,6 +1,6 @@
 "use client";
 
-import PlannerNavbar from "@/components/PlannerNavbar";
+import PlannerNavbar from "@/components/PlannerNavBar";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
@@ -43,39 +43,95 @@ function MiniOngoingMap() {
   }, []);
 
   // Initialize map
+  // In page.jsx - MiniOngoingMap component
+  // In MiniOngoingMap component, update the useEffect that initializes the map:
+  // Initialize map - FIX FOR DOUBLE INITIALIZATION
   useEffect(() => {
-    if (typeof window === 'undefined' || !mapRef.current || mapInstanceRef.current) return;
-
-    const map = L.map(mapRef.current, {
-      center: [14.2096, 121.164],
-      zoom: 13,
-      zoomControl: true,
-    });
-
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "&copy; OpenStreetMap",
-      maxZoom: 19,
-    }).addTo(map);
-
-    L.control.zoom({
-      position: "bottomright",
-    }).addTo(map);
-
-    mapInstanceRef.current = map;
-
-    return () => {
-      if (mapInstanceRef.current) {
+    if (typeof window === 'undefined' || !mapRef.current) return;
+    
+    // ✅ CRITICAL FIX: Check if container already has a map
+    if (mapRef.current._leaflet_id) {
+      console.log('🗺️ Map already initialized, skipping...');
+      return;
+    }
+    
+    // ✅ CRITICAL FIX: Remove existing map before creating new one
+    if (mapInstanceRef.current) {
+      try {
+        mapInstanceRef.current.off();
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
+      } catch (e) {
+        console.log('Map cleanup error:', e);
+      }
+    }
+
+    try {
+      const map = L.map(mapRef.current, {
+        center: [14.2096, 121.164],
+        zoom: 13,
+        zoomControl: true,
+        zoomAnimation: true,
+        fadeAnimation: true,
+        markerZoomAnimation: true,
+      });
+
+      // Set map pane z-index to stay below modals
+      if (map.getPane('mapPane')) {
+        map.getPane('mapPane').style.zIndex = '1';
+      }
+      if (map.getPane('overlayPane')) {
+        map.getPane('overlayPane').style.zIndex = '2';
+      }
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap",
+        maxZoom: 19,
+      }).addTo(map);
+
+      mapInstanceRef.current = map;
+      
+      console.log('✅ Mini Map initialized successfully');
+    } catch (error) {
+      console.error('Error initializing map:', error);
+    }
+
+    // ✅ CLEANUP FUNCTION - Remove map on unmount
+    return () => {
+      console.log('🧹 Cleaning up mini map...');
+      
+      // Clear all layers first
+      layersRef.current.forEach(layer => {
+        try {
+          if (mapInstanceRef.current && mapInstanceRef.current.hasLayer(layer)) {
+            mapInstanceRef.current.removeLayer(layer);
+          }
+        } catch (e) {}
+      });
+      layersRef.current = [];
+      
+      // Then remove map
+      if (mapInstanceRef.current) {
+        try {
+          mapInstanceRef.current.off();
+          mapInstanceRef.current.remove();
+          mapInstanceRef.current = null;
+        } catch (e) {}
+      }
+      
+      // Clear the _leaflet_id from the container
+      if (mapRef.current) {
+        delete mapRef.current._leaflet_id;
       }
     };
-  }, []);
+  }, []); // Empty dependency array - only run once
 
   // Draw disruptions when data changes
   useEffect(() => {
     if (!mapInstanceRef.current || disruptions.length === 0) return;
     drawDisruptionsOnMap();
-  }, [disruptions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [disruptions]); // drawDisruptionsOnMap is stable, no need to include
 
   const fetchOngoingDisruptions = async () => {
     try {
@@ -85,12 +141,22 @@ function MiniOngoingMap() {
 
       if (data.success) {
         const now = new Date();
-        const activeDisruptions = (data.disruptions || []).filter(d => {
-          if (!d.start_date || !d.end_date) return false;
-          const start = new Date(d.start_date);
-          const end = new Date(d.end_date);
-          return now >= start && now <= end;
-        });
+        const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+        
+        const activeDisruptions = (data.disruptions || [])
+          .map(d => ({
+            ...d,
+            status: getDisruptionStatus(d, now, weekFromNow)
+          }))
+          .filter(d => {
+            // Only show active or upcoming disruptions
+            return d.status === 'active' || d.status === 'upcoming';
+          });
+        
+        console.log('🗺️ Mini Map - Total disruptions:', data.disruptions?.length);
+        console.log('🗺️ Mini Map - Active/Upcoming:', activeDisruptions.length);
+        console.log('🗺️ Mini Map - Disruptions:', activeDisruptions);
+        
         setDisruptions(activeDisruptions);
       }
     } catch (err) {
@@ -98,6 +164,32 @@ function MiniOngoingMap() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getDisruptionStatus = (disruption, now, weekFromNow) => {
+    if (!disruption.start_date || !disruption.end_date) {
+      console.warn('⚠️ Disruption missing dates:', disruption.title);
+      return 'unknown';
+    }
+    
+    const start = new Date(disruption.start_date);
+    const end = new Date(disruption.end_date);
+    
+    if (now >= start && now <= end) {
+      console.log('✅ Active disruption:', disruption.title);
+      return 'active';
+    }
+    if (start > now && start <= weekFromNow) {
+      console.log('📅 Upcoming disruption:', disruption.title);
+      return 'upcoming';
+    }
+    if (end < now) {
+      console.log('⏹️ Past disruption:', disruption.title);
+      return 'past';
+    }
+    
+    console.log('🔮 Future disruption:', disruption.title);
+    return 'future';
   };
 
   const drawDisruptionsOnMap = () => {
@@ -113,12 +205,23 @@ function MiniOngoingMap() {
     });
     layersRef.current = [];
 
+      // 🔍 DEBUG: Log what we're about to draw
+    console.log('📍 Drawing disruptions:', disruptions.length)
+    console.log('Active:', disruptions.filter(d => d.status === 'active').length)
+    console.log('Upcoming:', disruptions.filter(d => d.status === 'upcoming').length)
+
     // Draw each disruption
     disruptions.forEach(disruption => {
-      if (!disruption.latitude || !disruption.longitude) return;
+      if (!disruption.latitude || !disruption.longitude) {
+        console.warn('⚠️ Mini Map - Disruption missing coordinates:', disruption.title);
+        return;
+      }
 
-      const severity = disruption.avg_severity || 1.0;
+      console.log('🎯 Mini Map - Drawing:', disruption.title, 'Status:', disruption.status);
+
+      const severity = disruption.avg_severity || 1.5;
       const color = getSeverityColor(severity);
+      const icon = disruption.status === 'upcoming' ? '📅' : '🚧';
 
       // Draw circular impact zone
       const circle = L.circle([disruption.latitude, disruption.longitude], {
@@ -134,9 +237,9 @@ function MiniOngoingMap() {
       // Add marker
       const marker = L.marker([disruption.latitude, disruption.longitude], {
         icon: L.divIcon({
-          className: 'disruption-marker',
+          className: disruption.status === 'upcoming' ? 'disruption-marker-upcoming' : 'disruption-marker-active',
           html: `
-            <div style="position: relative;">
+            <div style="position: relative; width: 36px; height: 36px;">
               <div style="
                 position: absolute;
                 top: 50%;
@@ -161,8 +264,9 @@ function MiniOngoingMap() {
                 font-size: 18px;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.2);
                 cursor: pointer;
+                position: relative;
                 z-index: 1000;
-              ">🚧</div>
+              ">${icon}</div>
               <style>
                 @keyframes pulse {
                   0% { transform: translate(-50%, -50%) scale(1); opacity: 0.3; }
@@ -173,7 +277,8 @@ function MiniOngoingMap() {
           `,
           iconSize: [36, 36],
           iconAnchor: [18, 18],
-        })
+        }),
+        zIndexOffset: 1000
       }).addTo(map);
 
       marker.bindPopup(createPopup(disruption));
@@ -190,33 +295,50 @@ function MiniOngoingMap() {
   };
 
   const createPopup = (disruption) => {
+    const isActive = disruption.status === 'active';
+    const icon = isActive ? '🚧' : '📅';
+    const statusLabel = isActive ? 'Active' : 'Upcoming';
+    const statusColor = isActive ? '#ef4444' : '#3b82f6';
+    
     return `
       <div style="font-family: -apple-system, sans-serif; padding: 10px; min-width: 200px;">
-        <h3 style="margin: 0 0 8px 0; font-size: 15px; font-weight: 600;">
-          🚧 ${disruption.title}
+        <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #1f2937;">
+          ${icon} ${disruption.title || 'Traffic Disruption'}
         </h3>
-        <p style="margin: 4px 0; font-size: 12px; color: #6b7280;">
-          📍 ${disruption.location}
+        <p style="margin: 4px 0; font-size: 11px; color: #6b7280;">
+          📍 ${disruption.location || 'Location not specified'}
         </p>
-        <div style="background: #f9fafb; padding: 6px; border-radius: 6px; margin-top: 6px;">
-          <p style="margin: 2px 0; font-size: 11px;">
-            <strong>Type:</strong> ${disruption.type}
-          </p>
-          <p style="margin: 2px 0; font-size: 11px;">
-            <strong>Delay:</strong> +${disruption.expected_delay} min
-          </p>
-          <p style="margin: 2px 0; font-size: 11px;">
-            <strong>Level:</strong> ${disruption.congestion_level}
-          </p>
+        <div style="margin-top: 8px;">
+          <span style="background: ${statusColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">
+            ${statusLabel}
+          </span>
         </div>
+        ${isActive ? `
+          <div style="margin-top: 8px; padding: 6px; background: #f9fafb; border-radius: 4px;">
+            <p style="margin: 2px 0; font-size: 10px; color: #4b5563;">
+              <strong>Delay:</strong> +${disruption.expected_delay || 0} min
+            </p>
+            <p style="margin: 2px 0; font-size: 10px; color: #4b5563;">
+              <strong>Level:</strong> ${disruption.congestion_level || 'Unknown'}
+            </p>
+          </div>
+        ` : `
+          <div style="margin-top: 8px; padding: 6px; background: #eff6ff; border-radius: 4px;">
+            <p style="margin: 2px 0; font-size: 10px; color: #1e40af;">
+              <strong>Starts:</strong> ${disruption.start_date ? new Date(disruption.start_date).toLocaleString('en-US', {
+                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+              }) : 'TBD'}
+            </p>
+          </div>
+        `}
       </div>
     `;
   };
 
   const getSeverityColor = (severity) => {
-    if (severity < 1.0) return '#22c55e';
-    if (severity < 2.0) return '#fbbf24';
-    return '#ef4444';
+    if (severity < 1.5) return '#22c55e'; // green
+    if (severity < 2.5) return '#fbbf24'; // yellow
+    return '#ef4444'; // red
   };
 
   return (
@@ -237,7 +359,13 @@ function MiniOngoingMap() {
           </div>
         </div>
       )}
-      <div ref={mapRef} className="w-full h-full rounded-lg" />
+      {/* ✅ IMPORTANT: Add id to prevent double initialization */}
+      <div 
+        ref={mapRef} 
+        id="mini-ongoing-map"
+        className="w-full h-full rounded-lg" 
+        style={{ zIndex: 1 }}
+      />
     </div>
   );
 }
@@ -927,103 +1055,125 @@ export default function DashboardPage() {
                     24-Hour Traffic Timeline
                   </h2>
                   <p className="text-xs text-gray-500 mt-1">
-                    Real-time tracking • Past hours fade • Current hour 🔴 • Future predictions
+                    Real-time tracking • Past hours fade • Current hour • Future predictions
                   </p>
                 </div>
                 <button
                   onClick={scrollToCurrentHour}
-                  className="text-xs bg-orange-100 text-orange-700 px-3 py-1.5 rounded-full font-semibold hover:bg-orange-200 transition"
+                  className="text-xs bg-orange-100 text-orange-700 px-3 py-1.5 rounded-full font-semibold hover:bg-orange-200 transition flex items-center gap-1"
                 >
-                  Jump to Now
+                  <span>Jump to Now</span>
+                  <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>
                 </button>
               </div>
 
-              {/* Scrollable Heatmap Container */}
-              <div 
-                ref={heatmapScrollRef}
-                className="overflow-x-auto overflow-y-visible pb-2"
-                style={{ scrollBehavior: 'smooth' }}
-              >
-                {heatmapData.roads.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <p>Loading 24-hour data...</p>
-                  </div>
-                ) : (
-                  <table className="text-xs w-max">
-                    <thead>
-                      <tr>
-                        <th className="sticky left-0 bg-white z-10 text-left p-2 font-semibold text-gray-700 border-r border-gray-200">
-                          Location
-                        </th>
-                        {heatmapData.times.map((time, idx) => {
+             {/* Scrollable Heatmap Container */}
+            <div 
+              ref={heatmapScrollRef}
+              className="overflow-x-auto overflow-y-visible pb-2"
+              style={{ scrollBehavior: 'smooth' }}
+            >
+              {heatmapData.roads.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p>Loading 24-hour data...</p>
+                </div>
+              ) : (
+                <table className="text-xs border-collapse" style={{ tableLayout: 'fixed' }}>
+                  <thead>
+                    <tr>
+                      <th className="sticky left-0 bg-white z-10 text-left p-2 font-semibold text-gray-700 border-r border-gray-200" style={{ minWidth: '100px', width: '100px' }}>
+                        Location
+                      </th>
+                      {heatmapData.times.map((time, idx) => {
+                        const currentHour = new Date().getHours();
+                        const isCurrent = idx === currentHour;
+                        const isPast = idx < currentHour;
+                        
+                        // Remove emoji for consistent width
+                        const timeText = time.replace(/🔴/g, '').replace(/\s+/g, ' ').trim();
+                        
+                        return (
+                          <th
+                            key={idx}
+                            className={`p-2 font-semibold text-center transition-opacity duration-500 ${
+                              isCurrent 
+                                ? 'text-red-600 bg-red-50' 
+                                : isPast 
+                                ? 'text-gray-400 opacity-50' 
+                                : 'text-gray-700'
+                            }`}
+                            style={{ 
+                              minWidth: '60px', 
+                              width: '60px',
+                              maxWidth: '60px'
+                            }}
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              <span className="whitespace-nowrap text-xs">{timeText}</span>
+                              {isCurrent && (
+                                <div 
+                                  className="w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0" 
+                                  title="Current Hour"
+                                />
+                              )}
+                            </div>
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {heatmapData.roads.map((road, roadIdx) => (
+                      <tr key={roadIdx}>
+                        <td className="sticky left-0 bg-white z-10 p-2 font-medium text-gray-800 text-xs border-r border-gray-200">
+                          {road.name}
+                        </td>
+                        {road.values.map((value, timeIdx) => {
                           const currentHour = new Date().getHours();
-                          const isCurrent = time.includes('🔴');
-                          const isPast = idx < currentHour;
-                          const isFuture = idx > currentHour;
+                          const isCurrent = timeIdx === currentHour;
+                          const isPast = timeIdx < currentHour;
+                          
+                          let opacity = 1.0;
+                          if (isPast) {
+                            const hoursSince = currentHour - timeIdx;
+                            opacity = Math.max(0.3, 1.0 - (hoursSince * 0.1));
+                          }
                           
                           return (
-                            <th
-                              key={idx}
-                              className={`p-2 font-semibold text-center min-w-[60px] transition-opacity duration-500 ${
-                                isCurrent 
-                                  ? 'text-red-600 bg-red-50' 
-                                  : isPast 
-                                  ? 'text-gray-400 opacity-50' 
-                                  : 'text-gray-700'
-                              }`}
+                            <td 
+                              key={timeIdx} 
+                              className="p-1 text-center"
+                              style={{ 
+                                minWidth: '60px',
+                                maxWidth: '60px',
+                                width: '60px'
+                              }}
                             >
-                              {time}
-                            </th>
+                              <div
+                                className={`h-12 w-12 rounded flex items-center justify-center text-white font-bold text-xs mx-auto ${getCongestionColor(
+                                  value
+                                )} hover:scale-110 transition-transform cursor-pointer ${
+                                  isCurrent ? 'ring-4 ring-red-400' : ''
+                                  //isCurrent ? 'ring-4 ring-red-400 animate-[pulse_1s_ease-in-out_infinite]' : ''
+                                }`}
+                                style={{ opacity }}
+                                title={`${road.name} at ${timeIdx}:00\n${getCongestionLabel(
+                                  value
+                                )} (${value.toFixed(1)})\n${
+                                  isPast ? '✓ Passed' : isCurrent ? '🔴 LIVE' : '📊 Predicted'
+                                }`}
+                              >
+                                {value.toFixed(1)}
+                              </div>
+                            </td>
                           );
                         })}
                       </tr>
-                    </thead>
-                    <tbody>
-                      {heatmapData.roads.map((road, roadIdx) => (
-                        <tr key={roadIdx}>
-                          <td className="sticky left-0 bg-white z-10 p-2 font-medium text-gray-800 text-xs border-r border-gray-200">
-                            {road.name}
-                          </td>
-                          {road.values.map((value, timeIdx) => {
-                            const currentHour = new Date().getHours();
-                            const isCurrent = timeIdx === currentHour;
-                            const isPast = timeIdx < currentHour;
-                            const isFuture = timeIdx > currentHour;
-                            
-                            // Calculate opacity based on how far in the past
-                            let opacity = 1.0;
-                            if (isPast) {
-                              const hoursSince = currentHour - timeIdx;
-                              opacity = Math.max(0.3, 1.0 - (hoursSince * 0.1));
-                            }
-                            
-                            return (
-                              <td key={timeIdx} className="p-1">
-                                <div
-                                  className={`h-12 w-12 rounded flex items-center justify-center text-white font-bold text-xs ${getCongestionColor(
-                                    value
-                                  )} hover:scale-110 transition-all cursor-pointer ${
-                                    isCurrent ? 'ring-4 ring-red-400 animate-pulse' : ''
-                                  }`}
-                                  style={{ opacity }}
-                                  title={`${road.name} at ${timeIdx}:00\n${getCongestionLabel(
-                                    value
-                                  )} (${value.toFixed(1)})\n${
-                                    isPast ? '✓ Passed' : isCurrent ? '🔴 LIVE' : '📊 Predicted'
-                                  }`}
-                                >
-                                  {value.toFixed(1)}
-                                </div>
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
               {/* Legend */}
               <div className="flex justify-between items-center mt-4 pt-4 border-t">
                 <div className="flex gap-4 text-xs">
@@ -1283,7 +1433,7 @@ export default function DashboardPage() {
                 </button>
               </div>
               
-              <div className="h-[400px] rounded-lg overflow-hidden border border-gray-200">
+              <div className="h-[400px] rounded-lg overflow-hidden border border-gray-200" key="mini-map-container">
                 <MiniOngoingMap />
               </div>
             </div>
