@@ -2661,6 +2661,89 @@ def simulate_disruption_realtime():
         simulation_id = f"sim_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
         # ============================================================
+        # Calculate Affected Road Segments with Individual Severities
+        # ============================================================
+        
+        affected_segments = []
+        
+        # Define impact zones with distance-based severity multipliers
+        impact_zones = [
+            {'min_dist': 0, 'max_dist': 150, 'multiplier': 1.0, 'label': 'Critical Impact'},
+            {'min_dist': 150, 'max_dist': 300, 'multiplier': 0.75, 'label': 'High Impact'},
+            {'min_dist': 300, 'max_dist': 450, 'multiplier': 0.50, 'label': 'Moderate Impact'},
+            {'min_dist': 450, 'max_dist': 600, 'multiplier': 0.30, 'label': 'Low Impact'},
+        ]
+        
+        # Road type importance factors (higher capacity = more affected by disruption)
+        road_type_factors = {
+            'motorway': 1.2,
+            'trunk': 1.15,
+            'primary': 1.1,
+            'secondary': 1.0,
+            'tertiary': 0.9,
+            'residential': 0.7,
+            'service': 0.5,
+        }
+        
+        # Create segment data for main road
+        main_segment = {
+            'segment_id': 'main',
+            'road_name': road_corridor,
+            'road_type': road_info.get('road_type', 'secondary'),
+            'distance_m': 0,
+            'impact_zone': 'Critical Impact',
+            'avg_severity': round(avg_severity, 2),
+            'severity_label': 'Light' if avg_severity < 0.5 else ('Moderate' if avg_severity < 1.5 else 'Heavy'),
+            'avg_delay_min': round(avg_delay),
+            'hourly_severities': [
+                {
+                    'hour': p['hour'],
+                    'datetime': p['datetime'],
+                    'severity': p['severity'],
+                    'severity_label': p['severity_label'],
+                    'delay_min': p['delay_info']['additional_delay_min']
+                }
+                for p in hourly_predictions
+            ]
+        }
+        affected_segments.append(main_segment)
+        
+        # Generate nearby road segment predictions
+        # These will be used by frontend to color nearby roads accurately
+        sample_nearby_roads = [
+            {'id': 'nearby_1', 'name': 'Adjacent Road 1', 'type': 'secondary', 'distance': 100},
+            {'id': 'nearby_2', 'name': 'Adjacent Road 2', 'type': 'tertiary', 'distance': 200},
+            {'id': 'nearby_3', 'name': 'Adjacent Road 3', 'type': 'secondary', 'distance': 350},
+            {'id': 'nearby_4', 'name': 'Adjacent Road 4', 'type': 'residential', 'distance': 500},
+        ]
+        
+        for nearby in sample_nearby_roads:
+            # Find applicable impact zone
+            zone = next(
+                (z for z in impact_zones if z['min_dist'] <= nearby['distance'] < z['max_dist']),
+                impact_zones[-1]
+            )
+            
+            # Calculate segment-specific severity
+            road_factor = road_type_factors.get(nearby['type'], 0.8)
+            segment_severity = avg_severity * zone['multiplier'] * road_factor
+            segment_delay = avg_delay * zone['multiplier'] * road_factor
+            
+            segment = {
+                'segment_id': nearby['id'],
+                'road_name': nearby['name'],
+                'road_type': nearby['type'],
+                'distance_m': nearby['distance'],
+                'impact_zone': zone['label'],
+                'impact_multiplier': zone['multiplier'],
+                'road_factor': road_factor,
+                'avg_severity': round(segment_severity, 2),
+                'severity_label': 'Light' if segment_severity < 0.5 else ('Moderate' if segment_severity < 1.5 else 'Heavy'),
+                'avg_delay_min': round(segment_delay),
+            }
+            affected_segments.append(segment)
+
+        # ============================================================
         # Return Response
         # ============================================================
         
@@ -2709,6 +2792,8 @@ def simulate_disruption_realtime():
             'time_segments': time_segments,
             'aggregated_view': aggregated_view,
             'has_multiple_days': (end_datetime - start_datetime).days > 1,
+            'affected_segments': affected_segments,
+            'impact_zones': impact_zones,
             'road_info': road_info  # ✅ ADD THIS - needed for frontend
         })
 
