@@ -1,5 +1,3 @@
-// frontend/components/SimulationMap.jsx - FIXED VERSION
-
 "use client";
 
 import L from "leaflet";
@@ -73,11 +71,9 @@ export default function SimulationMap({
     map.off("click");
     map.off("dblclick");
 
-    // Clear drawn items
-    // ✅ ONLY clear if we're changing modes (not on first load with existing selection)
-    // Check if we have a selectedLocation that we should keep
+    // Clear drawn items only if changing modes
     if (!selectedLocation || drawMode !== selectedLocation.type) {
-      drawnItems.clearLayers(); // Clear when changing modes
+      drawnItems.clearLayers();
     }
 
     // Reset drawing state using refs
@@ -91,27 +87,27 @@ export default function SimulationMap({
       const handleClick = (e) => {
         drawnItems.clearLayers();
 
-        // IMPORTANT: Add visible marker with custom icon
+        // Add visible marker with custom icon
         const marker = L.marker([e.latlng.lat, e.latlng.lng], {
           icon: L.divIcon({
             className: "custom-pin",
             html: `
               <div style="
-                background: #f97316;
+                background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
                 border: 3px solid white;
                 border-radius: 50%;
-                width: 30px;
-                height: 30px;
+                width: 32px;
+                height: 32px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                font-size: 18px;
-                box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+                font-size: 20px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.4);
                 cursor: pointer;
               ">📍</div>
             `,
-            iconSize: [30, 30],
-            iconAnchor: [15, 15],
+            iconSize: [32, 32],
+            iconAnchor: [16, 16],
           }),
         }).addTo(drawnItems);
 
@@ -119,9 +115,11 @@ export default function SimulationMap({
           .bindPopup(
             `
           <div style="font-family: sans-serif; padding: 4px;">
-            <strong>Selected Location</strong><br/>
-            <small>Lat: ${e.latlng.lat.toFixed(5)}<br/>
-            Lng: ${e.latlng.lng.toFixed(5)}</small>
+            <strong style="color: #f97316;">Selected Location</strong><br/>
+            <small style="color: #666;">
+              Lat: ${e.latlng.lat.toFixed(5)}<br/>
+              Lng: ${e.latlng.lng.toFixed(5)}
+            </small>
           </div>
         `
           )
@@ -129,7 +127,7 @@ export default function SimulationMap({
 
         // Add pulsing circle animation
         L.circle([e.latlng.lat, e.latlng.lng], {
-          radius: 300,
+          radius: 250,
           color: "#f97316",
           fillColor: "#f97316",
           fillOpacity: 0.15,
@@ -143,10 +141,15 @@ export default function SimulationMap({
       map.on("click", handleClick);
     }
 
-    // === LINE OR POLYGON MODE ===
-    else if (drawMode === "line" || drawMode === "polygon") {
+    // === LINE MODE (POINT TO POINT) ===
+    else if (drawMode === "line") {
       const handleClick = (e) => {
         const coords = drawingCoordsRef.current;
+
+        // ✅ LIMIT TO 2 POINTS MAXIMUM
+        if (coords.length >= 2) {
+          return; // Ignore clicks after 2 points
+        }
 
         // Add point
         coords.push(e.latlng);
@@ -155,11 +158,11 @@ export default function SimulationMap({
 
         // Add visual marker
         const marker = L.circleMarker([e.latlng.lat, e.latlng.lng], {
-          radius: 5,
+          radius: 6,
           color: "#f97316",
           fillColor: "#fff",
           fillOpacity: 1,
-          weight: 2,
+          weight: 3,
         }).addTo(drawnItems);
 
         tempMarkersRef.current.push(marker);
@@ -169,91 +172,76 @@ export default function SimulationMap({
           drawnItems.removeLayer(tempLineRef.current);
         }
 
-        // Draw temporary line/polygon
-        if (coords.length > 1) {
-          if (drawMode === "line") {
-            tempLineRef.current = L.polyline(coords, {
-              color: "#f97316",
-              weight: 4,
-              opacity: 0.7,
-              dashArray: "10, 10",
-            }).addTo(drawnItems);
-          } else {
-            tempLineRef.current = L.polygon(coords, {
-              color: "#f97316",
-              fillColor: "#f97316",
-              fillOpacity: 0.2,
-              weight: 3,
-              dashArray: "10, 10",
-            }).addTo(drawnItems);
-          }
+        // Draw temporary line if we have 2 points
+        if (coords.length === 2) {
+          tempLineRef.current = L.polyline(coords, {
+            color: "#f97316",
+            weight: 4,
+            opacity: 0.7,
+            dashArray: "10, 10",
+          }).addTo(drawnItems);
         }
-      };
 
-      const handleDoubleClick = (e) => {
-        L.DomEvent.stopPropagation(e);
-        L.DomEvent.preventDefault(e);
+        // ✅ AUTO-FINALIZE AFTER 2ND POINT (no double-click needed)
+        if (coords.length === 2) {
+          // Small delay to show the line before finalizing
+          setTimeout(() => {
+            // Remove temporary elements
+            tempMarkersRef.current.forEach((m) => drawnItems.removeLayer(m));
+            if (tempLineRef.current) {
+              drawnItems.removeLayer(tempLineRef.current);
+            }
 
-        const coords = drawingCoordsRef.current;
+            // Draw final line
+            // Base line (wider, lighter)
+            L.polyline(coords, {
+              color: "#94a3b8",
+              weight: 10,
+              opacity: 0.3,
+            }).addTo(drawnItems);
 
-        if (coords.length >= 2) {
-          // Remove temporary elements
-          tempMarkersRef.current.forEach((m) => drawnItems.removeLayer(m));
-          if (tempLineRef.current) {
-            drawnItems.removeLayer(tempLineRef.current);
-          }
-
-          // Draw final shape
-          let finalLayer;
-          if (drawMode === "line") {
-            finalLayer = L.polyline(coords, {
+            // Main line (narrower, brighter)
+            const finalLayer = L.polyline(coords, {
               color: "#f97316",
               weight: 6,
-              opacity: 1,
+              opacity: 0.9,
             }).addTo(drawnItems);
 
-            // Add buffer zone
+            // Add buffer zone visualization
             L.polyline(coords, {
               color: "#f97316",
               weight: 20,
-              opacity: 0.15,
+              opacity: 0.1,
             }).addTo(drawnItems);
-          } else {
-            finalLayer = L.polygon(coords, {
-              color: "#f97316",
-              fillColor: "#f97316",
-              fillOpacity: 0.3,
-              weight: 3,
-            }).addTo(drawnItems);
-          }
 
-          // Fit bounds
-          map.fitBounds(finalLayer.getBounds(), { padding: [50, 50] });
+            // Fit bounds
+            map.fitBounds(finalLayer.getBounds(), { padding: [50, 50] });
 
-          // Convert to array of {lat, lng}
-          const coordinates = coords.map((ll) => ({
-            lat: ll.lat,
-            lng: ll.lng,
-          }));
+            // Convert to array of {lat, lng}
+            const coordinates = coords.map((ll) => ({
+              lat: ll.lat,
+              lng: ll.lng,
+            }));
 
-          onAreaSelect(coordinates);
+            onAreaSelect(coordinates);
 
-          // Reset
-          drawingCoordsRef.current = [];
-          isDrawingRef.current = false;
-          tempMarkersRef.current = [];
-          tempLineRef.current = null;
+            // Reset
+            drawingCoordsRef.current = [];
+            isDrawingRef.current = false;
+            tempMarkersRef.current = [];
+            tempLineRef.current = null;
+          }, 200); // 200ms delay to show the dashed line briefly
         }
       };
 
+      // Only need click handler now (auto-finalize at 2 points)
       map.on("click", handleClick);
-      map.on("dblclick", handleDoubleClick);
     }
 
     // Cleanup function
     return () => {
       map.off("click");
-      map.off("dblclick");
+      //map.off("dblclick");
     };
   }, [drawMode, onPointSelect, onAreaSelect]); // Only depend on these props
 
@@ -271,9 +259,20 @@ export default function SimulationMap({
     const currentLayers = drawnItems.getLayers();
     const hasMarker = currentLayers.some((layer) => layer instanceof L.Marker);
 
-    // If we already have a marker at this location, don't redraw
+    // ✅ FIX: Check if we already have the SAME location displayed
     if (hasMarker && selectedLocation.type === "point") {
-      return; // ← PREVENTS CLEARING WHEN ROAD INFO LOADS
+      // Get the current marker position
+      const marker = currentLayers.find(layer => layer instanceof L.Marker);
+      if (marker) {
+        const markerPos = marker.getLatLng();
+        const { lat, lng } = selectedLocation.center;
+        
+        // If same location (within 0.0001 degrees ~11 meters), don't redraw
+        if (Math.abs(markerPos.lat - lat) < 0.0001 && 
+            Math.abs(markerPos.lng - lng) < 0.0001) {
+          return; // ← PREVENTS CLEARING WHEN ROAD INFO LOADS
+        }
+      }
     }
 
     // Clear and redraw only for new selections
@@ -328,19 +327,22 @@ export default function SimulationMap({
         )
         .openPopup();
 
-      // Add highlight circle (smaller)
+      // Add highlight circle
       L.circle([lat, lng], {
-        radius: 200,
+        radius: 250,
         color: "#f97316",
         fillColor: "#f97316",
         fillOpacity: 0.1,
         weight: 2,
         dashArray: "5, 5",
       }).addTo(drawnItems);
+
+      // Center map on the point
+      map.setView([lat, lng], 15);
     } else if (selectedLocation.type === "line") {
       const latlngs = selectedLocation.coordinates.map((c) => [c.lat, c.lng]);
 
-      // Base line
+      // Base line (wider, lighter)
       L.polyline(latlngs, {
         color: "#94a3b8",
         weight: 10,
@@ -348,24 +350,21 @@ export default function SimulationMap({
       }).addTo(drawnItems);
 
       // Highlighted line
-      L.polyline(latlngs, {
+      const mainLine = L.polyline(latlngs, {
         color: "#f97316",
         weight: 6,
         opacity: 0.9,
       }).addTo(drawnItems);
-    } else if (selectedLocation.type === "polygon") {
-      const latlngs = selectedLocation.coordinates.map((c) => [c.lat, c.lng]);
-      L.polygon(latlngs, {
-        color: "#f97316",
-        fillColor: "#f97316",
-        fillOpacity: 0.2,
-        weight: 3,
-      }).addTo(drawnItems);
-    }
 
-    // Fit bounds to show selection
-    if (drawnItems.getLayers().length > 0) {
-      map.fitBounds(drawnItems.getBounds(), { padding: [80, 80] });
+      // Buffer zone
+      L.polyline(latlngs, {
+        color: "#f97316",
+        weight: 20,
+        opacity: 0.1,
+      }).addTo(drawnItems);
+
+      // Fit bounds to show the line
+      map.fitBounds(mainLine.getBounds(), { padding: [80, 80] });
     }
   }, [selectedLocation]); // Only re-run when selectedLocation changes
 
@@ -412,23 +411,20 @@ export default function SimulationMap({
       </button>
 
       {/* Instructions Overlay */}
-      <div className="absolute bottom-4 left-4 bg-white rounded-lg p-4 shadow-lg max-w-xs z-[1000]">
+      <div className="absolute bottom-4 left-4 bg-white rounded-lg p-4 shadow-lg max-w-sm z-[1000]">
         <p className="font-bold text-gray-800 mb-2">
-          {drawMode === "point" && "📍 Point Mode"}
-          {drawMode === "line" && "➖ Line Mode"}
-          {drawMode === "polygon" && "⬟ Area Mode"}
+          {drawMode === "point" && "📍 Point Selection Mode"}
+          {drawMode === "line" && "➖ Point to Point Mode"}
         </p>
         <p className="text-sm text-gray-600 mb-1">
           {drawMode === "point" &&
-            "Click anywhere on the map to select a point"}
+            "Click anywhere on the map to select a disruption point"}
           {drawMode === "line" &&
-            "Click to add points along a road. Double-click to finish."}
-          {drawMode === "polygon" &&
-            "Click to draw area boundary. Double-click to close the shape."}
+            "Click to add points along the road segment. Double-click to finish selecting the line."}
         </p>
         {isDrawingRef.current && (
           <p className="text-xs text-orange-600 font-semibold mt-2">
-            🎨 Drawing... ({drawingCoordsRef.current.length} points)
+            🎨 Drawing... ({drawingCoordsRef.current.length} points added)
           </p>
         )}
       </div>
