@@ -3,12 +3,16 @@ import pandas as pd
 import numpy as np
 import os
 from datetime import datetime
+import json
 
 class TrafficPredictor:
     """
     Handles traffic congestion predictions using trained Random Forest model
     """
-    
+    """
+        road_data: List or DataFrame containing road segments.
+        Expected keys: 'road_id', 'start_node_id', 'end_node_id', 'length_meters'
+     """
     def __init__(self):
         """Load the trained model and feature names"""
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -21,6 +25,16 @@ class TrafficPredictor:
         
         info_path = os.path.join(current_dir, 'model_info.pkl')
         self.model_info = joblib.load(info_path)
+
+        # Load Calamba context data for location-aware predictions
+        context_path = os.path.join(current_dir, 'data', 'calamba_context.json')
+        if os.path.exists(context_path):
+            with open(context_path, 'r') as f:
+                self.calamba_context = json.load(f)
+            print(f"✓ Calamba context loaded ({len(self.calamba_context.get('schools', []))} schools, {len(self.calamba_context.get('bottlenecks', []))} bottlenecks)")
+        else:
+            self.calamba_context = None
+            print(f"⚠ Calamba context not found at {context_path}")
         
         print(f"✓ Model loaded successfully")
         print(f"  Accuracy: {self.model_info['accuracy']*100:.2f}%")
@@ -364,52 +378,92 @@ class TrafficPredictor:
             }
         }
     
-    def estimate_delay(self, severity, base_travel_time_minutes, road_length_km, impact_factor=0.6, realtime_speed_factor=None):
+    def estimate_delay(self, severity, base_travel_time_minutes, road_length_km, 
+                   impact_factor=0.6, realtime_speed_factor=None):
         """
-        Calculate delay with clean rounding
+        Calculate delay using BPR (Bureau of Public Roads) function
+        
+        Reference: Bureau of Public Roads (1964) "Traffic Assignment Manual"
+        Extended by Davidson (1966) and widely used in VISUM, TransCAD, etc.
+        
+        BPR Formula: t = t₀ * [1 + α * (V/C)^β]
+        Where:
+        - t₀ = free-flow travel time
+        - V/C = volume-to-capacity ratio
+        - α = 0.15 (standard), β = 4 (standard for urban roads)
+        
+        Severity mapping to V/C ratio:
+        - Light (0-0.5): V/C = 0.4-0.7 (LOS B-C)
+        - Moderate (0.5-1.5): V/C = 0.7-0.95 (LOS D-E)
+        - Heavy (1.5-3.0): V/C = 0.95-1.2 (LOS F)
         """
         
         # Validate inputs
         if base_travel_time_minutes <= 0:
-            base_travel_time_minutes = 10
+            base_travel_time_minutes = (road_length_km / 40) * 60  # Assume 40 km/h default
         if road_length_km <= 0:
             road_length_km = 1.0
         
-        # Delay multipliers
-        delay_multipliers = {0: 1.1, 1: 1.5, 2: 2.5}
-        
-        # Handle float severity
+        # Map severity to Volume/Capacity ratio
+        # Based on HCM 2016 Level of Service thresholds
         if isinstance(severity, float):
-            severity_key = 0 if severity < 0.5 else (1 if severity < 1.5 else 2)
+            if severity < 0.5:
+                v_c_ratio = 0.40 + (severity * 0.6)  # 0.4-0.7 (LOS B-C)
+            elif severity < 1.5:
+                v_c_ratio = 0.70 + ((severity - 0.5) * 0.25)  # 0.7-0.95 (LOS D-E)
+            else:
+                v_c_ratio = 0.95 + ((severity - 1.5) * 0.167)  # 0.95-1.2 (LOS F)
+                v_c_ratio = min(v_c_ratio, 1.20)  # Cap at 1.2
         else:
-            severity_key = severity
+            # Integer severity (0, 1, 2)
+            v_c_map = {0: 0.55, 1: 0.82, 2: 1.08}
+            v_c_ratio = v_c_map.get(severity, 0.82)
         
-        multiplier = delay_multipliers.get(severity_key, 1.5)
-        adjusted_multiplier = 1 + (multiplier - 1) * impact_factor
+        # Apply disruption impact factor
+        v_c_ratio = v_c_ratio * (1 + impact_factor * 0.5)
         
-        # Apply real-time adjustment
+        # Apply location-based multiplier if coordinates provided
+        location_multiplier = getattr(self, '_current_location_multiplier', 1.0)
+        v_c_ratio = v_c_ratio * location_multiplier
+        
+        # BPR function parameters
+        alpha = 0.15  # Standard BPR coefficient
+        beta = 4      # Standard BPR exponent (urban roads)
+        
+        # Calculate travel time multiplier
+        if v_c_ratio <= 1.0:
+            # Standard BPR for under-capacity conditions
+            multiplier = 1 + alpha * (v_c_ratio ** beta)
+        else:
+            # Over-capacity: use hypercongestion model
+            # Reference: Daganzo (2007) "Urban Gridlock"
+            multiplier = 1 + alpha + (v_c_ratio - 1.0) * 2.5
+        
+        # Apply real-time adjustment if available
         if realtime_speed_factor is not None and realtime_speed_factor > 0:
-            realtime_adjustment = 2 - realtime_speed_factor
-            adjusted_multiplier = (adjusted_multiplier * 0.7) + (realtime_adjustment * 0.3)
-            adjusted_multiplier = max(1.0, min(adjusted_multiplier, 3.0))
+            # Blend predicted and real-time (70/30 weight)
+            realtime_multiplier = 2 - realtime_speed_factor
+            realtime_multiplier = max(1.0, min(realtime_multiplier, 3.0))
+            multiplier = (multiplier * 0.70) + (realtime_multiplier * 0.30)
         
-        expected_travel_time = base_travel_time_minutes * adjusted_multiplier
+        # Calculate times
+        expected_travel_time = base_travel_time_minutes * multiplier
         additional_delay = expected_travel_time - base_travel_time_minutes
         additional_delay_rounded = round(additional_delay)
         
-        # Minimum delays
-        if severity_key == 0 and additional_delay_rounded < 1:
+        # Apply minimum realistic delays per severity
+        if severity < 0.5 and additional_delay_rounded < 1:
             additional_delay_rounded = 1
-        elif severity_key == 1 and additional_delay_rounded < 3:
-            additional_delay_rounded = 3
-        elif severity_key == 2 and additional_delay_rounded < 5:
+        elif 0.5 <= severity < 1.5 and additional_delay_rounded < 2:
+            additional_delay_rounded = 2
+        elif severity >= 1.5 and additional_delay_rounded < 5:
             additional_delay_rounded = 5
         
         # Calculate speeds
-        normal_speed = (road_length_km / base_travel_time_minutes) * 60 if base_travel_time_minutes > 0 else 50
-        reduced_speed = (road_length_km / expected_travel_time) * 60 if expected_travel_time > 0 else normal_speed * 0.5
+        normal_speed = (road_length_km / base_travel_time_minutes) * 60
+        reduced_speed = (road_length_km / expected_travel_time) * 60
         
-        if realtime_speed_factor is not None and realtime_speed_factor > 0:
+        if realtime_speed_factor is not None:
             reduced_speed = max(5, reduced_speed * realtime_speed_factor)
         
         speed_reduction = normal_speed - reduced_speed
@@ -422,5 +476,138 @@ class TrafficPredictor:
             'normal_speed_kmh': round(normal_speed, 1),
             'reduced_speed_kmh': round(reduced_speed, 1),
             'speed_reduction_kmh': round(speed_reduction, 1),
+            'v_c_ratio': round(v_c_ratio, 2),
+            'bpr_multiplier': round(multiplier, 2),
             'realtime_adjusted': realtime_speed_factor is not None,
         }
+    
+    def get_location_multiplier(self, lat, lng, hour, day_of_week, is_friday=False):
+        """
+        Calculate delay multiplier based on proximity to schools, bottlenecks, traffic lights, etc.
+        
+        Args:
+            lat, lng: Coordinates of the disruption
+            hour: Hour of day (0-23)
+            day_of_week: 0=Monday, 6=Sunday
+            is_friday: Boolean for Friday special handling
+        
+        Returns:
+            float: Multiplier to apply to delay (1.0 = no change)
+        """
+        if not self.calamba_context:
+            return 1.0
+        
+        multiplier = 1.0
+        
+        def haversine_distance(lat1, lng1, lat2, lng2):
+            """Calculate distance in meters between two coordinates"""
+            from math import radians, sin, cos, sqrt, atan2
+            R = 6371000  # Earth's radius in meters
+            lat1, lng1, lat2, lng2 = map(radians, [lat1, lng1, lat2, lng2])
+            dlat = lat2 - lat1
+            dlng = lng2 - lng1
+            a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlng/2)**2
+            c = 2 * atan2(sqrt(a), sqrt(1-a))
+            return R * c
+        
+        # Check proximity to schools
+        for school in self.calamba_context.get('schools', []):
+            if school.get('lat', 0) == 0:
+                continue
+            distance = haversine_distance(lat, lng, school['lat'], school['lng'])
+            if distance <= school.get('impact_radius_m', 300):
+                # Check if it's dismissal time
+                dismissal_hours = school.get('friday_dismissal_hours' if is_friday else 'dismissal_hours', [])
+                if hour in dismissal_hours:
+                    school_mult = school.get('delay_multiplier', 1.3)
+                    multiplier = max(multiplier, school_mult)
+        
+        # Check proximity to bottlenecks
+        for bottleneck in self.calamba_context.get('bottlenecks', []):
+            if bottleneck.get('lat', 0) == 0:
+                continue
+            distance = haversine_distance(lat, lng, bottleneck['lat'], bottleneck['lng'])
+            if distance <= bottleneck.get('impact_radius_m', 300):
+                peak_hours = bottleneck.get('friday_peak_hours' if is_friday else 'peak_hours', [])
+                if hour in peak_hours:
+                    bn_mult = bottleneck.get('friday_multiplier' if is_friday else 'delay_multiplier', 1.3)
+                    multiplier = max(multiplier, bn_mult)
+        
+        # Check proximity to malls
+        for mall in self.calamba_context.get('malls_commercial', []):
+            if mall.get('lat', 0) == 0:
+                continue
+            distance = haversine_distance(lat, lng, mall['lat'], mall['lng'])
+            if distance <= mall.get('impact_radius_m', 400):
+                is_weekend = day_of_week >= 5
+                peak_hours = mall.get('weekend_peak_hours' if is_weekend else 'peak_hours', [])
+                if hour in peak_hours:
+                    if is_friday:
+                        mall_mult = mall.get('friday_multiplier', 1.4)
+                    elif is_weekend:
+                        mall_mult = mall.get('weekend_multiplier', 1.3)
+                    else:
+                        mall_mult = mall.get('delay_multiplier', 1.2)
+                    multiplier = max(multiplier, mall_mult)
+        
+        # Check proximity to traffic lights (adds base delay)
+        for light in self.calamba_context.get('traffic_lights', []):
+            if light.get('lat', 0) == 0:
+                continue
+            distance = haversine_distance(lat, lng, light['lat'], light['lng'])
+            if distance <= light.get('impact_radius_m', 100):
+                # Traffic lights add ~10-20% during peak hours
+                if 7 <= hour <= 9 or 16 <= hour <= 19:
+                    multiplier = max(multiplier, multiplier * 1.15)
+        
+        # Apply Calamba-wide peak patterns
+        peak_patterns = self.calamba_context.get('calamba_peak_patterns', {})
+        
+        if is_friday and 17 <= hour <= 21:
+            friday_pattern = peak_patterns.get('friday_evening_special', {})
+            multiplier = max(multiplier, friday_pattern.get('multiplier', 1.5))
+        elif day_of_week < 5:  # Weekday
+            if 7 <= hour <= 9:
+                multiplier = max(multiplier, peak_patterns.get('weekday_morning_rush', {}).get('multiplier', 1.3))
+            elif 17 <= hour <= 19:
+                multiplier = max(multiplier, peak_patterns.get('weekday_evening_rush', {}).get('multiplier', 1.4))
+            elif 16 <= hour <= 17:
+                multiplier = max(multiplier, peak_patterns.get('school_dismissal', {}).get('multiplier', 1.4))
+        
+        return round(multiplier, 2)
+
+    def estimate_delay_with_location(self, severity, base_travel_time_minutes, road_length_km,
+                                      impact_factor=0.6, realtime_speed_factor=None,
+                                      lat=None, lng=None, hour=None, day_of_week=None):
+        """
+        Enhanced delay estimation with location awareness.
+        
+        Args:
+            ... (same as estimate_delay)
+            lat, lng: Coordinates of disruption location
+            hour: Hour of day (0-23)
+            day_of_week: 0=Monday, 6=Sunday
+        """
+        # Calculate location multiplier if coordinates provided
+        if lat is not None and lng is not None and hour is not None:
+            is_friday = (day_of_week == 4) if day_of_week is not None else False
+            self._current_location_multiplier = self.get_location_multiplier(
+                lat, lng, hour, day_of_week or 0, is_friday
+            )
+        else:
+            self._current_location_multiplier = 1.0
+        
+        # Call original estimate_delay
+        result = self.estimate_delay(
+            severity, base_travel_time_minutes, road_length_km,
+            impact_factor, realtime_speed_factor
+        )
+        
+        # Add location info to result
+        result['location_multiplier'] = self._current_location_multiplier
+        result['location_adjusted'] = self._current_location_multiplier != 1.0
+        
+        # Reset for next call
+        self._current_location_multiplier = 1.0
+        
+        return result
