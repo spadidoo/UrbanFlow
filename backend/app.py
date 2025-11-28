@@ -104,6 +104,7 @@ print("Loading database service...")
 db = DatabaseService()
 print("✓ Database service ready!")
 
+
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(AVATAR_FOLDER, exist_ok=True)
 

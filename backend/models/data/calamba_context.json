@@ -1,0 +1,330 @@
+{
+  "_instructions": "FILL IN THE COORDINATES YOU DON'T KNOW BY: 1) Go to Google Maps, 2) Right-click on the location, 3) Click the coordinates to copy them, 4) Paste here as [lat, lng]",
+  
+  "schools": [
+    {
+      "name": "Colegio de San Juan de Letran Calamba",
+      "lat": 14.1892,
+      "lng": 121.1650,
+      "address": "Ipil-Ipil Street, Barangay Bucal",
+      "dismissal_hours": [11, 12, 16, 17, 18],
+      "friday_dismissal_hours": [17, 18, 19, 20],
+      "impact_radius_m": 400,
+      "delay_multiplier": 1.5,
+      "notes": "Heavy traffic on Fridays 5-8 PM connecting to Manila S Road near Jollibee"
+    },
+    {
+      "name": "Calamba Doctors' College",
+      "lat": 14.2096,
+      "lng": 121.1653,
+      "address": "Km 49 National Highway, Parian",
+      "dismissal_hours": [11, 12, 16, 17],
+      "friday_dismissal_hours": [16, 17, 18],
+      "impact_radius_m": 350,
+      "delay_multiplier": 1.4,
+      "notes": "Near Calamba Doctors Hospital on National Highway"
+    },
+    {
+      "name": "STI College Calamba",
+      "lat": 14.202192950094364,
+      "lng": 121.15853624791727,
+      "address": "Barangay Uno, National Highway",
+      "dismissal_hours": [11, 12, 17, 18],
+      "friday_dismissal_hours": [17, 18],
+      "impact_radius_m": 250,
+      "delay_multiplier": 1.3,
+      "notes": "FILL IN EXACT COORDINATES - Along National Highway"
+    },
+    {
+      "name": "Lyceum of the Philippines University - Laguna",
+      "lat": 14.159481519474888,
+      "lng": 121.1379333968646,
+      "address": "FILL IN ADDRESS",
+      "dismissal_hours": [11, 12, 17, 18],
+      "friday_dismissal_hours": [17, 18, 19],
+      "impact_radius_m": 350,
+      "delay_multiplier": 1.4,
+      "notes": "FILL IN COORDINATES from Google Maps"
+    },
+    {
+      "name": "University of Perpetual Help - Calamba",
+      "lat": 14.21395526659942,
+      "lng": 121.13693934339466,
+      "address": "FILL IN ADDRESS",
+      "dismissal_hours": [11, 12, 17, 18],
+      "friday_dismissal_hours": [17, 18, 19],
+      "impact_radius_m": 350,
+      "delay_multiplier": 1.4,
+      "notes": "FILL IN COORDINATES from Google Maps"
+    }
+  ],
+
+  "malls_commercial": [
+    {
+      "name": "SM City Calamba",
+      "lat": 14.2034,
+      "lng": 121.1551,
+      "address": "Real, Calamba",
+      "peak_hours": [17, 18, 19, 20, 21],
+      "weekend_peak_hours": [11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+      "impact_radius_m": 500,
+      "delay_multiplier": 1.4,
+      "friday_multiplier": 1.6,
+      "weekend_multiplier": 1.5,
+      "notes": "Major mall, very heavy traffic especially Friday evenings and weekends"
+    },
+    {
+      "name": "Waltermart Calamba",
+      "lat": 0,
+      "lng": 0,
+      "address": "FILL IN ADDRESS",
+      "peak_hours": [17, 18, 19],
+      "weekend_peak_hours": [10, 11, 12, 13, 14, 15, 16, 17, 18],
+      "impact_radius_m": 300,
+      "delay_multiplier": 1.25,
+      "notes": "FILL IN COORDINATES from Google Maps"
+    },
+    {
+      "name": "Calamba Public Market",
+      "lat": 14.2050,
+      "lng": 121.1580,
+      "address": "Near City Hall",
+      "peak_hours": [6, 7, 8, 9, 17, 18],
+      "weekend_peak_hours": [6, 7, 8, 9, 10],
+      "impact_radius_m": 250,
+      "delay_multiplier": 1.3,
+      "notes": "Morning rush for market vendors and buyers"
+    }
+  ],
+
+  "traffic_lights": [
+    {
+      "name": "Crossing Intersection Main stoplight",
+      "lat": 14.196909341101565,
+      "lng": 121.16256046151001,
+      "avg_wait_seconds": 200,
+      "impact_radius_m": 600,
+      "notes": "Main intersection stoplight na mahaba"
+    },
+    {
+      "name": "Letran-Manila S Road Junction (Jollibee)",
+      "lat": 14.1895,
+      "lng": 121.1660,
+      "avg_wait_seconds": 120,
+      "impact_radius_m": 150,
+      "notes": "Critical intersection - Letran exit to Manila S Road, very congested during dismissal"
+    },
+    {
+      "name": "SM Calamba Main Intersection",
+      "lat": 14.2040,
+      "lng": 121.1555,
+      "avg_wait_seconds": 90,
+      "impact_radius_m": 200,
+      "notes": "Main entrance/exit of SM Calamba"
+    },
+    {
+      "name": "Crossing Junction / Parian",
+      "lat": 14.2100,
+      "lng": 121.1650,
+      "avg_wait_seconds": 90,
+      "impact_radius_m": 150,
+      "notes": "Major junction in Parian area - VERIFY COORDINATES"
+    },
+    {
+      "name": "Calamba City Hall Intersection",
+      "lat": 0,
+      "lng": 0,
+      "avg_wait_seconds": 60,
+      "impact_radius_m": 100,
+      "notes": "FILL IN COORDINATES"
+    },
+    {
+      "name": "Turbina Junction",
+      "lat": 0,
+      "lng": 0,
+      "avg_wait_seconds": 75,
+      "impact_radius_m": 150,
+      "notes": "FILL IN COORDINATES - Truck route intersection"
+    }
+  ],
+
+  "bottlenecks": [
+    {
+      "name": "Ipil-Ipil Street to Manila S Road",
+      "lat": 14.1895,
+      "lng": 121.1660,
+      "description": "Letran school traffic merging to main road",
+      "impact_radius_m": 300,
+      "delay_multiplier": 1.6,
+      "peak_hours": [7, 8, 17, 18, 19],
+      "friday_peak_hours": [17, 18, 19, 20],
+      "friday_multiplier": 1.8,
+      "notes": "Your main concern - very heavy on Fridays 5-8 PM"
+    },
+    {
+      "name": "SM Calamba - Maharlika Highway Area",
+      "lat": 14.2034,
+      "lng": 121.1551,
+      "description": "Mall traffic converging on highway",
+      "impact_radius_m": 500,
+      "delay_multiplier": 1.4,
+      "peak_hours": [17, 18, 19, 20],
+      "friday_peak_hours": [17, 18, 19, 20, 21],
+      "friday_multiplier": 1.7,
+      "notes": "Especially bad during sales, holidays, and Friday nights"
+    },
+    {
+      "name": "Parian Jeepney Terminal",
+      "lat": 14.2100,
+      "lng": 121.1653,
+      "description": "Jeepney loading/unloading zone",
+      "impact_radius_m": 200,
+      "delay_multiplier": 1.3,
+      "peak_hours": [7, 8, 9, 17, 18, 19],
+      "notes": "Constant stopping of PUVs causes traffic - VERIFY COORDINATES"
+    },
+    {
+      "name": "Turbina Industrial Area",
+      "lat": 14.2331,
+      "lng": 121.1653,
+      "description": "Truck route to LIMA/FPIP industrial zones",
+      "impact_radius_m": 400,
+      "delay_multiplier": 1.25,
+      "peak_hours": [6, 7, 8, 9, 17, 18],
+      "notes": "Heavy truck traffic morning and evening - VERIFY COORDINATES"
+    },
+    {
+      "name": "Halang-Real Junction",
+      "lat": 0,
+      "lng": 0,
+      "description": "FILL IN DESCRIPTION",
+      "impact_radius_m": 250,
+      "delay_multiplier": 1.2,
+      "peak_hours": [7, 8, 17, 18],
+      "notes": "FILL IN COORDINATES and details"
+    }
+  ],
+
+  "hospitals": [
+    {
+      "name": "Calamba Doctors Hospital",
+      "lat": 14.2096,
+      "lng": 121.1665,
+      "address": "KM 49 National Highway, Parian",
+      "impact_radius_m": 200,
+      "delay_multiplier": 1.15,
+      "notes": "Emergency vehicles may cause brief delays"
+    },
+    {
+      "name": "Calamba Medical Center",
+      "lat": 0,
+      "lng": 0,
+      "address": "FILL IN ADDRESS",
+      "impact_radius_m": 150,
+      "delay_multiplier": 1.1,
+      "notes": "FILL IN COORDINATES"
+    }
+  ],
+
+  "churches": [
+    {
+      "name": "St. John the Baptist Parish Church",
+      "lat": 14.2115,
+      "lng": 121.1650,
+      "address": "Poblacion, Calamba",
+      "sunday_mass_hours": [6, 7, 8, 9, 10, 11, 16, 17, 18],
+      "impact_radius_m": 250,
+      "sunday_multiplier": 1.4,
+      "notes": "Heavy traffic during Sunday masses - VERIFY COORDINATES"
+    }
+  ],
+
+  "calamba_peak_patterns": {
+    "weekday_morning_rush": {
+      "start_hour": 7,
+      "end_hour": 9,
+      "multiplier": 1.35,
+      "description": "School + work traffic"
+    },
+    "weekday_lunch": {
+      "start_hour": 11,
+      "end_hour": 13,
+      "multiplier": 1.15,
+      "description": "Light increase during lunch"
+    },
+    "school_dismissal": {
+      "start_hour": 16,
+      "end_hour": 17,
+      "multiplier": 1.45,
+      "description": "Elementary and some HS dismissal"
+    },
+    "weekday_evening_rush": {
+      "start_hour": 17,
+      "end_hour": 19,
+      "multiplier": 1.5,
+      "description": "Work + college dismissal"
+    },
+    "friday_evening_special": {
+      "start_hour": 17,
+      "end_hour": 21,
+      "multiplier": 1.7,
+      "description": "FRIDAYS are especially heavy - mall + school + weekend travelers"
+    },
+    "saturday_daytime": {
+      "start_hour": 10,
+      "end_hour": 18,
+      "multiplier": 1.3,
+      "description": "Mall and market traffic"
+    },
+    "sunday_morning": {
+      "start_hour": 7,
+      "end_hour": 12,
+      "multiplier": 1.25,
+      "description": "Church traffic"
+    }
+  },
+
+  "special_events": {
+    "fiesta_month": {
+      "month": 6,
+      "multiplier": 1.3,
+      "notes": "June - Calamba fiesta season"
+    },
+    "christmas_season": {
+      "start_month": 11,
+      "end_month": 12,
+      "multiplier": 1.4,
+      "notes": "Nov-Dec heavy mall traffic"
+    },
+    "holy_week": {
+      "multiplier": 0.7,
+      "notes": "Lower traffic during Lent exodus"
+    },
+    "enrollment_season": {
+      "months": [6, 7, 8],
+      "multiplier": 1.2,
+      "notes": "June-Aug school enrollment causes extra traffic near schools"
+    }
+  },
+
+  "road_specific_factors": {
+    "manila_south_road": {
+      "base_multiplier": 1.2,
+      "rush_hour_multiplier": 1.5,
+      "notes": "Main highway - always busier than average"
+    },
+    "maharlika_highway": {
+      "base_multiplier": 1.25,
+      "rush_hour_multiplier": 1.6,
+      "truck_hours": [6, 7, 8, 9, 18, 19, 20],
+      "truck_multiplier": 1.3,
+      "notes": "National highway with heavy truck traffic"
+    },
+    "ipil_ipil_street": {
+      "base_multiplier": 1.1,
+      "school_dismissal_multiplier": 1.7,
+      "friday_evening_multiplier": 2.0,
+      "notes": "Letran area - your specific concern"
+    }
+  }
+}
