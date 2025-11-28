@@ -22,6 +22,7 @@ export default function HomeMapWithSidebar() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [selectedDisruption, setSelectedDisruption] = useState(null)
+  const [expandedDisruptionId, setExpandedDisruptionId] = useState(null) // NEW: Track expanded disruption
   
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
@@ -779,6 +780,28 @@ export default function HomeMapWithSidebar() {
     }
   }
 
+  // NEW: Toggle expanded details for a disruption
+  const toggleDisruptionDetails = (disruptionId, e) => {
+    e.stopPropagation() // Prevent triggering the card click
+    setExpandedDisruptionId(prev => prev === disruptionId ? null : disruptionId)
+  }
+
+  // NEW: Format date and time nicely
+  const formatDateTime = (dateString) => {
+    if (!dateString) return 'N/A'
+    try {
+      return new Date(dateString).toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    } catch (e) {
+      return 'Invalid date'
+    }
+  }
+
   return (
     <div className="relative h-full w-full">
       {/* ============ SEARCH BAR WITH TRULY SMOOTH AUTOCOMPLETE ============ */}
@@ -966,85 +989,183 @@ export default function HomeMapWithSidebar() {
             </div>
           )}
 
+          {/* ============ MODIFIED DISRUPTION CARDS WITH VIEW DETAILS ============ */}
           {!loading && !error && disruptions.length > 0 && (
             <div className="space-y-4">
               {disruptions
                 .filter(d => d.status === 'active' || d.status === 'upcoming')
-                .map((disruption) => (
-                <div 
-                  key={disruption.id} 
-                  className={`bg-white border rounded-lg p-4 hover:shadow-md transition cursor-pointer ${
-                    selectedDisruption?.id === disruption.id ? 'ring-2 ring-blue-500' : ''
-                  }`}
-                  onClick={() => handleViewOnMap(disruption)}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
-                      <span>{disruption.status === 'upcoming' ? '📅' : getTypeIcon(disruption.type)}</span>
-                      {disruption.title}
-                    </h3>
-                    {disruption.realtime && (
-                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded font-semibold">LIVE</span>
-                    )}
-                  </div>
+                .map((disruption) => {
+                  const isExpanded = expandedDisruptionId === disruption.id
+                  
+                  return (
+                    <div 
+                      key={disruption.id} 
+                      className={`bg-white border rounded-lg p-4 hover:shadow-md transition ${
+                        selectedDisruption?.id === disruption.id ? 'ring-2 ring-blue-500' : ''
+                      }`}
+                    >
+                      {/* Card Header - clickable to view on map */}
+                      <div 
+                        className="cursor-pointer"
+                        onClick={() => handleViewOnMap(disruption)}
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
+                            <span>{disruption.status === 'upcoming' ? '📅' : getTypeIcon(disruption.type)}</span>
+                            {disruption.title}
+                          </h3>
+                          {disruption.realtime && (
+                            <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded font-semibold">LIVE</span>
+                          )}
+                        </div>
 
-                  <p className="text-sm text-gray-600 mb-2">📍 {disruption.location}</p>
+                        <p className="text-sm text-gray-600 mb-2">📍 {disruption.location}</p>
 
-                  <div className="flex gap-2 mb-3">
-                    <span className={`text-xs px-2 py-1 rounded font-semibold ${
-                      disruption.status === 'upcoming' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
-                    }`}>
-                      {disruption.status === 'upcoming' ? 'Upcoming' : 'Active'}
-                    </span>
-                    {disruption.status === 'active' && (
-                      <span className={`text-xs px-2 py-1 rounded font-semibold ${
-                        disruption.congestion_level === 'Heavy' ? 'bg-red-100 text-red-700' :
-                        disruption.congestion_level === 'Moderate' ? 'bg-yellow-100 text-yellow-700' :
-                        'bg-green-100 text-green-700'
-                      }`}>
-                        {disruption.congestion_level}
-                      </span>
-                    )}
-                  </div>
+                        <div className="flex gap-2 mb-3">
+                          <span className={`text-xs px-2 py-1 rounded font-semibold ${
+                            disruption.status === 'upcoming' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
+                          }`}>
+                            {disruption.status === 'upcoming' ? 'Upcoming' : 'Active'}
+                          </span>
+                          {disruption.status === 'active' && (
+                            <span className={`text-xs px-2 py-1 rounded font-semibold ${
+                              disruption.congestion_level === 'Heavy' ? 'bg-red-100 text-red-700' :
+                              disruption.congestion_level === 'Moderate' ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-green-100 text-green-700'
+                            }`}>
+                              {disruption.congestion_level}
+                            </span>
+                          )}
+                        </div>
 
-                  <div className="bg-gray-50 rounded-lg p-3 mb-3">
-                    <p className="text-sm text-gray-700">
-                      ⏱️ <strong>Delay:</strong> +{disruption.expected_delay} min
-                    </p>
-                    {disruption.status === 'active' && disruption.start_date && disruption.end_date && (
-                      <>
-                        <p className="text-sm text-gray-700 mt-1">
-                          📅 <strong>Started:</strong> {new Date(disruption.start_date).toLocaleString('en-US', {
-                            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                          })}
-                        </p>
-                        <p className="text-sm text-gray-700 mt-1">
-                          🏁 <strong>Ends:</strong> {new Date(disruption.end_date).toLocaleString('en-US', {
-                            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                          })}
-                        </p>
-                      </>
-                    )}
-                    {disruption.status === 'upcoming' && disruption.start_date && (
-                      <p className="text-sm text-gray-700 mt-1">
-                        📅 <strong>Starts:</strong> {new Date(disruption.start_date).toLocaleString('en-US', {
-                          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                        })}
-                      </p>
-                    )}
-                  </div>
+                        <div className="bg-gray-50 rounded-lg p-3 mb-3">
+                          <p className="text-sm text-gray-700">
+                            ⏱️ <strong>Delay:</strong> +{disruption.expected_delay} min
+                          </p>
+                          {disruption.status === 'active' && disruption.start_date && disruption.end_date && (
+                            <>
+                              <p className="text-sm text-gray-700 mt-1">
+                                📅 <strong>Started:</strong> {new Date(disruption.start_date).toLocaleString('en-US', {
+                                  month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                })}
+                              </p>
+                              <p className="text-sm text-gray-700 mt-1">
+                                🏁 <strong>Ends:</strong> {new Date(disruption.end_date).toLocaleString('en-US', {
+                                  month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                })}
+                              </p>
+                            </>
+                          )}
+                          {disruption.status === 'upcoming' && disruption.start_date && (
+                            <p className="text-sm text-gray-700 mt-1">
+                              📅 <strong>Starts:</strong> {new Date(disruption.start_date).toLocaleString('en-US', {
+                                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                              })}
+                            </p>
+                          )}
+                        </div>
+                      </div>
 
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleViewOnMap(disruption)
-                    }}
-                    className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition font-semibold text-sm"
-                  >
-                    View on Map
-                  </button>
-                </div>
-              ))}
+                      {/* NEW: Expandable Details Section */}
+                        {isExpanded && (
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-3">
+                            <h4 className="font-semibold text-sm text-blue-900 mb-4 flex items-center gap-2">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              Full Details
+                            </h4>
+                            
+                            <div className="space-y-3 text-xs">
+                              {/* Disruption Period */}
+                              <div>
+                                <span className="font-semibold text-gray-700 block mb-1">📅 Disruption Period</span>
+                                <p className="text-gray-800 pl-5">
+                                  {formatDateTime(disruption.start_date)} – {formatDateTime(disruption.end_date)}
+                                </p>
+                              </div>
+
+                              {/* Type */}
+                              <div>
+                                <span className="font-semibold text-gray-700 block mb-1">🏷️ Type</span>
+                                <p className="text-gray-800 pl-5 capitalize">{disruption.type || 'Not specified'}</p>
+                              </div>
+
+                              {/* Delay Information */}
+                              <div>
+                                <span className="font-semibold text-gray-700 block mb-1">⏱️ Additional Delays</span>
+                                <div className="pl-5 space-y-1">
+                                  <p className="text-gray-800">
+                                    <span className="font-medium">Hourly:</span> {disruption.hourly_delay ? `+${disruption.hourly_delay} min/hour` : 
+                                    disruption.expected_delay ? `~+${Math.round(disruption.expected_delay / 8)} min/hour (estimated)` : 
+                                    'N/A'}
+                                  </p>
+                                  <p className="text-gray-800">
+                                    <span className="font-medium">Daily:</span> {disruption.daily_delay ? `+${disruption.daily_delay} min/day` : 
+                                    disruption.expected_delay ? `~+${Math.round(disruption.expected_delay * 3)} min/day (estimated)` : 
+                                    'N/A'}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Description */}
+                              {disruption.description && (
+                                <div>
+                                  <span className="font-semibold text-gray-700 block mb-1">📝 Description</span>
+                                  <p className="text-gray-800 pl-5">{disruption.description}</p>
+                                </div>
+                              )}
+
+                              {/* Real-Time Data */}
+                              {disruption.realtime && (
+                                <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-2">
+                                  <span className="font-semibold text-green-700 flex items-center gap-2 mb-2">
+                                    <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                                    Real-Time Data
+                                  </span>
+                                  <div className="pl-5 space-y-1">
+                                    <p className="text-gray-800">
+                                      <span className="font-medium">Current Speed:</span> {Math.round(disruption.realtime.current_speed)} km/h
+                                    </p>
+                                    {disruption.realtime.congestion_ratio && (
+                                      <p className="text-gray-800">
+                                        <span className="font-medium">Congestion Ratio:</span> {disruption.realtime.congestion_ratio.toFixed(2)}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleViewOnMap(disruption)
+                          }}
+                          className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition font-semibold text-sm"
+                        >
+                          View on Map
+                        </button>
+                        
+                        {/* NEW: View Details Button */}
+                        <button
+                          onClick={(e) => toggleDisruptionDetails(disruption.id, e)}
+                          className={`flex-1 py-2 rounded-lg transition font-semibold text-sm ${
+                            isExpanded 
+                              ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          {isExpanded ? 'Hide Details' : 'View Details'}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
             </div>
           )}
 
