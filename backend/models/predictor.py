@@ -364,52 +364,88 @@ class TrafficPredictor:
             }
         }
     
-    def estimate_delay(self, severity, base_travel_time_minutes, road_length_km, impact_factor=0.6, realtime_speed_factor=None):
+    def estimate_delay(self, severity, base_travel_time_minutes, road_length_km, 
+                   impact_factor=0.6, realtime_speed_factor=None):
         """
-        Calculate delay with clean rounding
+        Calculate delay using BPR (Bureau of Public Roads) function
+        
+        Reference: Bureau of Public Roads (1964) "Traffic Assignment Manual"
+        Extended by Davidson (1966) and widely used in VISUM, TransCAD, etc.
+        
+        BPR Formula: t = t₀ * [1 + α * (V/C)^β]
+        Where:
+        - t₀ = free-flow travel time
+        - V/C = volume-to-capacity ratio
+        - α = 0.15 (standard), β = 4 (standard for urban roads)
+        
+        Severity mapping to V/C ratio:
+        - Light (0-0.5): V/C = 0.4-0.7 (LOS B-C)
+        - Moderate (0.5-1.5): V/C = 0.7-0.95 (LOS D-E)
+        - Heavy (1.5-3.0): V/C = 0.95-1.2 (LOS F)
         """
         
         # Validate inputs
         if base_travel_time_minutes <= 0:
-            base_travel_time_minutes = 10
+            base_travel_time_minutes = (road_length_km / 40) * 60  # Assume 40 km/h default
         if road_length_km <= 0:
             road_length_km = 1.0
         
-        # Delay multipliers
-        delay_multipliers = {0: 1.1, 1: 1.5, 2: 2.5}
-        
-        # Handle float severity
+        # Map severity to Volume/Capacity ratio
+        # Based on HCM 2016 Level of Service thresholds
         if isinstance(severity, float):
-            severity_key = 0 if severity < 0.5 else (1 if severity < 1.5 else 2)
+            if severity < 0.5:
+                v_c_ratio = 0.40 + (severity * 0.6)  # 0.4-0.7 (LOS B-C)
+            elif severity < 1.5:
+                v_c_ratio = 0.70 + ((severity - 0.5) * 0.25)  # 0.7-0.95 (LOS D-E)
+            else:
+                v_c_ratio = 0.95 + ((severity - 1.5) * 0.167)  # 0.95-1.2 (LOS F)
+                v_c_ratio = min(v_c_ratio, 1.20)  # Cap at 1.2
         else:
-            severity_key = severity
+            # Integer severity (0, 1, 2)
+            v_c_map = {0: 0.55, 1: 0.82, 2: 1.08}
+            v_c_ratio = v_c_map.get(severity, 0.82)
         
-        multiplier = delay_multipliers.get(severity_key, 1.5)
-        adjusted_multiplier = 1 + (multiplier - 1) * impact_factor
+        # Apply disruption impact factor
+        v_c_ratio = v_c_ratio * (1 + impact_factor * 0.5)
         
-        # Apply real-time adjustment
+        # BPR function parameters
+        alpha = 0.15  # Standard BPR coefficient
+        beta = 4      # Standard BPR exponent (urban roads)
+        
+        # Calculate travel time multiplier
+        if v_c_ratio <= 1.0:
+            # Standard BPR for under-capacity conditions
+            multiplier = 1 + alpha * (v_c_ratio ** beta)
+        else:
+            # Over-capacity: use hypercongestion model
+            # Reference: Daganzo (2007) "Urban Gridlock"
+            multiplier = 1 + alpha + (v_c_ratio - 1.0) * 2.5
+        
+        # Apply real-time adjustment if available
         if realtime_speed_factor is not None and realtime_speed_factor > 0:
-            realtime_adjustment = 2 - realtime_speed_factor
-            adjusted_multiplier = (adjusted_multiplier * 0.7) + (realtime_adjustment * 0.3)
-            adjusted_multiplier = max(1.0, min(adjusted_multiplier, 3.0))
+            # Blend predicted and real-time (70/30 weight)
+            realtime_multiplier = 2 - realtime_speed_factor
+            realtime_multiplier = max(1.0, min(realtime_multiplier, 3.0))
+            multiplier = (multiplier * 0.70) + (realtime_multiplier * 0.30)
         
-        expected_travel_time = base_travel_time_minutes * adjusted_multiplier
+        # Calculate times
+        expected_travel_time = base_travel_time_minutes * multiplier
         additional_delay = expected_travel_time - base_travel_time_minutes
         additional_delay_rounded = round(additional_delay)
         
-        # Minimum delays
-        if severity_key == 0 and additional_delay_rounded < 1:
+        # Apply minimum realistic delays per severity
+        if severity < 0.5 and additional_delay_rounded < 1:
             additional_delay_rounded = 1
-        elif severity_key == 1 and additional_delay_rounded < 3:
-            additional_delay_rounded = 3
-        elif severity_key == 2 and additional_delay_rounded < 5:
+        elif 0.5 <= severity < 1.5 and additional_delay_rounded < 2:
+            additional_delay_rounded = 2
+        elif severity >= 1.5 and additional_delay_rounded < 5:
             additional_delay_rounded = 5
         
         # Calculate speeds
-        normal_speed = (road_length_km / base_travel_time_minutes) * 60 if base_travel_time_minutes > 0 else 50
-        reduced_speed = (road_length_km / expected_travel_time) * 60 if expected_travel_time > 0 else normal_speed * 0.5
+        normal_speed = (road_length_km / base_travel_time_minutes) * 60
+        reduced_speed = (road_length_km / expected_travel_time) * 60
         
-        if realtime_speed_factor is not None and realtime_speed_factor > 0:
+        if realtime_speed_factor is not None:
             reduced_speed = max(5, reduced_speed * realtime_speed_factor)
         
         speed_reduction = normal_speed - reduced_speed
@@ -422,5 +458,7 @@ class TrafficPredictor:
             'normal_speed_kmh': round(normal_speed, 1),
             'reduced_speed_kmh': round(reduced_speed, 1),
             'speed_reduction_kmh': round(speed_reduction, 1),
+            'v_c_ratio': round(v_c_ratio, 2),
+            'bpr_multiplier': round(multiplier, 2),
             'realtime_adjusted': realtime_speed_factor is not None,
         }
