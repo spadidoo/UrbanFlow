@@ -967,7 +967,7 @@ export default function DashboardPage() {
                   Recent Activity
                 </h2>
                 <button
-                  onClick={() => router.push("/planner/saved-scenarios")}
+                  onClick={() => router.push("/data")}
                   className="text-orange-500 text-sm font-semibold hover:underline"
                 >
                   View all
@@ -1039,7 +1039,7 @@ export default function DashboardPage() {
 
               {!loading && !error && savedSimulations.length > 3 && (
                 <button
-                  onClick={() => router.push("/planner/saved-scenarios")}
+                  onClick={() => router.push("/data")}
                   className="w-full mt-4 text-orange-500 text-sm font-semibold hover:underline"
                 >
                   View all {savedSimulations.length} simulations →
@@ -1337,9 +1337,12 @@ export default function DashboardPage() {
                     Generate Report
                   </span>
                 </button>
-                <button className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition text-left">
+                <button 
+                  onClick={() => router.push("/settings")}
+                  className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition text-left">
                   <span className="text-xl">⚙️</span>
-                  <span className="font-medium text-gray-700">Settings</span>
+                  <span className="font-medium text-gray-700">
+                    Settings</span>
                 </button>
               </div>
             </div>
