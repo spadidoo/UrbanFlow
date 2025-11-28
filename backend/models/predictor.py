@@ -3,12 +3,16 @@ import pandas as pd
 import numpy as np
 import os
 from datetime import datetime
+import json
 
 class TrafficPredictor:
     """
     Handles traffic congestion predictions using trained Random Forest model
     """
-    
+    """
+        road_data: List or DataFrame containing road segments.
+        Expected keys: 'road_id', 'start_node_id', 'end_node_id', 'length_meters'
+     """
     def __init__(self):
         """Load the trained model and feature names"""
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -21,6 +25,16 @@ class TrafficPredictor:
         
         info_path = os.path.join(current_dir, 'model_info.pkl')
         self.model_info = joblib.load(info_path)
+
+        # Load Calamba context data for location-aware predictions
+        context_path = os.path.join(current_dir, 'data', 'calamba_context.json')
+        if os.path.exists(context_path):
+            with open(context_path, 'r') as f:
+                self.calamba_context = json.load(f)
+            print(f"✓ Calamba context loaded ({len(self.calamba_context.get('schools', []))} schools, {len(self.calamba_context.get('bottlenecks', []))} bottlenecks)")
+        else:
+            self.calamba_context = None
+            print(f"⚠ Calamba context not found at {context_path}")
         
         print(f"✓ Model loaded successfully")
         print(f"  Accuracy: {self.model_info['accuracy']*100:.2f}%")
@@ -408,6 +422,10 @@ class TrafficPredictor:
         # Apply disruption impact factor
         v_c_ratio = v_c_ratio * (1 + impact_factor * 0.5)
         
+        # Apply location-based multiplier if coordinates provided
+        location_multiplier = getattr(self, '_current_location_multiplier', 1.0)
+        v_c_ratio = v_c_ratio * location_multiplier
+        
         # BPR function parameters
         alpha = 0.15  # Standard BPR coefficient
         beta = 4      # Standard BPR exponent (urban roads)
@@ -462,3 +480,134 @@ class TrafficPredictor:
             'bpr_multiplier': round(multiplier, 2),
             'realtime_adjusted': realtime_speed_factor is not None,
         }
+    
+    def get_location_multiplier(self, lat, lng, hour, day_of_week, is_friday=False):
+        """
+        Calculate delay multiplier based on proximity to schools, bottlenecks, traffic lights, etc.
+        
+        Args:
+            lat, lng: Coordinates of the disruption
+            hour: Hour of day (0-23)
+            day_of_week: 0=Monday, 6=Sunday
+            is_friday: Boolean for Friday special handling
+        
+        Returns:
+            float: Multiplier to apply to delay (1.0 = no change)
+        """
+        if not self.calamba_context:
+            return 1.0
+        
+        multiplier = 1.0
+        
+        def haversine_distance(lat1, lng1, lat2, lng2):
+            """Calculate distance in meters between two coordinates"""
+            from math import radians, sin, cos, sqrt, atan2
+            R = 6371000  # Earth's radius in meters
+            lat1, lng1, lat2, lng2 = map(radians, [lat1, lng1, lat2, lng2])
+            dlat = lat2 - lat1
+            dlng = lng2 - lng1
+            a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlng/2)**2
+            c = 2 * atan2(sqrt(a), sqrt(1-a))
+            return R * c
+        
+        # Check proximity to schools
+        for school in self.calamba_context.get('schools', []):
+            if school.get('lat', 0) == 0:
+                continue
+            distance = haversine_distance(lat, lng, school['lat'], school['lng'])
+            if distance <= school.get('impact_radius_m', 300):
+                # Check if it's dismissal time
+                dismissal_hours = school.get('friday_dismissal_hours' if is_friday else 'dismissal_hours', [])
+                if hour in dismissal_hours:
+                    school_mult = school.get('delay_multiplier', 1.3)
+                    multiplier = max(multiplier, school_mult)
+        
+        # Check proximity to bottlenecks
+        for bottleneck in self.calamba_context.get('bottlenecks', []):
+            if bottleneck.get('lat', 0) == 0:
+                continue
+            distance = haversine_distance(lat, lng, bottleneck['lat'], bottleneck['lng'])
+            if distance <= bottleneck.get('impact_radius_m', 300):
+                peak_hours = bottleneck.get('friday_peak_hours' if is_friday else 'peak_hours', [])
+                if hour in peak_hours:
+                    bn_mult = bottleneck.get('friday_multiplier' if is_friday else 'delay_multiplier', 1.3)
+                    multiplier = max(multiplier, bn_mult)
+        
+        # Check proximity to malls
+        for mall in self.calamba_context.get('malls_commercial', []):
+            if mall.get('lat', 0) == 0:
+                continue
+            distance = haversine_distance(lat, lng, mall['lat'], mall['lng'])
+            if distance <= mall.get('impact_radius_m', 400):
+                is_weekend = day_of_week >= 5
+                peak_hours = mall.get('weekend_peak_hours' if is_weekend else 'peak_hours', [])
+                if hour in peak_hours:
+                    if is_friday:
+                        mall_mult = mall.get('friday_multiplier', 1.4)
+                    elif is_weekend:
+                        mall_mult = mall.get('weekend_multiplier', 1.3)
+                    else:
+                        mall_mult = mall.get('delay_multiplier', 1.2)
+                    multiplier = max(multiplier, mall_mult)
+        
+        # Check proximity to traffic lights (adds base delay)
+        for light in self.calamba_context.get('traffic_lights', []):
+            if light.get('lat', 0) == 0:
+                continue
+            distance = haversine_distance(lat, lng, light['lat'], light['lng'])
+            if distance <= light.get('impact_radius_m', 100):
+                # Traffic lights add ~10-20% during peak hours
+                if 7 <= hour <= 9 or 16 <= hour <= 19:
+                    multiplier = max(multiplier, multiplier * 1.15)
+        
+        # Apply Calamba-wide peak patterns
+        peak_patterns = self.calamba_context.get('calamba_peak_patterns', {})
+        
+        if is_friday and 17 <= hour <= 21:
+            friday_pattern = peak_patterns.get('friday_evening_special', {})
+            multiplier = max(multiplier, friday_pattern.get('multiplier', 1.5))
+        elif day_of_week < 5:  # Weekday
+            if 7 <= hour <= 9:
+                multiplier = max(multiplier, peak_patterns.get('weekday_morning_rush', {}).get('multiplier', 1.3))
+            elif 17 <= hour <= 19:
+                multiplier = max(multiplier, peak_patterns.get('weekday_evening_rush', {}).get('multiplier', 1.4))
+            elif 16 <= hour <= 17:
+                multiplier = max(multiplier, peak_patterns.get('school_dismissal', {}).get('multiplier', 1.4))
+        
+        return round(multiplier, 2)
+
+    def estimate_delay_with_location(self, severity, base_travel_time_minutes, road_length_km,
+                                      impact_factor=0.6, realtime_speed_factor=None,
+                                      lat=None, lng=None, hour=None, day_of_week=None):
+        """
+        Enhanced delay estimation with location awareness.
+        
+        Args:
+            ... (same as estimate_delay)
+            lat, lng: Coordinates of disruption location
+            hour: Hour of day (0-23)
+            day_of_week: 0=Monday, 6=Sunday
+        """
+        # Calculate location multiplier if coordinates provided
+        if lat is not None and lng is not None and hour is not None:
+            is_friday = (day_of_week == 4) if day_of_week is not None else False
+            self._current_location_multiplier = self.get_location_multiplier(
+                lat, lng, hour, day_of_week or 0, is_friday
+            )
+        else:
+            self._current_location_multiplier = 1.0
+        
+        # Call original estimate_delay
+        result = self.estimate_delay(
+            severity, base_travel_time_minutes, road_length_km,
+            impact_factor, realtime_speed_factor
+        )
+        
+        # Add location info to result
+        result['location_multiplier'] = self._current_location_multiplier
+        result['location_adjusted'] = self._current_location_multiplier != 1.0
+        
+        # Reset for next call
+        self._current_location_multiplier = 1.0
+        
+        return result
