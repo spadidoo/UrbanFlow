@@ -25,7 +25,7 @@ export default function DataPage() {
   const [otpSent, setOTPSent] = useState(false);
   const [otpLoading, setOTPLoading] = useState(false);
   const [otpError, setOTPError] = useState(null);
-  const [testOTP, setTestOTP] = useState(""); // For testing only
+  const [testOTP, setTestOTP] = useState("");
 
   // Delete Confirmation Modal
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -38,24 +38,46 @@ export default function DataPage() {
 
   const userId = user?.user_id || user?.id;
 
-  // Fetch simulations on mount
+  // ============================================================
+  // 🔍 DEBUG: Log user info on mount
+  // ============================================================
   useEffect(() => {
-    fetchDisruptions();
-  }, []);
+    console.log("📊 DataPage mounted");
+    console.log("👤 Current user:", user);
+    console.log("🆔 User ID:", userId);
+  }, [user, userId]);
 
+  // ============================================================
+  // Fetch simulations on mount
+  // ============================================================
+  useEffect(() => {
+    if (userId) {
+      console.log("🔄 useEffect triggered - fetching disruptions");
+      fetchDisruptions();
+    } else {
+      console.warn("⚠️ No userId available, skipping fetch");
+      setLoading(false);
+    }
+  }, [userId]); // ✅ FIXED: Added userId as dependency
+
+  // ============================================================
+  // Fetch datasets when switching to datasets tab
+  // ============================================================
   useEffect(() => {
     if (activeTab === "datasets") {
+      console.log("📂 Switching to datasets tab");
       fetchDatasets();
     }
   }, [activeTab]);
 
+  // ============================================================
+  // Clean up stale publish payloads
+  // ============================================================
   useEffect(() => {
-    // Clean up any stale publish payloads on mount
     const storedPayload = sessionStorage.getItem('publishPayload');
     if (storedPayload) {
       try {
         const { originPage } = JSON.parse(storedPayload);
-        // Only keep if we're on the same page
         const currentPage = window.location.pathname.includes('simulation') 
           ? 'simulation' 
           : 'data';
@@ -68,23 +90,30 @@ export default function DataPage() {
     }
   }, []);
 
-
-  //fetch datasets from backend
+  // ============================================================
+  // FETCH DATASETS
+  // ============================================================
   const fetchDatasets = async () => {
     setLoading(true);
     setError(null);
+
+    console.log("📂 Fetching datasets...");
 
     try {
       const response = await fetch("http://localhost:5000/api/files/list");
       const data = await response.json();
 
+      console.log("✅ Datasets API response:", data);
+
       if (data.success) {
+        console.log(`📊 Found ${data.files.length} datasets`);
         setDatasets(data.files);
       } else {
+        console.error("❌ Datasets API error:", data.error);
         setError(data.error || "Failed to load datasets");
       }
     } catch (err) {
-      console.error("Failed to fetch datasets:", err);
+      console.error("❌ Failed to fetch datasets:", err);
       setError("Failed to connect to server");
     } finally {
       setLoading(false);
@@ -98,13 +127,11 @@ export default function DataPage() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.name.endsWith(".csv")) {
       setError("Only CSV files are allowed");
       return;
     }
 
-    // Validate file size (16MB max)
     if (file.size > 16 * 1024 * 1024) {
       setError("File size must be less than 16MB");
       return;
@@ -127,9 +154,7 @@ export default function DataPage() {
 
       if (data.success) {
         setSuccess(`✅ "${data.file.name}" uploaded successfully!`);
-        fetchDatasets(); // Refresh list
-
-        // Clear success message after 3 seconds
+        fetchDatasets();
         setTimeout(() => setSuccess(null), 3000);
       } else {
         setError(data.error || "Upload failed");
@@ -139,7 +164,6 @@ export default function DataPage() {
       setError("Failed to upload file");
     } finally {
       setUploading(false);
-      // Reset file input
       event.target.value = "";
     }
   };
@@ -157,7 +181,6 @@ export default function DataPage() {
         throw new Error("Download failed");
       }
 
-      // Create blob and download
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -203,7 +226,6 @@ export default function DataPage() {
         throw new Error("Download failed");
       }
 
-      // Create blob and download
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -251,7 +273,7 @@ export default function DataPage() {
       if (data.success) {
         setSuccess(`✅ ${data.message}`);
         setSelectedDatasets([]);
-        fetchDatasets(); // Refresh list
+        fetchDatasets();
         setTimeout(() => setSuccess(null), 3000);
       } else {
         setError(data.error || "Delete failed");
@@ -281,31 +303,60 @@ export default function DataPage() {
     }
   };
 
+  // ============================================================
+  // 🔍 FIXED: Fetch Disruptions with Detailed Logging
+  // ============================================================
   const fetchDisruptions = async () => {
     if (!userId) {
-      console.log("⚠️ No userId found");
+      console.log("⚠️ No userId found, skipping fetch");
       setLoading(false);
       return;
     }
     
     try {
       setLoading(true);
+      setError(null);
+      
       console.log("🔄 Fetching simulations for user:", userId);
+      console.log("📡 Calling API:", `http://localhost:5000/api/my-simulations?user_id=${userId}`);
+      
       const response = await api.getMySimulations(userId);
       
-      console.log("✅ API Response:", response);
+      console.log("✅ Raw API Response:", response);
+      console.log("📊 Response type:", typeof response);
+      console.log("📦 Response keys:", Object.keys(response || {}));
 
-      if (response.success) {
-        setDisruptions(response.simulations);
+      if (response && response.success) {
+        // ✅ FIXED: Backend returns 'simulations', not 'disruptions'
+        const simulationsData = response.simulations || [];
+        console.log(`✅ Found ${simulationsData.length} simulations`);
+        console.log("📋 First simulation:", simulationsData[0]);
+        
+        setDisruptions(simulationsData);
+        
+        if (simulationsData.length === 0) {
+          console.log("ℹ️ No simulations found for this user");
+        }
+      } else {
+        console.error("❌ API returned success=false:", response);
+        setError(response?.error || "Failed to load simulations");
       }
     } catch (err) {
-      console.error("Failed to fetch disruptions:", err);
+      console.error("❌ Failed to fetch disruptions:", err);
+      console.error("Error details:", {
+        message: err.message,
+        stack: err.stack
+      });
       setError("Failed to load simulations");
     } finally {
       setLoading(false);
+      console.log("✅ Fetch completed");
     }
   };
 
+  // ============================================================
+  // DISRUPTION SELECTION
+  // ============================================================
   const toggleSelect = (id) => {
     setSelectedDisruptions((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
@@ -320,50 +371,64 @@ export default function DataPage() {
     }
   };
 
-  const filteredDisruptions = disruptions.filter(
-    (d) =>
-      (filter === "all" ||
-        (filter === "published" && d.simulation_status === "published") ||
-        (filter === "draft" && d.simulation_status === "completed")) &&
-      (d.simulation_name?.toLowerCase().includes(search.toLowerCase()) ||
-        d.disruption_location?.toLowerCase().includes(search.toLowerCase()))
-  );
+  // ============================================================
+  // 🔍 FIXED: Filter Disruptions with Null Checks
+  // ============================================================
+  const filteredDisruptions = disruptions.filter((d) => {
+    // ✅ FIXED: Add null checks for all fields
+    const matchesFilter = 
+      filter === "all" ||
+      (filter === "published" && d.simulation_status === "published") ||
+      (filter === "draft" && d.simulation_status === "completed");
+    
+    const matchesSearch = 
+      (d.simulation_name || "").toLowerCase().includes(search.toLowerCase()) ||
+      (d.disruption_location || "").toLowerCase().includes(search.toLowerCase());
+    
+    return matchesFilter && matchesSearch;
+  });
 
-  // Handle Edit - Navigate to simulation page with pre-filled data
+  console.log("🔍 Filter applied:", {
+    total: disruptions.length,
+    filtered: filteredDisruptions.length,
+    filter,
+    search
+  });
+
+  // ============================================================
+  // HANDLE EDIT
+  // ============================================================
   const handleEdit = async (simulation) => {
-  try {
-    // Fetch full simulation details
-    const details = await api.getSimulation(simulation.simulation_id);
-
-    if (details) {
-      console.log("🔍 API Response:", details); // ADD THIS
+    try {
+      console.log("✏️ Editing simulation:", simulation.simulation_id);
       
-      // ❌ WRONG: If details has { success: true, simulation: {...} }
-      // sessionStorage.setItem("editSimulation", JSON.stringify(details));
+      const details = await api.getSimulation(simulation.simulation_id);
+      console.log("🔍 API Response:", details);
       
-      // ✅ CORRECT: Extract the simulation object
-      const simulationData = details.simulation || details; // ADD THIS
-      console.log("💾 Saving to session:", simulationData); // ADD THIS
-      
-      sessionStorage.setItem("editSimulation", JSON.stringify(simulationData));
-      router.push("/simulation");
+      if (details) {
+        const simulationData = details.simulation || details;
+        console.log("💾 Saving to session:", simulationData);
+        
+        sessionStorage.setItem("editSimulation", JSON.stringify(simulationData));
+        router.push("/simulation");
+      }
+    } catch (error) {
+      console.error("Error loading simulation for edit:", error);
+      alert("Failed to load simulation details");
     }
-  } catch (error) {
-    console.error("Error loading simulation for edit:", error);
-    alert("Failed to load simulation details");
-  }
-};
+  };
 
-  // Handle Publish - Show OTP Modal
+  // ============================================================
+  // HANDLE PUBLISH CLICK
+  // ============================================================
   const handlePublishClick = (simulation) => {
-     const publishPayload = {
+    const publishPayload = {
       simulation_id: simulation.simulation_id,
       user_id: userId,
       title: simulation.simulation_name || "Traffic Disruption",
       public_description: simulation.description || "View predicted traffic impact",
     };
 
-    // Store payload in sessionStorage
     sessionStorage.setItem('publishPayload', JSON.stringify({
       payload: publishPayload,
       originPage: 'data',
@@ -377,7 +442,10 @@ export default function DataPage() {
     setTestOTP("");
     setShowOTPModal(true);
   };
-  // Send OTP
+
+  // ============================================================
+  // SEND OTP
+  // ============================================================
   const handleSendOTP = async () => {
     try {
       setOTPLoading(true);
@@ -387,10 +455,8 @@ export default function DataPage() {
 
       if (response.success) {
         setOTPSent(true);
-        setTestOTP(response.otp_for_testing); // For testing only
-        alert(
-          `OTP sent to your email!)`
-        );
+        setTestOTP(response.otp_for_testing);
+        alert(`OTP sent to your email!`);
       } else {
         setOTPError(response.error || "Failed to send OTP");
       }
@@ -402,66 +468,59 @@ export default function DataPage() {
     }
   };
 
-  // Verify OTP and Publish
+  // ============================================================
+  // VERIFY OTP AND PUBLISH
+  // ============================================================
   const handleVerifyAndPublish = async () => {
-  if (!otpCode || otpCode.length !== 6) {	
-    setOTPError("Please enter a valid 6-digit OTP");
-    return;
-  }
-
-  try {
-    setOTPLoading(true);
-    setOTPError(null);
-
-    // Get stored publish payload
-    const storedData = sessionStorage.getItem('publishPayload');
-    if (!storedData) {
-      throw new Error("Publish data not found. Please try again.");
+    if (!otpCode || otpCode.length !== 6) {	
+      setOTPError("Please enter a valid 6-digit OTP");
+      return;
     }
 
-    const { payload, originPage, type } = JSON.parse(storedData);
+    try {
+      setOTPLoading(true);
+      setOTPError(null);
 
-    // Verify OTP first
-    const response = await api.verifyPublishOTP(
-      payload.simulation_id,
-      otpCode,
-      payload.title,
-      payload.public_description,
-      payload.user_id
-    );
+      const storedData = sessionStorage.getItem('publishPayload');
+      if (!storedData) {
+        throw new Error("Publish data not found. Please try again.");
+      }
 
-    if (response.success) {
-      // Clear stored payload
-      sessionStorage.removeItem('publishPayload');
-      
-      // Close modal
-      setShowOTPModal(false);
-      
-      // Show success message
-      alert(
-        `✅ ${type === 'simulation' ? 'Simulation' : 'Data'} published successfully!\n\n` +
-        `Public URL: ${response.public_url || ''}\n` +
-        `This ${type} is now visible on the public map.`
+      const { payload, originPage, type } = JSON.parse(storedData);
+
+      const response = await api.verifyPublishOTP(
+        payload.simulation_id,
+        otpCode,
+        payload.title,
+        payload.public_description,
+        payload.user_id
       );
 
-      // Update local state
-      if (originPage === 'simulation') {
-        setPublishSuccess(true);
-      } else if (originPage === 'data') {
-        fetchDisruptions(); // Refresh list
-      }
-    } else {
-      setOTPError(response.error || "Invalid OTP");
-    }
-  } catch (error) {
-    console.error("Error verifying OTP:", error);
-    setOTPError(error.message || "Verification failed. Please check your OTP.");
-  } finally {
-    setOTPLoading(false);
-  }
-};
+      if (response.success) {
+        sessionStorage.removeItem('publishPayload');
+        setShowOTPModal(false);
+        
+        alert(
+          `✅ ${type === 'simulation' ? 'Simulation' : 'Data'} published successfully!\n\n` +
+          `Public URL: ${response.public_url || ''}\n` +
+          `This ${type} is now visible on the public map.`
+        );
 
-  // Handle Unpublish
+        fetchDisruptions();
+      } else {
+        setOTPError(response.error || "Invalid OTP");
+      }
+    } catch (error) {
+      console.error("Error verifying OTP:", error);
+      setOTPError(error.message || "Verification failed. Please check your OTP.");
+    } finally {
+      setOTPLoading(false);
+    }
+  };
+
+  // ============================================================
+  // HANDLE UNPUBLISH
+  // ============================================================
   const handleUnpublish = async (simulation) => {
     if (!confirm("Are you sure you want to unpublish this simulation?")) {
       return;
@@ -485,7 +544,9 @@ export default function DataPage() {
     }
   };
 
-  // Handle Delete
+  // ============================================================
+  // HANDLE DELETE CLICK
+  // ============================================================
   const handleDeleteClick = () => {
     if (selectedDisruptions.length === 0) {
       alert("Please select simulations to delete");
@@ -494,6 +555,9 @@ export default function DataPage() {
     setShowDeleteModal(true);
   };
 
+  // ============================================================
+  // CONFIRM DELETE
+  // ============================================================
   const handleConfirmDelete = async () => {
     try {
       const response = await api.deleteSimulationsBatch(selectedDisruptions, userId);
@@ -514,14 +578,16 @@ export default function DataPage() {
     }
   };
 
+  // ============================================================
+  // UTILITY FUNCTIONS
+  // ============================================================
   const getSeverityColor = (severity) => {
     if (!severity) return "bg-gray-100 text-gray-700";
 
     const level = severity.toLowerCase();
     if (level === "light") return "bg-green-100 text-green-700";
     if (level === "moderate") return "bg-yellow-100 text-yellow-700";
-    if (level === "heavy" || level === "severe")
-      return "bg-red-100 text-red-700";
+    if (level === "heavy" || level === "severe") return "bg-red-100 text-red-700";
     return "bg-gray-100 text-gray-700";
   };
 
@@ -531,6 +597,9 @@ export default function DataPage() {
     return "bg-gray-100 text-gray-700";
   };
 
+  // ============================================================
+  // RENDER
+  // ============================================================
   return (
     <div className="min-h-screen bg-[#F5F6FA] text-gray-800">
       <PlannerNavbar />
@@ -539,6 +608,25 @@ export default function DataPage() {
         <h1 className="text-3xl font-bold text-black-600 mb-8">
           Data Management
         </h1>
+
+        {/* Success/Error Messages */}
+        {success && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+            <p className="text-green-700">{success}</p>
+          </div>
+        )}
+        
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+            <p className="text-red-700">{error}</p>
+            <button 
+              onClick={() => setError(null)} 
+              className="text-sm underline mt-2"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex gap-4 mb-6">
@@ -562,7 +650,6 @@ export default function DataPage() {
           <div className="bg-white shadow rounded-lg p-6">
             {/* Controls */}
             <div className="flex justify-between items-center mb-4">
-              {/* Filters */}
               <div className="flex gap-2">
                 {["all", "published", "draft"].map((f) => (
                   <button
@@ -579,7 +666,6 @@ export default function DataPage() {
                 ))}
               </div>
 
-              {/* Actions */}
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -623,13 +709,6 @@ export default function DataPage() {
               </div>
             )}
 
-            {/* Error State */}
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                <p className="text-red-700">{error}</p>
-              </div>
-            )}
-
             {/* Empty State */}
             {!loading && !error && filteredDisruptions.length === 0 && (
               <div className="text-center py-12">
@@ -648,200 +727,272 @@ export default function DataPage() {
             )}
 
             {/* Disruptions Grid - Grouped by Status */}
-            {!loading && !error && filteredDisruptions.length > 0 && (
-              <div className="space-y-6">
-                {/* ACTIVE SCENARIOS */}
-                {(() => {
-                  const now = new Date();
-                  const active = filteredDisruptions.filter(d => {
-                    if (!d.start_time || !d.end_time) return false;
-                    const start = new Date(d.start_time);
-                    const end = new Date(d.end_time);
-                    return start <= now && end >= now;
-                  });
-                  
-                  if (active.length === 0) return null;
-                  
-                  return (
-                    <div className="bg-gradient-to-r from-green-50 to-white rounded-lg p-6 border-l-4 border-green-500">
-                      <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-2xl font-bold text-green-700 flex items-center gap-2">
-                          <span className="text-3xl">🟢</span> 
-                          <span>Active Scenarios</span>
-                          <span className="text-lg font-normal text-green-600">({active.length})</span>
-                        </h2>
-                        <p className="text-sm text-green-600">Currently ongoing</p>
-                      </div>
-                      
-                      <div className="grid md:grid-cols-2 gap-4">
-                        {active.map((d) => (
-                          <div
-                            key={d.simulation_id}
-                            className="bg-white border-2 border-green-200 rounded-lg p-4 hover:shadow-xl transition-all transform hover:scale-[1.02]"
-                          >
-                            <div className="flex justify-between items-start mb-3">
-                              <div className="flex items-center gap-3 flex-1">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedDisruptions.includes(d.simulation_id)}
-                                  onChange={() => toggleSelect(d.simulation_id)}
-                                  className="w-5 h-5 text-green-600 rounded focus:ring-green-500"
-                                />
-                                <div className="flex-1">
-                                  <h3 className="font-bold text-lg text-gray-800">
-                                    {d.simulation_name || "Untitled Simulation"}
-                                  </h3>
-                                  <p className="text-xs text-green-600 font-semibold mt-1">● ACTIVE NOW</p>
-                                </div>
-                              </div>
-                              <div className="flex flex-col gap-1">
-                                {d.simulation_status === "published" && (
-                                  <span className="px-2 py-1 text-xs rounded-full font-semibold bg-purple-100 text-purple-700">
-                                    Published ✓
-                                  </span>
-                                )}
-                                <span className={`px-2 py-1 text-xs rounded-full font-semibold ${getSeverityColor(d.severity_level)}`}>
-                                  {d.severity_level || "N/A"}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="text-sm text-gray-600 space-y-2 mb-4 bg-gray-50 rounded p-3">
-                              <p className="flex items-center gap-2">
-                                <span className="font-semibold">📍 Location:</span> {d.disruption_location || "Unknown"}
-                              </p>
-                              <p className="flex items-center gap-2">
-                                <span className="font-semibold">🚧 Type:</span> {d.disruption_type || "N/A"}
-                              </p>
-                              {d.start_time && (
-                                <p className="flex items-center gap-2">
-                                  <span className="font-semibold">📅 Period:</span>
-                                  {new Date(d.start_time).toLocaleDateString()} - {new Date(d.end_time).toLocaleDateString()}
-                                </p>
-                              )}
-                            </div>
-
-                            <div className="flex justify-end gap-2">
-                              <button onClick={() => handleEdit(d)} className="px-4 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-semibold">
-                                ✏️ Edit
-                              </button>
-                              {d.simulation_status === "published" ? (
-                                <button onClick={() => handleUnpublish(d)} className="px-4 py-2 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition font-semibold">
-                                  🔒 Unpublish
-                                </button>
-                              ) : (
-                                <button onClick={() => handlePublishClick(d)} className="px-4 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-semibold">
-                                  🌐 Publish
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+{!loading && !error && filteredDisruptions.length > 0 && (
+  <div className="space-y-6">
+    {/* ACTIVE SCENARIOS */}
+    {(() => {
+      const now = new Date();
+      const active = filteredDisruptions.filter(d => {
+        if (!d.start_time || !d.end_time) return false;
+        const start = new Date(d.start_time);
+        const end = new Date(d.end_time);
+        return start <= now && end >= now;
+      });
+      
+      if (active.length === 0) return null;
+      
+      return (
+        <div className="bg-gradient-to-r from-green-50 to-white rounded-lg p-6 border-l-4 border-green-500">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-green-700 flex items-center gap-2">
+              <span className="text-3xl">🟢</span> 
+              <span>Active Scenarios</span>
+              <span className="text-lg font-normal text-green-600">({active.length})</span>
+            </h2>
+            <p className="text-sm text-green-600">Currently ongoing</p>
+          </div>
+          
+          <div className="grid md:grid-cols-2 gap-4">
+            {active.map((d) => (
+              <div
+                key={d.simulation_id}
+                className="bg-white border-2 border-green-200 rounded-lg p-4 hover:shadow-xl transition-all transform hover:scale-[1.02]"
+              >
+                <div className="flex justify-between items-start mb-3">
+                  <div className="flex items-center gap-3 flex-1">
+                    <input
+                      type="checkbox"
+                      checked={selectedDisruptions.includes(d.simulation_id)}
+                      onChange={() => toggleSelect(d.simulation_id)}
+                      className="w-5 h-5 text-green-600 rounded focus:ring-green-500"
+                    />
+                    <div className="flex-1">
+                      <h3 className="font-bold text-lg text-gray-800">
+                        {d.simulation_name || "Untitled Simulation"}
+                      </h3>
+                      <p className="text-xs text-green-600 font-semibold mt-1">● ACTIVE NOW</p>
                     </div>
-                  );
-                })()}
-
-                {/* UPCOMING SCENARIOS */}
-                {(() => {
-                  const now = new Date();
-                  const upcoming = filteredDisruptions.filter(d => {
-                    if (!d.start_time) return false;
-                    const start = new Date(d.start_time);
-                    return start > now;
-                  });
-                  
-                  if (upcoming.length === 0) return null;
-                  
-                  return (
-                    <div className="bg-gradient-to-r from-blue-50 to-white rounded-lg p-6 border-l-4 border-blue-500">
-                      <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-2xl font-bold text-blue-700 flex items-center gap-2">
-                          <span className="text-3xl">🔵</span> 
-                          <span>Upcoming Scenarios</span>
-                          <span className="text-lg font-normal text-blue-600">({upcoming.length})</span>
-                        </h2>
-                        <p className="text-sm text-blue-600">Scheduled for future</p>
-                      </div>
-                      
-                      <div className="grid md:grid-cols-2 gap-4">
-                        {upcoming.map((d) => (
-                          <div key={d.simulation_id} className="bg-white border-2 border-blue-200 rounded-lg p-4 hover:shadow-xl transition-all transform hover:scale-[1.02]">
-                            <div className="flex justify-between items-start mb-3">
-                              <div className="flex items-center gap-3 flex-1">
-                                <input type="checkbox" checked={selectedDisruptions.includes(d.simulation_id)} onChange={() => toggleSelect(d.simulation_id)} className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" />
-                                <div className="flex-1">
-                                  <h3 className="font-bold text-lg text-gray-800">{d.simulation_name || "Untitled Simulation"}</h3>
-                                  <p className="text-xs text-blue-600 font-semibold mt-1">
-                                    ⏰ Starts {new Date(d.start_time).toLocaleDateString()}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex flex-col gap-1">
-                                {d.simulation_status === "published" && (
-                                  <span className="px-2 py-1 text-xs rounded-full font-semibold bg-purple-100 text-purple-700">Published ✓</span>
-                                )}
-                                <span className={`px-2 py-1 text-xs rounded-full font-semibold ${getSeverityColor(d.severity_level)}`}>{d.severity_level || "N/A"}</span>
-                              </div>
-                            </div>
-
-                            <div className="text-sm text-gray-600 space-y-2 mb-4 bg-gray-50 rounded p-3">
-                              <p className="flex items-center gap-2"><span className="font-semibold">📍 Location:</span> {d.disruption_location || "Unknown"}</p>
-                              <p className="flex items-center gap-2"><span className="font-semibold">🚧 Type:</span> {d.disruption_type || "N/A"}</p>
-                              {d.start_time && (
-                                <p className="flex items-center gap-2">
-                                  <span className="font-semibold">📅 Period:</span>
-                                  {new Date(d.start_time).toLocaleDateString()} - {new Date(d.end_time).toLocaleDateString()}
-                                </p>
-                              )}
-                            </div>
-
-                            <div className="flex justify-end gap-2">
-                              <button onClick={() => handleEdit(d)} className="px-4 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-semibold">✏️ Edit</button>
-                              {d.simulation_status === "published" ? (
-                                <button onClick={() => handleUnpublish(d)} className="px-4 py-2 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition font-semibold">🔒 Unpublish</button>
-                              ) : (
-                                <button onClick={() => handlePublishClick(d)} className="px-4 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-semibold">🌐 Publish</button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* NO ACTIVE/UPCOMING SCENARIOS */}
-                {(() => {
-                  const now = new Date();
-                  const active = filteredDisruptions.filter(d => {
-                    if (!d.start_time || !d.end_time) return false;
-                    const start = new Date(d.start_time);
-                    const end = new Date(d.end_time);
-                    return start <= now && end >= now;
-                  });
-                  const upcoming = filteredDisruptions.filter(d => {
-                    if (!d.start_time) return false;
-                    return new Date(d.start_time) > now;
-                  });
-                  
-                  if (active.length === 0 && upcoming.length === 0) {
-                    return (
-                      <div className="text-center py-12 bg-gray-50 rounded-lg">
-                        <p className="text-gray-500 text-lg">📭 No active or upcoming scenarios</p>
-                        <p className="text-sm text-gray-400 mt-2">Finished scenarios are available in the Reports tab</p>
-                      </div>
-                    );
-                  }
-                })()}
-              </div>
-            )}
-                      </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    {d.simulation_status === "published" && (
+                      <span className="px-2 py-1 text-xs rounded-full font-semibold bg-purple-100 text-purple-700">
+                        Published ✓
+                      </span>
                     )}
+                    <span className={`px-2 py-1 text-xs rounded-full font-semibold ${getSeverityColor(d.severity_level)}`}>
+                      {d.severity_level || "N/A"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-sm text-gray-600 space-y-2 mb-4 bg-gray-50 rounded p-3">
+                  <p className="flex items-center gap-2">
+                    <span className="font-semibold">📍 Location:</span> {d.disruption_location || "Unknown"}
+                  </p>
+                  <p className="flex items-center gap-2">
+                    <span className="font-semibold">🚧 Type:</span> {d.disruption_type || "N/A"}
+                  </p>
+                  {d.start_time && (
+                    <p className="flex items-center gap-2">
+                      <span className="font-semibold">📅 Period:</span>
+                      {new Date(d.start_time).toLocaleDateString()} - {new Date(d.end_time).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => handleEdit(d)} className="px-4 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-semibold">
+                    ✏️ Edit
+                  </button>
+                  {d.simulation_status === "published" ? (
+                    <button onClick={() => handleUnpublish(d)} className="px-4 py-2 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition font-semibold">
+                      🔒 Unpublish
+                    </button>
+                  ) : (
+                    <button onClick={() => handlePublishClick(d)} className="px-4 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-semibold">
+                      🌐 Publish
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    })()}
+
+    {/* UPCOMING SCENARIOS */}
+    {(() => {
+      const now = new Date();
+      const upcoming = filteredDisruptions.filter(d => {
+        if (!d.start_time) return false;
+        const start = new Date(d.start_time);
+        return start > now;
+      });
+      
+      if (upcoming.length === 0) return null;
+      
+      return (
+        <div className="bg-gradient-to-r from-blue-50 to-white rounded-lg p-6 border-l-4 border-blue-500">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-blue-700 flex items-center gap-2">
+              <span className="text-3xl">🔵</span> 
+              <span>Upcoming Scenarios</span>
+              <span className="text-lg font-normal text-blue-600">({upcoming.length})</span>
+            </h2>
+            <p className="text-sm text-blue-600">Scheduled for future</p>
+          </div>
+          
+          <div className="grid md:grid-cols-2 gap-4">
+            {upcoming.map((d) => (
+              <div key={d.simulation_id} className="bg-white border-2 border-blue-200 rounded-lg p-4 hover:shadow-xl transition-all transform hover:scale-[1.02]">
+                <div className="flex justify-between items-start mb-3">
+                  <div className="flex items-center gap-3 flex-1">
+                    <input type="checkbox" checked={selectedDisruptions.includes(d.simulation_id)} onChange={() => toggleSelect(d.simulation_id)} className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" />
+                    <div className="flex-1">
+                      <h3 className="font-bold text-lg text-gray-800">{d.simulation_name || "Untitled Simulation"}</h3>
+                      <p className="text-xs text-blue-600 font-semibold mt-1">
+                        ⏰ Starts {new Date(d.start_time).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    {d.simulation_status === "published" && (
+                      <span className="px-2 py-1 text-xs rounded-full font-semibold bg-purple-100 text-purple-700">Published ✓</span>
+                    )}
+                    <span className={`px-2 py-1 text-xs rounded-full font-semibold ${getSeverityColor(d.severity_level)}`}>{d.severity_level || "N/A"}</span>
+                  </div>
+                </div>
+
+                <div className="text-sm text-gray-600 space-y-2 mb-4 bg-gray-50 rounded p-3">
+                  <p className="flex items-center gap-2"><span className="font-semibold">📍 Location:</span> {d.disruption_location || "Unknown"}</p>
+                  <p className="flex items-center gap-2"><span className="font-semibold">🚧 Type:</span> {d.disruption_type || "N/A"}</p>
+                  {d.start_time && (
+                    <p className="flex items-center gap-2">
+                      <span className="font-semibold">📅 Period:</span>
+                      {new Date(d.start_time).toLocaleDateString()} - {new Date(d.end_time).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => handleEdit(d)} className="px-4 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-semibold">✏️ Edit</button>
+                  {d.simulation_status === "published" ? (
+                    <button onClick={() => handleUnpublish(d)} className="px-4 py-2 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition font-semibold">🔒 Unpublish</button>
+                  ) : (
+                    <button onClick={() => handlePublishClick(d)} className="px-4 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-semibold">🌐 Publish</button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    })()}
+
+    {/* ✅ NEW: FINISHED SCENARIOS */}
+    {(() => {
+      const now = new Date();
+      const finished = filteredDisruptions.filter(d => {
+        if (!d.end_time) return false;
+        const end = new Date(d.end_time);
+        return end < now;
+      });
+      
+      if (finished.length === 0) return null;
+      
+      return (
+        <div className="bg-gradient-to-r from-gray-50 to-white rounded-lg p-6 border-l-4 border-gray-500">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-gray-700 flex items-center gap-2">
+              <span className="text-3xl">⏹️</span> 
+              <span>Finished Scenarios</span>
+              <span className="text-lg font-normal text-gray-600">({finished.length})</span>
+            </h2>
+            <p className="text-sm text-gray-600">Completed simulations</p>
+          </div>
+          
+          <div className="grid md:grid-cols-2 gap-4">
+            {finished.map((d) => (
+              <div key={d.simulation_id} className="bg-white border-2 border-gray-200 rounded-lg p-4 hover:shadow-xl transition-all transform hover:scale-[1.02]">
+                <div className="flex justify-between items-start mb-3">
+                  <div className="flex items-center gap-3 flex-1">
+                    <input type="checkbox" checked={selectedDisruptions.includes(d.simulation_id)} onChange={() => toggleSelect(d.simulation_id)} className="w-5 h-5 text-gray-600 rounded focus:ring-gray-500" />
+                    <div className="flex-1">
+                      <h3 className="font-bold text-lg text-gray-800">{d.simulation_name || "Untitled Simulation"}</h3>
+                      <p className="text-xs text-gray-600 font-semibold mt-1">
+                        ✓ Ended {new Date(d.end_time).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    {d.simulation_status === "published" && (
+                      <span className="px-2 py-1 text-xs rounded-full font-semibold bg-purple-100 text-purple-700">Published ✓</span>
+                    )}
+                    <span className={`px-2 py-1 text-xs rounded-full font-semibold ${getSeverityColor(d.severity_level)}`}>{d.severity_level || "N/A"}</span>
+                  </div>
+                </div>
+
+                <div className="text-sm text-gray-600 space-y-2 mb-4 bg-gray-50 rounded p-3">
+                  <p className="flex items-center gap-2"><span className="font-semibold">📍 Location:</span> {d.disruption_location || "Unknown"}</p>
+                  <p className="flex items-center gap-2"><span className="font-semibold">🚧 Type:</span> {d.disruption_type || "N/A"}</p>
+                  {d.start_time && (
+                    <p className="flex items-center gap-2">
+                      <span className="font-semibold">📅 Period:</span>
+                      {new Date(d.start_time).toLocaleDateString()} - {new Date(d.end_time).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => handleEdit(d)} className="px-4 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-semibold">✏️ Edit</button>
+                  {d.simulation_status === "published" ? (
+                    <button onClick={() => handleUnpublish(d)} className="px-4 py-2 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition font-semibold">🔒 Unpublish</button>
+                  ) : (
+                    <button onClick={() => handlePublishClick(d)} className="px-4 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-semibold">🌐 Publish</button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    })()}
+
+    {/* ALL EMPTY STATE */}
+    {(() => {
+      const now = new Date();
+      const active = filteredDisruptions.filter(d => {
+        if (!d.start_time || !d.end_time) return false;
+        const start = new Date(d.start_time);
+        const end = new Date(d.end_time);
+        return start <= now && end >= now;
+      });
+      const upcoming = filteredDisruptions.filter(d => {
+        if (!d.start_time) return false;
+        return new Date(d.start_time) > now;
+      });
+      const finished = filteredDisruptions.filter(d => {
+        if (!d.end_time) return false;
+        return new Date(d.end_time) < now;
+      });
+      
+      if (active.length === 0 && upcoming.length === 0 && finished.length === 0) {
+        return (
+          <div className="text-center py-12 bg-gray-50 rounded-lg">
+            <p className="text-gray-500 text-lg">📭 No simulations found</p>
+            <p className="text-sm text-gray-400 mt-2">Create your first simulation to get started</p>
+          </div>
+        );
+      }
+      return null;
+    })()}
+  </div>
+)}
+          </div>
+        )}
                
-        {/* ============================================================ */}
-        {/* DATASETS TAB - UPDATED WITH REAL FUNCTIONALITY */}
-        {/* ============================================================ */}
+        {/* DATASETS TAB */}
         {activeTab === "datasets" && (
           <div className="bg-white shadow rounded-lg p-6">
             <div className="flex justify-between items-center mb-4">
@@ -856,7 +1007,6 @@ export default function DataPage() {
               </div>
 
               <div className="flex gap-2">
-                {/* Upload Button */}
                 <label
                   className={`border border-orange-500 text-orange-600 px-4 py-1 rounded transition-all duration-300 cursor-pointer flex items-center gap-2 ${
                     uploading
@@ -883,7 +1033,6 @@ export default function DataPage() {
                   )}
                 </label>
 
-                {/* Download Selected Button */}
                 <button
                   onClick={handleDownloadMultiple}
                   disabled={selectedDatasets.length === 0}
@@ -898,7 +1047,6 @@ export default function DataPage() {
                     `(${selectedDatasets.length})`}
                 </button>
 
-                {/* Delete Selected Button */}
                 {selectedDatasets.length > 0 && (
                   <button
                     onClick={() => handleDelete(selectedDatasets)}
@@ -908,7 +1056,6 @@ export default function DataPage() {
                   </button>
                 )}
 
-                {/* Select All Toggle */}
                 {datasets.length > 0 && (
                   <button
                     onClick={selectAllDatasets}
@@ -920,7 +1067,6 @@ export default function DataPage() {
                   </button>
                 )}
 
-                {/* Refresh Button */}
                 <button
                   onClick={fetchDatasets}
                   disabled={loading}
@@ -966,7 +1112,6 @@ export default function DataPage() {
                     }`}
                   >
                     <div className="flex items-start gap-3 flex-1">
-                      {/* Checkbox */}
                       <input
                         type="checkbox"
                         checked={selectedDatasets.includes(dataset.name)}
@@ -974,7 +1119,6 @@ export default function DataPage() {
                         className="mt-1"
                       />
 
-                      {/* File Info */}
                       <div className="flex-1">
                         <h3 className="font-semibold text-gray-800 flex items-center gap-2">
                           {dataset.name}
@@ -1002,7 +1146,6 @@ export default function DataPage() {
                       </div>
                     </div>
 
-                    {/* Action Buttons */}
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleDownloadSingle(dataset.name)}
@@ -1040,8 +1183,6 @@ export default function DataPage() {
             </div>
           </div>
         )}
-
-       
       </main>
 
       {/* OTP MODAL */}
@@ -1058,7 +1199,10 @@ export default function DataPage() {
                 </p>
                 <div className="flex gap-3">
                   <button
-                    onClick={() => setShowOTPModal(false)}
+                    onClick={() => {
+                      setShowOTPModal(false);
+                      sessionStorage.removeItem('publishPayload');
+                    }}
                     className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
                   >
                     Cancel
@@ -1078,13 +1222,6 @@ export default function DataPage() {
                   Enter the 6-digit code sent to your email:
                 </p>
 
-                {testOTP && (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-4">
-                    <p className="text-xs text-yellow-800">
-                    </p>
-                  </div>
-                )}
-
                 <input
                   type="text"
                   maxLength={6}
@@ -1102,7 +1239,13 @@ export default function DataPage() {
 
                 <div className="flex gap-3">
                   <button
-                    onClick={() => setShowOTPModal(false)}
+                    onClick={() => {
+                      setShowOTPModal(false);
+                      sessionStorage.removeItem('publishPayload');
+                      setOTPCode("");
+                      setOTPSent(false);
+                      setOTPError(null);
+                    }}
                     className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
                   >
                     Cancel
@@ -1164,17 +1307,11 @@ export default function DataPage() {
 
             <div className="flex gap-3">
               <button
-                  onClick={() => {
-                    setShowOTPModal(false);
-                    sessionStorage.removeItem('publishPayload'); // Clean up
-                    setOTPCode("");
-                    setOTPSent(false);
-                    setOTPError(null);
-                  }}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
+                onClick={() => setShowDeleteModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
               <button
                 onClick={handleConfirmDelete}
                 className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
