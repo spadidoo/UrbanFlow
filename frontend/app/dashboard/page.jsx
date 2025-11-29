@@ -673,6 +673,41 @@ export default function DashboardPage() {
     }
   };
 
+  // Add this function in page.jsx, before fetchDashboardData
+  const calculateWeeklyTrend = (simulations) => {
+    const dayMap = {
+      'Sunday': 0,
+      'Monday': 1,
+      'Tuesday': 2,
+      'Wednesday': 3,
+      'Thursday': 4,
+      'Friday': 5,
+      'Saturday': 6
+    };
+
+    const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayCounts = new Array(7).fill(0);
+    const daySeverities = new Array(7).fill(0);
+
+    simulations.forEach(sim => {
+      if (sim.start_time && sim.average_delay_ratio) {
+        const startDate = new Date(sim.start_time);
+        const dayIndex = startDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
+        
+        dayCounts[dayIndex]++;
+        daySeverities[dayIndex] += parseFloat(sim.average_delay_ratio);
+      }
+    });
+
+    // Calculate averages and format for chart
+    return dayLabels.map((day, index) => ({
+      day: day,
+      level: dayCounts[index] > 0 
+        ? parseFloat((daySeverities[index] / dayCounts[index]).toFixed(2))
+        : 0
+    }));
+  };
+
   // ============================================
   // FETCH DASHBOARD DATA
   // ============================================
@@ -719,6 +754,12 @@ export default function DashboardPage() {
           activeDisruptions: published.length,
           avgCongestion: avgLabel,
         });
+
+        // ✅ ADD THIS - Calculate weekly trend from actual data
+        const weeklyData = calculateWeeklyTrend(savedData.simulations);
+        setWeeklyTrend(weeklyData);
+        
+        console.log("📊 Weekly trend data:", weeklyData);
 
         console.log("🔄 Calculating 24-hour heatmap...");
         await calculateHeatmap(savedData.simulations);

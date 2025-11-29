@@ -35,6 +35,9 @@ import pytz
 import smtplib
 from flask import Blueprint, request, jsonify
 from flask_mail import Message
+import requests
+
+
 
 load_dotenv()
 
@@ -259,6 +262,33 @@ Message:
             'error': 'Failed to send message. Please try again later.'
         }), 500
 
+
+@app.route('/api/google-directions', methods=['POST'])
+def google_directions():
+    """Proxy endpoint for Google Directions API to avoid CORS"""
+    try:
+        data = request.get_json()
+        origin = data.get('origin')  # "lat,lng"
+        destination = data.get('destination')  # "lat,lng"
+        
+        if not origin or not destination:
+            return jsonify({'error': 'Missing origin or destination'}), 400
+        
+        # Get API key from environment or hardcode temporarily
+        api_key = os.environ.get('GOOGLE_MAPS_API_KEY', 'YOUR_API_KEY_HERE')
+        
+        url = f"https://maps.googleapis.com/maps/api/directions/json?origin={origin}&destination={destination}&mode=driving&key={api_key}"
+        
+        response = requests.get(url, timeout=10)
+        
+        if response.status_code == 200:
+            return jsonify(response.json())
+        else:
+            return jsonify({'error': f'Google API error: {response.status_code}'}), response.status_code
+            
+    except Exception as e:
+        print(f"❌ Google Directions error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 # ============================================================
 # NEW ROUTE: Upload Avatar
