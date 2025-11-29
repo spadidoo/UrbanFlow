@@ -6,7 +6,7 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useEffect, useMemo, useRef, useState } from "react";
-
+import calambaContext from '../../backend/models/data/calamba_context.json';
 // Fix Leaflet icons
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -178,13 +178,16 @@ export default function SmartResultsMap({ simulationResults, selectedLocation, r
       for (let attempt = 0; attempt < retries; attempt++) {
         try {
           const center = selectedLocation.center;
-          const searchRadius = 500;
+          const searchRadius = 900;
 
           const query = `
-            [out:json][timeout:25];
+            [out:json][timeout:30];
             (
-              way["highway"~"^(trunk|primary|secondary|tertiary)$"]
-                 (around:${searchRadius},${center.lat},${center.lng});
+              way["highway"~"^(trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary)$"]
+                ["name"]
+                (around:${searchRadius},${center.lat},${center.lng});
+              way["highway"]["name"~"Ipil|National|Manila|Maharlika|Chipeco",i]
+                (around:${searchRadius},${center.lat},${center.lng});
             );
             out body;
             >;
@@ -211,8 +214,19 @@ export default function SmartResultsMap({ simulationResults, selectedLocation, r
 
           const data = await response.json();
 
+          // ✅ DEBUG: Log all roads returned by OSM
+          const debugWays = data.elements
+            .filter(el => el.type === 'way' && el.tags?.name)
+            .map(el => ({ name: el.tags.name, type: el.tags.highway }));
+          console.log('🛣️ OSM returned these roads:', debugWays);
+
           if (data.elements && data.elements.length > 0) {
-            const processedNetwork = processRoadNetwork(data.elements, center, roadInfo);
+            const processedNetwork = processRoadNetwork(
+              data.elements, 
+              center, 
+              roadInfo, 
+              calambaContext  // ✅ Use the imported constant  // ✅ Pass context
+            );
             
             // ✅ Cache the result
             roadNetworkCacheRef.current.set(cacheKey, processedNetwork);
@@ -284,10 +298,11 @@ export default function SmartResultsMap({ simulationResults, selectedLocation, r
   // ========================================
   // PROCESS ROAD NETWORK
   // ========================================
-  function processRoadNetwork(elements, center, roadInfo) {
+  function processRoadNetwork(elements, center, roadInfo, context) {
     const nodes = elements.filter(el => el.type === "node");
     const nodeMap = new Map(nodes.map(n => [n.id, n]));
     
+
     const ways = elements
       .filter(el => el.type === "way" && el.tags && el.tags.highway)
       .map(way => {
@@ -313,6 +328,103 @@ export default function SmartResultsMap({ simulationResults, selectedLocation, r
         };
       })
       .filter(Boolean);
+
+      // ============================================
+      // ✅ CONTEXT-AWARE ROAD INCLUSION HELPER
+      // ============================================
+    function shouldForceIncludeRoad(way, center, context) {
+      if (!context?.traffic_corridors) return null;
+      
+      // Check if disruption is near any corridor trigger point
+      for (const corridor of context.traffic_corridors) {
+        for (const trigger of corridor.disruption_triggers) {
+          const distToTrigger = getDistance(
+            center.lat, center.lng,
+            trigger.lat, trigger.lng
+          );
+          
+          if (distToTrigger <= trigger.radius_m) {
+            // ✅ Disruption matches this corridor
+            console.log(`🎯 Corridor matched: ${corridor.name}`);
+            
+            // Check if this road is in the critical list
+            for (const criticalRoad of corridor.critical_roads) {
+              const nameMatch = criticalRoad.name_patterns.some(pattern =>
+                way.name.toLowerCase().includes(pattern.toLowerCase())
+              );
+              
+              const typeMatch = criticalRoad.road_types.includes(way.type);
+              
+              if ((nameMatch || typeMatch) && criticalRoad.force_include) {
+                console.log(`✅ Force-including: ${way.name} (${criticalRoad.reason})`);
+                return {
+                  force: true,
+                  impactLevel: criticalRoad.impact_level || 'high',
+                  reason: criticalRoad.reason
+                };
+              }
+            }
+          }
+        }
+      }
+      
+      return null;
+    }
+
+    function checkIfShouldExclude(way, context) {
+      // ✅ 1. Exclude roads with no name (unnamed alleys, etc.)
+      if (!way.name || way.name.toLowerCase().includes('unnamed')) {
+        return 'No name';
+      }
+
+      // ✅ 2. Check if this is a critical road BEFORE excluding by type
+      const isCriticalRoad = way.name.toLowerCase().includes('ipil') || 
+                             way.name.toLowerCase().includes('bucal') ||
+                             way.name.toLowerCase().includes('national') ||
+                             way.name.toLowerCase().includes('maharlika') ||
+                             way.name.toLowerCase().includes('chipeco');
+      
+      // ✅ 3. Exclude service roads, parking areas, driveways - BUT NOT critical roads
+      const excludedTypes = ['service', 'footway', 'path', 'cycleway', 'living_street', 'pedestrian'];
+      if (excludedTypes.includes(way.type)) {
+        return `Type: ${way.type}`;
+      }
+      // ✅ 4. Exclude very short disconnected segments (< 50m total length)
+      const roadLength = way.coordinates.reduce((sum, coord, i) => {
+        if (i === 0) return 0;
+        const prev = way.coordinates[i - 1];
+        return sum + getDistance(prev.lat, prev.lng, coord.lat, coord.lng);
+      }, 0);
+
+      if (roadLength < 50 && !isCriticalRoad) {
+        return 'Too short (< 50m)';
+      }
+      // ✅ 4. Exclude unclassified/residential UNLESS it's a critical road
+      if ((way.type === 'unclassified' || way.type === 'residential') && !isCriticalRoad) {
+        return `Type: ${way.type} (not critical)`;
+      }
+
+      // ✅ 4. Context-based exclusions - BUT skip if critical road
+      if (context?.traffic_corridors && !isCriticalRoad) {
+        for (const corridor of context.traffic_corridors) {
+          const excludeRules = corridor.exclude_roads || [];
+          
+          for (const rule of excludeRules) {
+            const nameMatch = rule.name_patterns.some(pattern =>
+              way.name.toLowerCase().includes(pattern.toLowerCase())
+            );
+            
+            const typeMatch = rule.road_types.includes(way.type);
+            
+            if (nameMatch || typeMatch) {
+              return rule.reason;
+            }
+          }
+        }
+      }
+
+      return null; // Don't exclude
+    }
 
     // Find main road
     let mainRoad = null;
@@ -353,25 +465,121 @@ export default function SmartResultsMap({ simulationResults, selectedLocation, r
     ways.forEach(way => {
       if (mainRoadWay && way.id === mainRoadWay.id) return;
 
+       // ✅ NEW: EXCLUDE UNWANTED ROADS FIRST
+      const shouldExclude = checkIfShouldExclude(way, context);
+      if (shouldExclude) {
+        console.log(`❌ Excluding: ${way.name} (${shouldExclude})`);
+        return; // Skip this road
+      }
+
+      // ✅ CHECK CONTEXT FIRST
+      const forceInclude = shouldForceIncludeRoad(way, center, context);
+
+      if (forceInclude?.force) {
+        const roadData = {
+          ...way,
+          road_name: way.name,
+          road_type: way.type,
+          impactLevel: forceInclude.impactLevel,
+          impactMultiplier: 0.95, // Always high impact
+          distanceToDisruption: way.minDistToCenter,
+          connectionType: 'critical_corridor',
+          reason: forceInclude.reason,
+          isCriticalPath: true,
+          sharedNodeCount: 0, // Not intersection-based
+          passesNearCenter: false,
+          isLetranExitRoute: false
+        };
+
+        connectedRoads.push(roadData);
+        console.log(`✅ Added critical road: ${way.name}`);
+        return; // Skip normal classification
+      }
+
       const sharedNodes = [...way.nodeIds].filter(nodeId => mainRoadNodeIds.has(nodeId));
       const isDirectlyConnected = sharedNodes.length > 0;
+      
+      // ✅ NEW: Check if road passes near disruption center (catches all intersection directions)
+      const passesNearCenter = way.coordinates.some(coord => 
+        getDistance(center.lat, center.lng, coord.lat, coord.lng) < 180
+      );
+
+      // ✅ NEW: Check if this is Ipil-Ipil Street  (Letran exit routes)
+      const isLetranExitRoute = way.name.toLowerCase().includes('ipil-ipil') || 
+                                way.name.toLowerCase().includes('ipil ipil');
+
+     // ✅ SMART: Major highways get special treatment
+      const isMajorHighway = way.name.toLowerCase().includes('national') || 
+                            way.name.toLowerCase().includes('maharlika') ||
+                            way.name.toLowerCase().includes('highway') ||
+                            ['trunk', 'primary'].includes(way.type);
+
+      const hasProximity = way.minDistToCenter < (isMajorHighway ? 800 : 300); // ✅ Highways can be farther
+      const hasPhysicalLink = isLetranExitRoute || passesNearCenter || isDirectlyConnected;
+
+      // ✅ NEW: Highways don't need node connection, just proximity
+      const hasNetworkPath = isMajorHighway || hasPhysicalLink || (
+        sharedNodes.length > 0 && 
+        way.coordinates.some(coord => 
+          getDistance(center.lat, center.lng, coord.lat, coord.lng) < 250
+        )
+      );
+
+      const isAccessibleFromMainRoad = hasProximity && hasNetworkPath;
+
+      // ✅ DEBUG
+      if (way.name.includes('National')) {
+        console.log(`🛣️ National Highway check: proximity=${hasProximity}, network=${hasNetworkPath}, dist=${way.minDistToCenter.toFixed(0)}m`);
+      }
+            
+      if (!isAccessibleFromMainRoad && way.minDistToCenter > 100 && !isMajorHighway) {
+        console.log(`⚠️ Skipping disconnected road: ${way.name} (${way.minDistToCenter.toFixed(0)}m away)`);
+        return;
+      }
+
+      if (isMajorHighway && way.minDistToCenter < 800) {
+        console.log(`✅ Including major highway: ${way.name} (${way.minDistToCenter.toFixed(0)}m)`);
+      }
 
       let impactLevel, impactMultiplier;
 
-      if (isDirectlyConnected) {
+      // ✅ PRIORITY BOOST for Letran exit routes
+      if (isLetranExitRoute) {
         impactLevel = 'high';
-        impactMultiplier = 0.80;
-      } else if (way.minDistToCenter < 150) {
+        impactMultiplier = 0.95;  // Treat as critical
+        console.log(`✅ Letran exit route detected: ${way.name}`);
+      } 
+
+      // Roads passing directly through disruption area
+      else if (passesNearCenter) {
+        impactLevel = 'high';
+        impactMultiplier = 0.95;
+      } else if (isDirectlyConnected) {
+        impactLevel = 'high';
+        impactMultiplier = 0.85;
+      } else if (way.minDistToCenter < 160) {
+        // ✅ Only include if it's a major road type
+        if (!['trunk', 'trunk_link', 'primary', 'primary_link', 'secondary', 'secondary_link'].includes(way.type)) {
+          return; // Skip minor roads that are just nearby
+        }
         impactLevel = 'medium-high';
-        impactMultiplier = 0.60;
+        impactMultiplier = 0.70;
       } else if (way.minDistToCenter < 300) {
+        // ✅ Only trunk/primary roads at this distance
+        if (!['trunk', 'trunk_link', 'primary', 'primary_link'].includes(way.type)) {
+          return;
+        }
         impactLevel = 'medium';
-        impactMultiplier = 0.40;
-      } else if (way.minDistToCenter < 450) {
+        impactMultiplier = 0.50;
+      } else if (way.minDistToCenter < 500) {
+        // ✅ Only trunk roads (highways) at far distances
+        if (!['trunk', 'trunk_link'].includes(way.type)) {
+          return;
+        }
         impactLevel = 'low';
-        impactMultiplier = 0.25;
+        impactMultiplier = 0.35;
       } else {
-        return;
+        return;  // Too far, skip
       }
 
       const roadData = {
@@ -379,15 +587,38 @@ export default function SmartResultsMap({ simulationResults, selectedLocation, r
         impactLevel,
         impactMultiplier,
         distanceToDisruption: way.minDistToCenter,
-        connectionType: isDirectlyConnected ? 'intersection' : 'proximity',
+        connectionType: isLetranExitRoute ? 'letran_exit' : 
+                        passesNearCenter ? 'intersection' : 
+                        (isDirectlyConnected ? 'intersection' : 'proximity'),
         sharedNodeCount: sharedNodes.length,
+        passesNearCenter: passesNearCenter,
+        isLetranExitRoute: isLetranExitRoute,  // ✅ Flag for later use
       };
 
-      if (isDirectlyConnected || way.minDistToCenter < 200) {
-        connectedRoads.push(roadData);
-      } else {
-        nearbyRoads.push(roadData);
+      // ✅ Letran exit routes ALWAYS go to connectedRoads (high priority)
+      // ✅ Only include roads that are CONNECTED or pass through the intersection
+      // NOT roads that are just nearby by distance
+      const isActuallyConnected = isLetranExitRoute || passesNearCenter || isDirectlyConnected;
+      
+      // ✅ STRICT: Only include roads that are ACTUALLY CONNECTED
+      if (isAccessibleFromMainRoad) {
+        // ✅ EXTRA CHECK: Verify the road physically connects to main road or passes through disruption
+        const hasPhysicalConnection = isDirectlyConnected || passesNearCenter || isLetranExitRoute;
+        
+        if (hasPhysicalConnection) {
+          connectedRoads.push(roadData);
+        } else {
+          console.log(`⚠️ Blocked disconnected road: ${way.name} (no physical connection)`);
+        }
+      } else if (['trunk', 'trunk_link', 'primary', 'primary_link'].includes(way.type) && way.minDistToCenter < 150) {
+        // ✅ Reduced from 200m to 150m for nearby roads
+        // Must also share nodes with main road or be a parallel highway
+        if (sharedNodes.length > 0 || way.type.includes('trunk')) {
+          nearbyRoads.push(roadData);
+        }
       }
+// ✅ Everything else is rejected (no more stray lines)
+      // Skip roads that are just within radius but not connected
     });
 
     connectedRoads.sort((a, b) => a.distanceToDisruption - b.distanceToDisruption);
@@ -395,8 +626,8 @@ export default function SmartResultsMap({ simulationResults, selectedLocation, r
 
     return {
       mainRoad,
-      connectedRoads: connectedRoads.slice(0, 6),
-      nearbyRoads: nearbyRoads.slice(0, 4)
+      connectedRoads: connectedRoads.slice(0, 15),
+      nearbyRoads: nearbyRoads.slice(0, 8)
     };
   }
 
@@ -425,21 +656,21 @@ export default function SmartResultsMap({ simulationResults, selectedLocation, r
   // ✅ IMPROVED: Continuous color scaling with smooth transitions
   const getImpactColor = (impactLevel, severity) => {
     const colors = {
-      light: { start: '#16a34a', mid: '#22c55e', end: '#84cc16' },
-      moderate: { start: '#84cc16', mid: '#eab308', end: '#f59e0b' },
-      heavy: { start: '#f59e0b', mid: '#ea580c', end: '#dc2626' }
+      light: { start: '#16a34a', mid: '#22c55e', end: '#84cc16' },      // Green shades
+      moderate: { start: '#f59e0b', mid: '#fb923c', end: '#fb923c' },   // Orange shades
+      heavy: { start: '#ef4444', mid: '#dc2626', end: '#b91c1c' }       // RED shades (more intense)
     };
 
     let tier, position;
-    if (severity < 0.4) {
+    if (severity < 0.5) {
       tier = 'light';
       position = severity / 0.5;
-    } else if (severity < 1.5) {
+    } else if (severity < 1.2) {
       tier = 'moderate';
-      position = (severity - 0.5) / 1.0;
+      position = (severity - 0.5) / 0.7;
     } else {
       tier = 'heavy';
-      position = Math.min((severity - 1.5) / 1.0, 1.0);
+      position = Math.min((severity - 1.2) / 1.3, 1.0);
     }
 
     const interpolateColor = (color1, color2, factor) => {
@@ -462,16 +693,16 @@ export default function SmartResultsMap({ simulationResults, selectedLocation, r
 
     const impactMultipliers = {
       'direct': 1.0,
-      'high': 0.85,
-      'medium-high': 0.70,
-      'medium': 0.55,
+      'high': 0.90,
+      'medium-high': 0.75,
+      'medium': 0.60,
       'low': 0.40
     };
 
     const multiplier = impactMultipliers[impactLevel] || 0.5;
     
-    if (multiplier < 0.8) {
-      return interpolateColor(baseColor, '#22c55e', 1 - multiplier);
+    if (multiplier < 0.85) {
+      return interpolateColor(baseColor, '#fb923c', 1 - multiplier * 0.8);  // Blend to orange instead of green
     }
     
     return baseColor;
@@ -512,19 +743,13 @@ export default function SmartResultsMap({ simulationResults, selectedLocation, r
     const baseSeverity = currentHourData?.severity ?? simulationResults.summary.avg_severity;
 
     // ✅ OPTIMIZATION: Only update colors if hour changed, not full re-render
+    // ✅ OPTIMIZATION: Only update colors if hour changed, not full re-render
+    // ✅ Always do full re-render when hour changes (needed for length updates)
     const hourChanged = lastRenderedHourRef.current !== currentHourIndex;
-    const networkChanged = layersRef.current.length === 0;
 
-    if (!networkChanged && hourChanged) {
-      // ✅ FIX: Use requestAnimationFrame for smooth updates
-      requestAnimationFrame(() => {
-        updateSegmentColors(baseSeverity);
-        lastRenderedHourRef.current = currentHourIndex;
-      });
-      return;
+    if (hourChanged) {
+      lastRenderedHourRef.current = currentHourIndex;
     }
-
-    lastRenderedHourRef.current = currentHourIndex;
     
     // ✅ IMPROVED: Proper cleanup with event listener removal
     layersRef.current.forEach(layer => {
@@ -552,9 +777,13 @@ export default function SmartResultsMap({ simulationResults, selectedLocation, r
       const coords = road.coordinates;
       if (coords.length < 2) return;
 
+      // ✅ Severity-based radius expansion
+      const severityExpansion = baseSeverity >= 1.5 ? 2.5 : baseSeverity >= 1.0 ? 2.0 : 1.4;  // ✅ Increased
       const capacityFactor = (road.lanes || 2) * (road.maxspeed || 40) / 100;
-      const baseImpactRadius = isMainRoad ? 150 : 100;
+      const baseImpactRadius = isMainRoad ? 220 : 150;  // ✅ Increased from 180/120
       const adjustedImpactRadius = baseImpactRadius * (1 / Math.sqrt(capacityFactor));
+      const effectiveRadius = adjustedImpactRadius * severityExpansion;
+
 
       for (let i = 0; i < coords.length - 1; i++) {
         const startCoord = coords[i];
@@ -566,32 +795,41 @@ export default function SmartResultsMap({ simulationResults, selectedLocation, r
 
         let segmentImpact, impactIntensity;
         
-        if (isMainRoad && distToCenter < adjustedImpactRadius * 0.7) {
+        // ✅ EXTENDED IMPACT ZONES - Roads stay moderate/high impact longer
+        if (isMainRoad && distToCenter < effectiveRadius * 0.6) {  // ✅ Increased from 0.5
           segmentImpact = 'direct';
           impactIntensity = 1.0;
-        } else if (distToCenter < adjustedImpactRadius) {
+        } else if (distToCenter < effectiveRadius * 1.2) {  // ✅ Increased from 0.8
           segmentImpact = 'high';
-          impactIntensity = 1 - (distToCenter / adjustedImpactRadius) * 0.3;
-        } else if (distToCenter < adjustedImpactRadius * 2) {
+          impactIntensity = 1 - (distToCenter / effectiveRadius) * 0.15;  // ✅ Reduced decay
+        } else if (distToCenter < effectiveRadius * 2.0) {  // ✅ Increased from 1.5
           segmentImpact = 'medium-high';
-          impactIntensity = 0.7 - ((distToCenter - adjustedImpactRadius) / adjustedImpactRadius) * 0.25;
-        } else if (distToCenter < adjustedImpactRadius * 3.5) {
+          impactIntensity = 0.85 - ((distToCenter - effectiveRadius * 1.2) / effectiveRadius) * 0.15;  // ✅ Higher base
+        } else if (distToCenter < effectiveRadius * 3.0) {  // ✅ Increased from 2.5
           segmentImpact = 'medium';
-          impactIntensity = 0.45 - ((distToCenter - adjustedImpactRadius * 2) / (adjustedImpactRadius * 1.5)) * 0.2;
+          impactIntensity = 0.70 - ((distToCenter - effectiveRadius * 2.0) / effectiveRadius) * 0.15;  // ✅ Higher base
+        } else if (distToCenter < effectiveRadius * 4.0) {  // ✅ NEW: Additional medium zone
+          segmentImpact = 'medium';
+          impactIntensity = 0.55 - ((distToCenter - effectiveRadius * 3.0) / effectiveRadius) * 0.10;
         } else {
           segmentImpact = 'low';
-          impactIntensity = Math.max(0.15, 0.25 - ((distToCenter - adjustedImpactRadius * 3.5) / adjustedImpactRadius) * 0.1);
+          impactIntensity = Math.max(0.30, 0.45 - ((distToCenter - effectiveRadius * 4.0) / effectiveRadius) * 0.08);  // ✅ Higher minimum
         }
 
         const adjustedSeverity = baseSeverity * impactIntensity;
         const segmentColor = getImpactColor(segmentImpact, adjustedSeverity);
+
+        // ✅ DEBUG: Log first few segments to verify gradient
+        if (i < 3) {
+          console.log(`Segment ${i}: dist=${distToCenter.toFixed(0)}m, impact=${segmentImpact}, color=${segmentColor}`);
+        }
         
-        const maxDistance = 500;
+        const maxDistance = 800;
         const normalizedDist = Math.min(distToCenter / maxDistance, 1);
-        const opacity = Math.max(0.35, (1 - Math.pow(normalizedDist, 1.5)) * 0.9);
+        const opacity = Math.max(0.40, (1 - Math.pow(normalizedDist, 1.3)) * 0.95);
         
         const baseWeight = isMainRoad ? 10 : (road.impactLevel === 'high' ? 7 : 5);
-        const weight = baseWeight * (1 - normalizedDist * 0.4);
+        const weight = baseWeight * (1 - normalizedDist * 0.3);
 
         const shadow = L.polyline(
           [[startCoord.lat, startCoord.lng], [endCoord.lat, endCoord.lng]],
@@ -656,62 +894,242 @@ export default function SmartResultsMap({ simulationResults, selectedLocation, r
     };
 
     // ✅ IMPROVED: Coordinate filtering to prevent gaps
-    const trimCoordinates = (coords, maxDist) => {
-      const trimmed = [];
-      for (let i = 0; i < coords.length; i++) {
-        const coord = coords[i];
+    // ✅ IMPROVED: Direction-aware trimming - only extends toward disruption
+    // ✅ IMPROVED: Direction-aware trimming - extends toward major roads/highways
+    const trimCoordinates = (coords, maxDist, roadName = '', roadType = '') => {
+      if (coords.length < 2) return coords;
+      
+      // ✅ Check if this road should extend toward National Highway
+      const isFeederRoad = roadName.toLowerCase().includes('bucal') || 
+                          roadName.toLowerCase().includes('chipeco') ||
+                          roadName.toLowerCase().includes('turbina') ||
+                          roadType === 'secondary' || roadType === 'tertiary';
+      
+      const isMainHighway = roadName.toLowerCase().includes('national') || 
+                            roadName.toLowerCase().includes('maharlika') ||
+                            roadName.toLowerCase().includes('highway') ||
+                            roadType === 'trunk' || roadType === 'primary';
+      
+      let closestIndex = -1;
+      let minDistToCenter = Infinity;
+      
+      // Find point closest to disruption
+      coords.forEach((coord, index) => {
         const dist = getDistance(center.lat, center.lng, coord.lat, coord.lng);
+        if (dist < minDistToCenter) {
+          minDistToCenter = dist;
+          closestIndex = index;
+        }
+      });
+      
+      if (closestIndex === -1) return coords;
+      
+      const trimmed = [];
+      
+      // ✅ SMART DIRECTION LOGIC
+      if (isMainHighway) {
+        // Highways: Extend BOTH directions equally (bidirectional traffic)
+        const startIndex = Math.max(0, closestIndex - 15);
+        const endIndex = Math.min(coords.length - 1, closestIndex + 15);
         
-        if (dist < maxDist) {
-          trimmed.push(coord);
-        } else if (i > 0) {
-          const prevCoord = coords[i - 1];
-          const prevDist = getDistance(center.lat, center.lng, prevCoord.lat, prevCoord.lng);
-          if (prevDist < maxDist) {
+        for (let i = startIndex; i <= endIndex; i++) {
+          const coord = coords[i];
+          const dist = getDistance(center.lat, center.lng, coord.lat, coord.lng);
+          
+          if (dist < maxDist * 1.3) { // Extra buffer for highways
+            trimmed.push(coord);
+          }
+        }
+      } else if (isFeederRoad) {
+        // ✅ Feeder roads: Extend MORE toward the direction AWAY from disruption
+        // (traffic backs up in the direction people are trying to GO)
+        
+        // Determine which end is farther from disruption (that's the highway direction)
+        const distToStart = getDistance(center.lat, center.lng, coords[0].lat, coords[0].lng);
+        const distToEnd = getDistance(center.lat, center.lng, coords[coords.length - 1].lat, coords[coords.length - 1].lng);
+        
+        let startIndex, endIndex;
+        
+        if (distToEnd > distToStart) {
+          // Highway is at the END - extend more in that direction
+          startIndex = Math.max(0, closestIndex - 5);
+          endIndex = Math.min(coords.length - 1, closestIndex + 20); // ✅ 4x more toward highway
+        } else {
+          // Highway is at the START - extend more in that direction
+          startIndex = Math.max(0, closestIndex - 20); // ✅ 4x more toward highway
+          endIndex = Math.min(coords.length - 1, closestIndex + 5);
+        }
+        
+        for (let i = startIndex; i <= endIndex; i++) {
+          const coord = coords[i];
+          const dist = getDistance(center.lat, center.lng, coord.lat, coord.lng);
+          
+          if (dist < maxDist * 1.2) {
+            trimmed.push(coord);
+          }
+        }
+      } else {
+        // Normal roads: Balanced extension
+        const startIndex = Math.max(0, closestIndex - 10);
+        const endIndex = Math.min(coords.length - 1, closestIndex + 10);
+        
+        for (let i = startIndex; i <= endIndex; i++) {
+          const coord = coords[i];
+          const dist = getDistance(center.lat, center.lng, coord.lat, coord.lng);
+          
+          if (dist < maxDist) {
             trimmed.push(coord);
           }
         }
       }
-      return trimmed;
+      
+      // ✅ Add gradient fade points at the end
+      const lastIncludedDist = trimmed.length > 0 
+        ? getDistance(center.lat, center.lng, trimmed[trimmed.length - 1].lat, trimmed[trimmed.length - 1].lng)
+        : 0;
+      
+      if (lastIncludedDist < maxDist * 1.4 && trimmed.length > 0) {
+        // Find next 3-5 points for fade
+        const lastIndex = coords.indexOf(trimmed[trimmed.length - 1]);
+        for (let i = lastIndex + 1; i < Math.min(coords.length, lastIndex + 6); i++) {
+          const coord = coords[i];
+          const dist = getDistance(center.lat, center.lng, coord.lat, coord.lng);
+          if (dist < maxDist * 1.5) {
+            trimmed.push(coord);
+          }
+        }
+      }
+      
+      return trimmed.length >= 2 ? trimmed : coords;
     };
 
     // Render nearby roads
     nearbyRoads.forEach(road => {
       const currentDelay = currentHourData?.delay_info?.additional_delay_min ?? simulationResults.summary.avg_delay_minutes ?? 5;
-      const severityMultiplier = Math.min(Math.max(0.6, 0.6 + (currentDelay / 25)), 2.0);
-      const maxDist = 350 * severityMultiplier;
+      const severityMultiplier = Math.min(Math.max(0.8, 0.8 + (currentDelay / 25)), 2.5);
+      const maxDist = 500 * severityMultiplier;
       
-      const trimmedCoords = trimCoordinates(road.coordinates, maxDist);
+      const trimmedCoords = trimCoordinates(road.coordinates, maxDist, road.name, road.type);
       if (trimmedCoords.length >= 2) {
         drawRoadWithGradient({ ...road, coordinates: trimmedCoords }, false, 'nearbyRoads');
       }
     });
 
-    // Render connected roads
+    // Render connected roads with extended inner lane coverage
+    // Render connected roads with extended inner lane coverage
+    // Render connected roads with extended inner lane coverage
     connectedRoads.forEach(road => {
+      const hour = currentHourData?.hour ?? simulationResults.hourly_predictions?.[currentHourIndex]?.hour ?? 12;
       const currentDelay = currentHourData?.delay_info?.additional_delay_min ?? simulationResults.summary.avg_delay_minutes ?? 5;
-      const severityMultiplier = Math.min(Math.max(0.6, 0.6 + (currentDelay / 25)), 2.0);
-      const baseMaxDist = road.impactLevel === 'high' ? 350 : 250;
-      const maxDist = baseMaxDist * severityMultiplier;
+
+      // ✅ USE CURRENT HOUR'S SEVERITY (not average!)
+      const currentSeverity = currentHourData?.severity ?? baseSeverity;
+
+      const isPeakHour = (hour >= 6 && hour <= 9) || (hour >= 17 && hour <= 20);
+      const isSuperPeak = hour === 7 || hour === 8 || hour === 18;
       
-      const trimmedCoords = trimCoordinates(road.coordinates, maxDist);
+      // ✅ SEVERITY-BASED LENGTH - recalculated every hour!
+      let severityFactor;
+      if (currentSeverity >= 2.0) {
+        severityFactor = 3.5;  // Extreme - very long
+      } else if (currentSeverity >= 1.5) {
+        severityFactor = 2.8;  // Heavy - long
+      } else if (currentSeverity >= 1.0) {
+        severityFactor = 1.8;  // Moderate - medium
+      } else if (currentSeverity >= 0.5) {
+        severityFactor = 1.2;  // Light-Moderate - short-medium
+      } else {
+        severityFactor = 0.8;  // Light - very short
+      }
+      
+      // Peak hour bonus
+      if (isSuperPeak && currentSeverity >= 1.5) {
+        severityFactor *= 1.2;  // ✅ Reduced from 1.3
+      } else if (isPeakHour && currentSeverity >= 1.0) {
+        severityFactor *= 1.1;  // ✅ Reduced from 1.15
+      }
+      
+      // ✅ Delay factor (more conservative)
+      const delayFactor = Math.min(1.0 + (currentDelay / 40), 1.3);  // ✅ Reduced impact
+      const finalMultiplier = severityFactor * delayFactor;
+      
+      // Road-specific base distances
+      const isIpilIpil = road.name?.toLowerCase().includes('ipil');
+      const isChipeco = road.name?.toLowerCase().includes('chipeco');
+      const isMainHighway = road.name?.toLowerCase().includes('national') || 
+                            road.name?.toLowerCase().includes('maharlika') ||
+                            road.name?.toLowerCase().includes('highway');
+      
+      let baseMaxDist;
+      if (isIpilIpil) {
+        baseMaxDist = 5;  // Short local road
+      } else if (isChipeco) {
+        baseMaxDist = 220;  // Limit Chipeco
+      } else if (isMainHighway) {
+        baseMaxDist = 500;  // Highways
+      } else if (road.passesNearCenter || road.connectionType === 'intersection') {
+        baseMaxDist = 350;
+      } else {
+        baseMaxDist = 250;
+      }
+      
+      // ✅ FINAL DISTANCE - changes every hour!
+      const maxDist = baseMaxDist * finalMultiplier;
+      
+      console.log(`🛣️ ${road.name}: severity=${currentSeverity.toFixed(2)}, length=${maxDist.toFixed(0)}m`);
+      
+      const trimmedCoords = trimCoordinates(road.coordinates, maxDist, road.name, road.type);
       if (trimmedCoords.length >= 2) {
         drawRoadWithGradient({ ...road, coordinates: trimmedCoords }, false, 'connectedRoads');
       }
     });
 
-    // Render main road
+    // Render main road with extended coverage during heavy traffic
     if (mainRoad) {
+      const hour = currentHourData?.hour ?? simulationResults.hourly_predictions?.[currentHourIndex]?.hour ?? 12;
       const currentDelay = currentHourData?.delay_info?.additional_delay_min ?? simulationResults.summary.avg_delay_minutes ?? 5;
-      const severityMultiplier = Math.min(Math.max(0.6, 0.6 + (currentDelay / 25)), 2.0);
-      const maxMainDist = 1000 * severityMultiplier;
+      
+      // ✅ USE CURRENT HOUR'S SEVERITY
+      const currentSeverity = currentHourData?.severity ?? baseSeverity;
+      
+      const isPeakHour = (hour >= 6 && hour <= 9) || (hour >= 17 && hour <= 20);
+      const isSuperPeak = hour === 7 || hour === 8 || hour === 18;
+      
+      // ✅ SEVERITY-BASED
+      let severityFactor;
+      if (currentSeverity >= 2.0) {
+        severityFactor = 4.0;
+      } else if (currentSeverity >= 1.5) {
+        severityFactor = 3.2;
+      } else if (currentSeverity >= 1.0) {
+        severityFactor = 2.0;
+      } else if (currentSeverity >= 0.5) {
+        severityFactor = 1.3;
+      } else {
+        severityFactor = 1.0;
+      }
+      
+      // Peak bonus
+      if (isSuperPeak && currentSeverity >= 1.5) {
+        severityFactor *= 1.2;
+      } else if (isPeakHour && currentSeverity >= 1.0) {
+        severityFactor *= 1.1;
+      }
+      
+      // Delay factor
+      const delayFactor = Math.min(1.0 + (currentDelay / 35), 1.4);
+      const finalMultiplier = severityFactor * delayFactor;
+      
+      const maxMainDist = 600 * finalMultiplier;  // ✅ Reduced base
+      
+      console.log(`🚧 Main road: severity=${currentSeverity.toFixed(2)}, length=${maxMainDist.toFixed(0)}m`);
       
       const trimmedMainCoords = trimCoordinates(mainRoad.coordinates, maxMainDist);
       
       if (trimmedMainCoords.length >= 2) {
-        drawRoadWithGradient({ ...mainRoad, coordinates: trimmedMainCoords }, true);
-      }
-    }
+    drawRoadWithGradient({ ...mainRoad, coordinates: trimmedMainCoords }, true);
+  }
+}
 
     // Disruption epicenter marker
     const epicenterColor = getImpactColor('direct', baseSeverity);
@@ -896,14 +1314,14 @@ export default function SmartResultsMap({ simulationResults, selectedLocation, r
       {!loading && mapReady && simulationResults && (
         <>
           {/* Enhanced Legend with Severity Indicator */}
-          <div className="absolute bottom-6 right-6 bg-white rounded-xl p-4 shadow-xl z-[1000] border border-gray-200" style={{maxWidth: '220px'}}>
-            <h4 className="font-bold text-gray-800 mb-3 text-sm flex items-center gap-2">
+          <div className="absolute bottom-6 right-6 bg-white rounded-xl p-4 shadow-xl z-[1000] border border-gray-200" style={{width: '200px'}}>
+            <h4 className="font-bold text-gray-800 mb-3 text-sm flex items-center justify-between w-full">
               Impact Zones
               <span className={`ml-auto text-xs px-2 py-0.5 rounded-full ${
                 getCurrentHourSeverity() >= 1.5 ? 'bg-red-100 text-red-700' :
                 getCurrentHourSeverity() >= 0.5 ? 'bg-yellow-100 text-yellow-700' :
                 'bg-green-100 text-green-700'
-              }`}>
+              }`}> 
                 {simulationResults.hourly_predictions?.[currentHourIndex]?.severity_label || 'N/A'}
               </span>
             </h4>
@@ -925,19 +1343,19 @@ export default function SmartResultsMap({ simulationResults, selectedLocation, r
 
             <div className="space-y-1.5 text-xs">
               <div className="flex items-center gap-2">
-                <div className="w-4 h-2 rounded bg-red-600"></div>
+                <div className="w-4 h-2 rounded" style={{background: '#dc2626'}}></div> {/* ✅ Changed to red */}
                 <span>Direct Impact</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-2 rounded bg-orange-500"></div>
+                <div className="w-4 h-2 rounded" style={{background: '#ef4444'}}></div> {/* ✅ Changed to lighter red */}
                 <span>High ({roadNetwork.connectedRoads.filter(r => r.impactLevel === 'high').length})</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-2 rounded bg-amber-500"></div>
+                <div className="w-4 h-2 rounded" style={{background: '#fb923c'}}></div> {/* ✅ Changed to orange */}
                 <span>Medium-High</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-2 rounded bg-yellow-500"></div>
+                <div className="w-4 h-2 rounded" style={{background: '#f59e0b'}}></div> {/* ✅ Kept orange */}
                 <span>Medium</span>
               </div>
               <div className="flex items-center gap-2">
@@ -997,11 +1415,11 @@ export default function SmartResultsMap({ simulationResults, selectedLocation, r
                 {simulationResults.hourly_predictions[currentHourIndex]?.datetime || 'N/A'}
               </p>
             </div>
-            <span className={`text-xs font-bold px-2 py-1 rounded ${
+            <span className={`text-xs font-bold px-2 py-1 rounded text-center ${
               getCurrentHourSeverity() < 0.5 ? 'bg-green-100 text-green-700' :
               getCurrentHourSeverity() < 1.5 ? 'bg-yellow-100 text-yellow-700' :
               'bg-red-100 text-red-700'
-            }`}>
+            }`} style={{ minWidth: '65px' }}>
               {simulationResults.hourly_predictions[currentHourIndex]?.severity_label || 'N/A'}
             </span>
           </div>

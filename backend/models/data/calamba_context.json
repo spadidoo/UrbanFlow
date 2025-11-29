@@ -103,15 +103,22 @@
       "lat": 14.196909341101565,
       "lng": 121.16256046151001,
       "avg_wait_seconds": 200,
-      "impact_radius_m": 600,
+      "impact_radius_m": 600,  
+      "bottleneck_multiplier": 2.5,  
+      "peak_hours": [6, 7, 8, 17, 18, 19], 
+      "creates_queue_length_m": 800,  
       "notes": "Main intersection stoplight na mahaba"
     },
     {
       "name": "Letran-Manila S Road Junction (Jollibee)",
-      "lat": 14.1895,
-      "lng": 121.1660,
+      "lat": 14.191953306465141,
+      "lng": 121.1666932487903,
       "avg_wait_seconds": 120,
-      "impact_radius_m": 150,
+      "impact_radius_m": 800,  
+      "delay_multiplier": 2.2,  
+      "morning_rush_hours": [6, 7, 8],  
+      "morning_multiplier": 1.8, 
+      "cascade_radius_m": 1200,  
       "notes": "Critical intersection - Letran exit to Manila S Road, very congested during dismissal"
     },
     {
@@ -151,15 +158,31 @@
   "bottlenecks": [
     {
       "name": "Ipil-Ipil Street to Manila S Road",
-      "lat": 14.1895,
-      "lng": 121.1660,
+      "lat": 14.191953306465141,
+      "lng": 121.1666932487903,
       "description": "Letran school traffic merging to main road",
-      "impact_radius_m": 300,
-      "delay_multiplier": 1.6,
-      "peak_hours": [7, 8, 17, 18, 19],
+      "impact_radius_m": 600,  
+      "delay_multiplier": 2.5, 
+      "peak_hours": [6, 7, 8, 17, 18, 19], 
+      "morning_multiplier": 2.0, 
       "friday_peak_hours": [17, 18, 19, 20],
-      "friday_multiplier": 1.8,
+      "friday_multiplier": 2.8,  
+      "is_single_exit": true,  
+      "queue_extends_to": ["Bucal", "Halang"],  
       "notes": "Your main concern - very heavy on Fridays 5-8 PM"
+    },
+    {
+      "name": "Bucal-Halang Corridor (Letran Queue Zone)",
+      "lat": 14.1920,
+      "lng": 121.1680,
+      "description": "Extended queue zone from Letran traffic backing up to Crossing stoplight",
+      "impact_radius_m": 1000,
+      "delay_multiplier": 1.8,
+      "peak_hours": [6, 7, 8, 17, 18, 19],
+      "morning_multiplier": 1.9,
+      "friday_peak_hours": [17, 18, 19, 20],
+      "friday_multiplier": 2.2,
+      "notes": "This entire stretch gets clogged when Letran traffic backs up. Red line should extend through here during rush hours."
     },
     {
       "name": "SM Calamba - Maharlika Highway Area",
@@ -326,5 +349,48 @@
       "friday_evening_multiplier": 2.0,
       "notes": "Letran area - your specific concern"
     }
-  }
+  },
+  "traffic_corridors": [
+    {
+      "name": "Letran to Manila South Road Exit",
+      "disruption_triggers": [
+        {
+          "lat": 14.1892,
+          "lng": 121.1650,
+          "radius_m": 300,
+          "description": "Letran campus area"
+        }
+      ],
+      "critical_roads": [
+        {
+          "name_patterns": ["ipil-ipil", "ipil ipil", "narra"],
+          "road_types": ["residential", "tertiary"],
+          "reason": "Only exit route from Letran to main highway",
+          "force_include": true,
+          "impact_level": "high"
+        },
+        {
+          "name_patterns": ["manila south road", "maharlika", "national highway"],
+          "road_types": ["trunk", "primary"],
+          "reason": "Main arterial road",
+          "force_include": true,
+          "impact_level": "direct"
+        },
+        {
+          "name_patterns": ["bucal", "halang", "crossing"],
+          "road_types": ["secondary", "primary"],
+          "reason": "Main commuter corridor",
+          "force_include": true,
+          "impact_level": "high"
+        }
+      ],
+      "exclude_roads": [
+        {
+          "name_patterns": ["unnamed", "service", "access", "alley"],
+          "road_types": ["service", "unclassified"],
+          "reason": "Internal/minor roads"
+        }
+      ]
+    }
+  ]
 }
