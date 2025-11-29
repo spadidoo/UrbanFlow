@@ -12,7 +12,6 @@ export default function ReportsPage() {
   
   // Filters
   const [filterType, setFilterType] = useState("all");
-  const [filterLocation, setFilterLocation] = useState("");
   const [filterDate, setFilterDate] = useState("");
   const [search, setSearch] = useState("");
   
@@ -78,14 +77,11 @@ export default function ReportsPage() {
   const filteredReports = reports.filter((r) => {
     const matchesType =
       filterType === "all" || r.type.toLowerCase() === filterType.toLowerCase();
-    const matchesLocation =
-      !filterLocation ||
-      r.location.toLowerCase().includes(filterLocation.toLowerCase());
     const matchesDate = !filterDate || r.start_date === filterDate || r.end_date === filterDate;
     const matchesSearch =
       r.title.toLowerCase().includes(search.toLowerCase()) ||
       r.location.toLowerCase().includes(search.toLowerCase());
-    return matchesType && matchesLocation && matchesDate && matchesSearch;
+    return matchesType && matchesDate && matchesSearch;
   });
   
   // Handle View Details
@@ -136,19 +132,6 @@ export default function ReportsPage() {
     }
   };
   
-  // Get type icon
-  const getTypeIcon = (type) => {
-    const typeMap = {
-      'roadwork': '🚧',
-      'flood': '🌊',
-      'traffic': '🚗',
-      'infrastructure': '🏗️',
-      'event': '🎪',
-      'general': '🔔'
-    };
-    return typeMap[type.toLowerCase()] || '📍';
-  };
-  
   // Get severity badge color
   const getSeverityColor = (severity) => {
     if (!severity) return "bg-gray-100 text-gray-700";
@@ -172,24 +155,24 @@ export default function ReportsPage() {
           
           <button
             onClick={fetchReports}
-            className="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600 transition flex items-center gap-2"
+            className="bg-orange-400 text-white px-4 py-2 rounded hover:bg-orange-600 transition flex items-center gap-2"
           >
-            <span>🔄</span>
+            <span>↻</span>
             Refresh
           </button>
         </div>
 
         {/* Filters */}
         <div className="bg-white shadow rounded-lg p-6 mb-8">
-          <div className="grid md:grid-cols-4 sm:grid-cols-2 gap-4">
+          <div className="grid md:grid-cols-3 sm:grid-cols-2 gap-4">
             <div>
-              <label className="text-sm text-gray-600 block mb-1">Search</label>
+              <label className="text-sm text-gray-600 block mb-1"> Search</label>
               <input
                 type="text"
                 placeholder="Search by title or location..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="border border-gray-300 rounded px-3 py-1 w-full text-sm"
+                className="w-full px-4 py-2 border rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-transparent"
               />
             </div>
 
@@ -201,20 +184,7 @@ export default function ReportsPage() {
                 type="date"
                 value={filterDate}
                 onChange={(e) => setFilterDate(e.target.value)}
-                className="border border-gray-300 rounded px-3 py-1 w-full text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="text-sm text-gray-600 block mb-1">
-                Filter by Location
-              </label>
-              <input
-                type="text"
-                placeholder="Enter location..."
-                value={filterLocation}
-                onChange={(e) => setFilterLocation(e.target.value)}
-                className="border border-gray-300 rounded px-3 py-1 w-full text-sm"
+                className="w-full px-4 py-2 border rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-transparent"
               />
             </div>
 
@@ -225,7 +195,7 @@ export default function ReportsPage() {
               <select
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
-                className="border border-gray-300 rounded px-3 py-1 w-full text-sm"
+                className="w-full px-4 py-3 border rounded-lg focus:ring-1 focus:ring-gray-500 focus:border-transparent"
               >
                 <option value="all">All</option>
                 <option value="roadwork">Roadwork</option>
@@ -238,7 +208,7 @@ export default function ReportsPage() {
           </div>
           
           {/* Active Filters Summary */}
-          {(search || filterDate || filterLocation || filterType !== 'all') && (
+          {(search || filterDate || filterType !== 'all') && (
             <div className="mt-4 flex gap-2 items-center flex-wrap">
               <span className="text-sm text-gray-600">Active filters:</span>
               {search && (
@@ -251,11 +221,6 @@ export default function ReportsPage() {
                   Date: {filterDate}
                 </span>
               )}
-              {filterLocation && (
-                <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">
-                  Location: "{filterLocation}"
-                </span>
-              )}
               {filterType !== 'all' && (
                 <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">
                   Type: {filterType}
@@ -265,7 +230,6 @@ export default function ReportsPage() {
                 onClick={() => {
                   setSearch('');
                   setFilterDate('');
-                  setFilterLocation('');
                   setFilterType('all');
                 }}
                 className="text-xs text-red-600 hover:underline ml-2"
@@ -340,13 +304,12 @@ export default function ReportsPage() {
                       {/* Report Info */}
                       <div className="flex-1">
                         <div className="flex items-start gap-3">
-                          <span className="text-2xl">{getTypeIcon(r.type)}</span>
                           <div>
                             <h3 className="font-semibold text-lg text-orange-600">
                               {r.title}
                             </h3>
                             <p className="text-sm text-gray-600 mt-1">
-                              📍 {r.location} | 🗓 {r.date}
+                             {r.location} | 🗓 {r.date}
                             </p>
                             <div className="flex gap-2 mt-2">
                               <span className={`px-2 py-1 rounded text-xs font-semibold ${getSeverityColor(r.severity_level)}`}>
@@ -370,7 +333,7 @@ export default function ReportsPage() {
                           className="border border-blue-500 text-blue-600 px-3 py-1 text-sm rounded hover:bg-blue-500 hover:text-white transition-all duration-300"
                           title="View Details"
                         >
-                          View Details
+                          Simulation Details
                         </button>
                         <button 
                           onClick={() => handleExport(r.id, 'pdf')}

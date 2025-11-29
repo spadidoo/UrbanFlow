@@ -35,6 +35,8 @@ export default function DataPage() {
   const [selectedDatasets, setSelectedDatasets] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [success, setSuccess] = useState(null);
+  const [sortBy, setSortBy] = useState("recent"); // 'recent', 'oldest', 'location', 'type'
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
 
   const userId = user?.user_id || user?.id;
 
@@ -363,13 +365,13 @@ export default function DataPage() {
     );
   };
 
-  const selectAll = () => {
-    if (selectedDisruptions.length === filteredDisruptions.length) {
-      setSelectedDisruptions([]);
-    } else {
-      setSelectedDisruptions(filteredDisruptions.map((d) => d.simulation_id));
-    }
-  };
+const selectAll = () => {
+  if (selectedDisruptions.length === sortedDisruptions.length) {
+    setSelectedDisruptions([]);
+  } else {
+    setSelectedDisruptions(sortedDisruptions.map((d) => d.simulation_id));
+  }
+};
 
   // ============================================================
   // 🔍 FIXED: Filter Disruptions with Null Checks
@@ -388,6 +390,27 @@ export default function DataPage() {
     return matchesFilter && matchesSearch;
   });
 
+  const sortedDisruptions = [...filteredDisruptions].sort((a, b) => {
+  switch (sortBy) {
+    case 'recent':
+      // Most recent first (by created_at or start_time)
+      return new Date(b.created_at || b.start_time) - new Date(a.created_at || a.start_time);
+    
+    case 'oldest':
+      // Oldest first
+      return new Date(a.created_at || a.start_time) - new Date(b.created_at || b.start_time);
+    
+    case 'type':
+      // Alphabetical by disruption type
+      const typeA = (a.disruption_type || '').toLowerCase();
+      const typeB = (b.disruption_type || '').toLowerCase();
+      return typeA.localeCompare(typeB);
+    
+    default:
+      return 0;
+  }
+});
+
   console.log("🔍 Filter applied:", {
     total: disruptions.length,
     filtered: filteredDisruptions.length,
@@ -400,14 +423,14 @@ export default function DataPage() {
   // ============================================================
   const handleEdit = async (simulation) => {
     try {
-      console.log("✏️ Editing simulation:", simulation.simulation_id);
+      console.log(" Editing simulation:", simulation.simulation_id);
       
       const details = await api.getSimulation(simulation.simulation_id);
-      console.log("🔍 API Response:", details);
+      console.log(" API Response:", details);
       
       if (details) {
         const simulationData = details.simulation || details;
-        console.log("💾 Saving to session:", simulationData);
+        console.log(" Saving to session:", simulationData);
         
         sessionStorage.setItem("editSimulation", JSON.stringify(simulationData));
         router.push("/simulation");
@@ -636,7 +659,7 @@ export default function DataPage() {
               onClick={() => setActiveTab(tab)}
               className={`px-5 py-2 rounded font-semibold transition-all duration-300 ${
                 activeTab === tab
-                  ? "bg-orange-500 text-white shadow-md scale-105"
+                  ? "bg-orange-400 text-white shadow-md scale-105"
                   : "bg-gray-200 text-gray-700 hover:bg-orange-500 hover:text-white hover:scale-105"
               }`}
             >
@@ -657,7 +680,7 @@ export default function DataPage() {
                     onClick={() => setFilter(f)}
                     className={`px-3 py-1 rounded transition-all duration-300 ${
                       filter === f
-                        ? "bg-orange-500 text-white"
+                        ? "bg-orange-400 text-white"
                         : "bg-gray-200 text-gray-700 hover:bg-orange-500 hover:text-white"
                     }`}
                   >
@@ -666,7 +689,76 @@ export default function DataPage() {
                 ))}
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
+                {/* Sort Dropdown */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowSortDropdown(!showSortDropdown)}
+                    className="flex items-center gap-2 border border-gray-300 rounded px-3 py-1 text-sm bg-white hover:bg-gray-50 transition"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={1.5}
+                      stroke="currentColor"
+                      className="w-4 h-4"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M3 7.5L7.5 3m0 0L12 7.5M7.5 3v13.5m13.5 0L16.5 21m0 0L12 16.5m4.5 4.5V7.5"
+                      />
+                    </svg>
+                    Sort: {sortBy === "recent" ? "Most Recent" : sortBy === "oldest" ? "Oldest" : "Disruption Type"}
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={1.5}
+                      stroke="currentColor"
+                      className={`w-4 h-4 transition-transform ${showSortDropdown ? "rotate-180" : ""}`}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                    </svg>
+                  </button>
+
+                  {showSortDropdown && (
+                    <>
+                      {/* Backdrop to close dropdown */}
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={() => setShowSortDropdown(false)}
+                      />
+                      
+                      {/* Dropdown Menu */}
+                      <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-20">
+                          {[
+                            { value: "recent", label: "Most Recent"},
+                            { value: "oldest", label: "From Oldest"},
+                            { value: "type", label: "Disruption Type"},
+                          ].map((option) => (
+                            <button
+                              key={option.value}
+                              onClick={() => {
+                                setSortBy(option.value);
+                                setShowSortDropdown(false);
+                              }}
+                              className={`w-full text-left px-4 py-2 hover:bg-orange-50 transition flex items-center gap-2 ${
+                                sortBy === option.value ? "bg-orange-100 text-orange-700 font-semibold" : ""
+                              }`}
+                            >
+                              {option.label}
+                              {sortBy === option.value && (
+                                <span className="ml-auto text-orange-600">✓</span>
+                              )}
+                            </button>
+                          ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+
                 <input
                   type="text"
                   placeholder="Search..."
@@ -674,19 +766,21 @@ export default function DataPage() {
                   onChange={(e) => setSearch(e.target.value)}
                   className="border border-gray-300 rounded px-3 py-1 text-sm"
                 />
+                
                 <button
                   onClick={() => router.push("/simulation")}
-                  className="bg-orange-500 text-white px-4 py-1 rounded hover:bg-orange-600 transition"
+                  className="bg-orange-400 text-white px-4 py-1 rounded hover:bg-orange-600 transition"
                 >
                   + New
                 </button>
+                
                 {selectedDisruptions.length > 0 && (
                   <>
                     <button
                       onClick={selectAll}
                       className="bg-blue-500 text-white px-4 py-1 rounded hover:bg-blue-600 transition"
                     >
-                      {selectedDisruptions.length === filteredDisruptions.length
+                      {selectedDisruptions.length === sortedDisruptions.length
                         ? "Deselect All"
                         : "Select All"}
                     </button>
@@ -704,35 +798,35 @@ export default function DataPage() {
             {/* Loading State */}
             {loading && (
               <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-400 mx-auto mb-4"></div>
                 <p className="text-gray-600">Loading simulations...</p>
               </div>
             )}
 
             {/* Empty State */}
-            {!loading && !error && filteredDisruptions.length === 0 && (
-              <div className="text-center py-12">
-                <p className="text-gray-500 text-lg mb-4">
-                  {search
-                    ? "No simulations found matching your search"
-                    : "No simulations yet"}
-                </p>
-                <button
-                  onClick={() => router.push("/simulation")}
-                  className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition"
-                >
-                  Create Your First Simulation
-                </button>
-              </div>
-            )}
+              {!loading && !error && sortedDisruptions.length === 0 && (
+                <div className="text-center py-12">
+                  <p className="text-gray-500 text-lg mb-4">
+                    {search
+                      ? "No simulations found matching your search"
+                      : "No simulations yet"}
+                  </p>
+                  <button
+                    onClick={() => router.push("/simulation")}
+                    className="bg-orange-400 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition"
+                  >
+                    Create Your First Simulation
+                  </button>
+                </div>
+              )}
 
             {/* Disruptions Grid - Grouped by Status */}
-{!loading && !error && filteredDisruptions.length > 0 && (
+{!loading && !error && sortedDisruptions.length > 0 && (
   <div className="space-y-6">
     {/* ACTIVE SCENARIOS */}
     {(() => {
       const now = new Date();
-      const active = filteredDisruptions.filter(d => {
+      const active = sortedDisruptions.filter(d => {
         if (!d.start_time || !d.end_time) return false;
         const start = new Date(d.start_time);
         const end = new Date(d.end_time);
@@ -745,7 +839,6 @@ export default function DataPage() {
         <div className="bg-gradient-to-r from-green-50 to-white rounded-lg p-6 border-l-4 border-green-500">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-bold text-green-700 flex items-center gap-2">
-              <span className="text-3xl">🟢</span> 
               <span>Active Scenarios</span>
               <span className="text-lg font-normal text-green-600">({active.length})</span>
             </h2>
@@ -787,14 +880,14 @@ export default function DataPage() {
 
                 <div className="text-sm text-gray-600 space-y-2 mb-4 bg-gray-50 rounded p-3">
                   <p className="flex items-center gap-2">
-                    <span className="font-semibold">📍 Location:</span> {d.disruption_location || "Unknown"}
+                    <span className="font-semibold"> Location:</span> {d.disruption_location || "Unknown"}
                   </p>
                   <p className="flex items-center gap-2">
-                    <span className="font-semibold">🚧 Type:</span> {d.disruption_type || "N/A"}
+                    <span className="font-semibold"> Type:</span> {d.disruption_type || "N/A"}
                   </p>
                   {d.start_time && (
                     <p className="flex items-center gap-2">
-                      <span className="font-semibold">📅 Period:</span>
+                      <span className="font-semibold"> Period:</span>
                       {new Date(d.start_time).toLocaleDateString()} - {new Date(d.end_time).toLocaleDateString()}
                     </p>
                   )}
@@ -802,15 +895,15 @@ export default function DataPage() {
 
                 <div className="flex justify-end gap-2">
                   <button onClick={() => handleEdit(d)} className="px-4 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-semibold">
-                    ✏️ Edit
+                    Edit
                   </button>
                   {d.simulation_status === "published" ? (
                     <button onClick={() => handleUnpublish(d)} className="px-4 py-2 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition font-semibold">
-                      🔒 Unpublish
+                    Unpublish
                     </button>
                   ) : (
                     <button onClick={() => handlePublishClick(d)} className="px-4 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-semibold">
-                      🌐 Publish
+                    Publish
                     </button>
                   )}
                 </div>
@@ -824,7 +917,7 @@ export default function DataPage() {
     {/* UPCOMING SCENARIOS */}
     {(() => {
       const now = new Date();
-      const upcoming = filteredDisruptions.filter(d => {
+      const upcoming = sortedDisruptions.filter(d => {
         if (!d.start_time) return false;
         const start = new Date(d.start_time);
         return start > now;
@@ -836,7 +929,6 @@ export default function DataPage() {
         <div className="bg-gradient-to-r from-blue-50 to-white rounded-lg p-6 border-l-4 border-blue-500">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-bold text-blue-700 flex items-center gap-2">
-              <span className="text-3xl">🔵</span> 
               <span>Upcoming Scenarios</span>
               <span className="text-lg font-normal text-blue-600">({upcoming.length})</span>
             </h2>
@@ -852,7 +944,7 @@ export default function DataPage() {
                     <div className="flex-1">
                       <h3 className="font-bold text-lg text-gray-800">{d.simulation_name || "Untitled Simulation"}</h3>
                       <p className="text-xs text-blue-600 font-semibold mt-1">
-                        ⏰ Starts {new Date(d.start_time).toLocaleDateString()}
+                         Starts {new Date(d.start_time).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
@@ -865,22 +957,22 @@ export default function DataPage() {
                 </div>
 
                 <div className="text-sm text-gray-600 space-y-2 mb-4 bg-gray-50 rounded p-3">
-                  <p className="flex items-center gap-2"><span className="font-semibold">📍 Location:</span> {d.disruption_location || "Unknown"}</p>
-                  <p className="flex items-center gap-2"><span className="font-semibold">🚧 Type:</span> {d.disruption_type || "N/A"}</p>
+                  <p className="flex items-center gap-2"><span className="font-semibold"> Location:</span> {d.disruption_location || "Unknown"}</p>
+                  <p className="flex items-center gap-2"><span className="font-semibold"> Type:</span> {d.disruption_type || "N/A"}</p>
                   {d.start_time && (
                     <p className="flex items-center gap-2">
-                      <span className="font-semibold">📅 Period:</span>
+                      <span className="font-semibold"> Period:</span>
                       {new Date(d.start_time).toLocaleDateString()} - {new Date(d.end_time).toLocaleDateString()}
                     </p>
                   )}
                 </div>
 
                 <div className="flex justify-end gap-2">
-                  <button onClick={() => handleEdit(d)} className="px-4 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-semibold">✏️ Edit</button>
+                  <button onClick={() => handleEdit(d)} className="px-4 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-semibold"> Edit</button>
                   {d.simulation_status === "published" ? (
-                    <button onClick={() => handleUnpublish(d)} className="px-4 py-2 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition font-semibold">🔒 Unpublish</button>
+                    <button onClick={() => handleUnpublish(d)} className="px-4 py-2 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition font-semibold"> Unpublish</button>
                   ) : (
-                    <button onClick={() => handlePublishClick(d)} className="px-4 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-semibold">🌐 Publish</button>
+                    <button onClick={() => handlePublishClick(d)} className="px-4 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-semibold"> Publish</button>
                   )}
                 </div>
               </div>
@@ -893,7 +985,7 @@ export default function DataPage() {
     {/* ✅ NEW: FINISHED SCENARIOS */}
     {(() => {
       const now = new Date();
-      const finished = filteredDisruptions.filter(d => {
+      const finished = sortedDisruptions.filter(d => {
         if (!d.end_time) return false;
         const end = new Date(d.end_time);
         return end < now;
@@ -905,7 +997,6 @@ export default function DataPage() {
         <div className="bg-gradient-to-r from-gray-50 to-white rounded-lg p-6 border-l-4 border-gray-500">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-bold text-gray-700 flex items-center gap-2">
-              <span className="text-3xl">⏹️</span> 
               <span>Finished Scenarios</span>
               <span className="text-lg font-normal text-gray-600">({finished.length})</span>
             </h2>
@@ -934,22 +1025,22 @@ export default function DataPage() {
                 </div>
 
                 <div className="text-sm text-gray-600 space-y-2 mb-4 bg-gray-50 rounded p-3">
-                  <p className="flex items-center gap-2"><span className="font-semibold">📍 Location:</span> {d.disruption_location || "Unknown"}</p>
-                  <p className="flex items-center gap-2"><span className="font-semibold">🚧 Type:</span> {d.disruption_type || "N/A"}</p>
+                  <p className="flex items-center gap-2"><span className="font-semibold"> Location:</span> {d.disruption_location || "Unknown"}</p>
+                  <p className="flex items-center gap-2"><span className="font-semibold"> Type:</span> {d.disruption_type || "N/A"}</p>
                   {d.start_time && (
                     <p className="flex items-center gap-2">
-                      <span className="font-semibold">📅 Period:</span>
+                      <span className="font-semibold"> Period:</span>
                       {new Date(d.start_time).toLocaleDateString()} - {new Date(d.end_time).toLocaleDateString()}
                     </p>
                   )}
                 </div>
 
                 <div className="flex justify-end gap-2">
-                  <button onClick={() => handleEdit(d)} className="px-4 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-semibold">✏️ Edit</button>
+                  <button onClick={() => handleEdit(d)} className="px-4 py-2 text-sm bg-orange-400 text-white rounded-lg hover:bg-orange-600 transition font-semibold"> Edit</button>
                   {d.simulation_status === "published" ? (
-                    <button onClick={() => handleUnpublish(d)} className="px-4 py-2 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition font-semibold">🔒 Unpublish</button>
+                    <button onClick={() => handleUnpublish(d)} className="px-4 py-2 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition font-semibold"> Unpublish</button>
                   ) : (
-                    <button onClick={() => handlePublishClick(d)} className="px-4 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-semibold">🌐 Publish</button>
+                    <button onClick={() => handlePublishClick(d)} className="px-4 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-semibold"> Publish</button>
                   )}
                 </div>
               </div>
@@ -962,17 +1053,17 @@ export default function DataPage() {
     {/* ALL EMPTY STATE */}
     {(() => {
       const now = new Date();
-      const active = filteredDisruptions.filter(d => {
+      const active = sortedDisruptions.filter(d => {
         if (!d.start_time || !d.end_time) return false;
         const start = new Date(d.start_time);
         const end = new Date(d.end_time);
         return start <= now && end >= now;
       });
-      const upcoming = filteredDisruptions.filter(d => {
+      const upcoming = sortedDisruptions.filter(d => {
         if (!d.start_time) return false;
         return new Date(d.start_time) > now;
       });
-      const finished = filteredDisruptions.filter(d => {
+      const finished = sortedDisruptions.filter(d => {
         if (!d.end_time) return false;
         return new Date(d.end_time) < now;
       });
@@ -980,7 +1071,7 @@ export default function DataPage() {
       if (active.length === 0 && upcoming.length === 0 && finished.length === 0) {
         return (
           <div className="text-center py-12 bg-gray-50 rounded-lg">
-            <p className="text-gray-500 text-lg">📭 No simulations found</p>
+            <p className="text-gray-500 text-lg"> No simulations found</p>
             <p className="text-sm text-gray-400 mt-2">Create your first simulation to get started</p>
           </div>
         );
@@ -1008,15 +1099,15 @@ export default function DataPage() {
 
               <div className="flex gap-2">
                 <label
-                  className={`border border-orange-500 text-orange-600 px-4 py-1 rounded transition-all duration-300 cursor-pointer flex items-center gap-2 ${
+                  className={`border border-orange-400 text-orange-400 px-4 py-1 rounded transition-all duration-300 cursor-pointer flex items-center gap-2 ${
                     uploading
                       ? "opacity-50 cursor-not-allowed"
-                      : "hover:bg-orange-500 hover:text-white"
+                      : "hover:bg-orange-400 hover:text-white"
                   }`}
                 >
                   {uploading ? (
                     <>
-                      <div className="animate-spin h-4 w-4 border-2 border-orange-600 border-t-transparent rounded-full"></div>
+                      <div className="animate-spin h-4 w-4 border-2 border-orange-400 border-t-transparent rounded-full"></div>
                       Uploading...
                     </>
                   ) : (
@@ -1168,7 +1259,7 @@ export default function DataPage() {
             {/* Info Footer */}
             <div className="mt-6 bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
               <p className="text-sm text-blue-800">
-                <strong>ℹ️ Tips:</strong>
+                <strong> Tips:</strong>
               </p>
               <ul className="text-sm text-blue-700 mt-2 space-y-1 ml-4">
                 <li>• Only CSV files are allowed (max 16MB)</li>

@@ -2,7 +2,7 @@
 
 "use client";
 
-import PlannerNavbar from "@/components/PlannerNavbar";
+import PlannerNavbar from "@/components/PlannerNavBar";
 import {
   getRoadInfoFromOSM,
   getRoadSegmentsInArea,

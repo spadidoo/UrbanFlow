@@ -41,6 +41,41 @@ export default function ContactPage() {
     return Object.keys(newErrors).length === 0;
   };
 
+  function LinkedInPerson({ name, href, imgSrc, initials }) {
+  const [imgError, setImgError] = useState(false);
+  const displayInitials = initials || name.split(' ').map(n => n[0]).slice(0,2).join('');
+  return (
+    <div className="flex items-center gap-3">
+      {!imgError ? (
+        <img
+          src={imgSrc}
+          alt={name}
+          className="w-10 h-10 rounded-full object-cover border border-gray-200"
+          onError={(e) => {
+            setImgError(true);
+            e.currentTarget.style.display = 'none';
+          }}
+        />
+      ) : (
+        <div className="w-10 h-10 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center font-semibold text-sm">
+          {displayInitials}
+        </div>
+      )}
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-2 text-gray-800 hover:text-blue-600 flex-1 min-w-0"
+      >
+        <span className="font-semibold truncate">{name}</span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-blue-600">
+          <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11.75 20h-3v-10h3v10zm-1.5-11.3c-.966 0-1.75-.786-1.75-1.75s.784-1.75 1.75-1.75c.965 0 1.75.786 1.75 1.75s-.785 1.75-1.75 1.75zm13.25 11.3h-3v-5.5c0-1.314-.025-3-1.825-3-1.824 0-2.103 1.423-2.103 2.899v5.601h-3v-10h2.881v1.362h.041c.401-.763 1.381-1.562 2.845-1.562 3.042 0 3.603 2.001 3.603 4.601v5.599z"/>
+        </svg>
+      </a>
+    </div>
+  );
+}
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
@@ -88,7 +123,7 @@ export default function ContactPage() {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
 
-      <main className="container mx-auto px-4 py-16">
+      <main className="container mx-auto px-4 py-25">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-4xl font-bold text-gray-800 mb-6">Contact Us</h1>
 
@@ -100,14 +135,14 @@ export default function ContactPage() {
               </h2>
               <div className="space-y-4">
                 <div className="flex items-start gap-4">
-                  <div className="text-blue-600 text-2xl">📧</div>
+                  <div className="text-blue-600 text-2xl"></div>
                   <div>
                     <h3 className="font-semibold text-gray-800">Email</h3>
                     <p className="text-gray-600">urbanflow.service@gmail.com</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-4">
-                  <div className="text-blue-600 text-2xl">📍</div>
+                  <div className="text-blue-600 text-2xl"></div>
                   <div>
                     <h3 className="font-semibold text-gray-800">Address</h3>
                     <p className="text-gray-600">
@@ -120,7 +155,34 @@ export default function ContactPage() {
                   </div>
                 </div>
               </div>
+              {/* LinkedIn Section */}
+                <div className="pt-3 border-t border-gray-100">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3">LinkedIn</h3>
+                  <div className="space-y-3">
+                    <LinkedInPerson
+                      name="Edzon Deveras"
+                      href="https://www.linkedin.com/in/edzon-deveras-6b8a7b392"
+                      imgSrc="/Edzon2.png"
+                      initials="ED"
+                    />
+
+                    <LinkedInPerson
+                      name="Fate Almario"
+                      href="https://www.linkedin.com/in/fate-almario-239a23350"
+                      imgSrc="/fate.jpg"
+                      initials="FA"
+                    />
+
+                    <LinkedInPerson
+                      name="Nazreen Villanueva"
+                      href="https://www.linkedin.com/in/nzrnvllnv/"
+                      imgSrc="/naz.jpg"
+                      initials="NV"
+                    />
+                  </div>
+                </div>
             </div>
+            
 
             {/* Contact Form */}
             <div className="bg-white rounded-lg shadow-md p-8">
