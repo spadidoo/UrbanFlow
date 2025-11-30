@@ -27,6 +27,23 @@ CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_username ON users(username);
 
 -- =============================================================================
+-- TABLE: password_reset_tokens
+-- Stores password reset tokens used in the forgot/reset password flow
+-- =============================================================================
+CREATE TABLE password_reset_tokens (
+    id SERIAL PRIMARY KEY,
+    token VARCHAR(255) NOT NULL UNIQUE,
+    user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    expires_at TIMESTAMP NOT NULL,
+    is_used BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    used_at TIMESTAMP
+);
+
+CREATE INDEX idx_password_reset_tokens_token ON password_reset_tokens(token);
+
+
+-- =============================================================================
 -- TABLE: segments
 -- Contains geospatial and structural information about road segments
 -- =============================================================================

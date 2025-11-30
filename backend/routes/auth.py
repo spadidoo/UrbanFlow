@@ -13,6 +13,9 @@ auth_bp = Blueprint('auth', __name__)
 # Import DatabaseService (already exists in your project)
 # ============================================================
 from services.database import DatabaseService
+from services.email_service import send_otp_email
+import secrets
+from datetime import datetime, timedelta
 
 # Initialize database service
 db = DatabaseService()
@@ -412,3 +415,178 @@ def logout():
         'success': True,
         'message': 'Logged out successfully'
     })
+
+
+# ============================================================
+# ROUTE: Forgot Password
+# ============================================================
+@auth_bp.route('/forgot-password', methods=['POST'])
+def forgot_password():
+    """
+    Request a password reset link.
+    Request Body: { email: string }
+    Behavior: Always returns success to avoid user enumeration.
+    If user exists, generate a secure token, store it, and email reset link.
+    """
+    try:
+        data = request.get_json() or {}
+        email = (data.get('email') or '').strip()
+
+        # Generic success response to avoid enumeration
+        generic_response = {
+            'success': True,
+            'message': "If an account with that email exists, we've sent instructions to reset your password."
+        }
+
+        if not email:
+            return jsonify(generic_response), 200
+
+        conn = None
+        try:
+            conn = db._get_connection()
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute("SELECT user_id, first_name, last_name FROM users WHERE email = %s", (email,))
+            user = cursor.fetchone()
+
+            if not user:
+                # Not revealing whether the email exists
+                return jsonify(generic_response), 200
+
+            user_id = user['user_id']
+            name = f"{user.get('first_name') or ''} {user.get('last_name') or ''}".strip() or 'User'
+
+            # Create token and expiry
+            token = secrets.token_urlsafe(48)
+            expires_at = datetime.utcnow() + timedelta(hours=1)  # 1 hour expiry
+            print(f"Generating password reset token for user_id={user_id}, expires_at={expires_at}")
+
+            # Ensure table exists (safe to run at runtime)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                    id SERIAL PRIMARY KEY,
+                    token VARCHAR(255) NOT NULL UNIQUE,
+                    user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                    expires_at TIMESTAMP NOT NULL,
+                    is_used BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    used_at TIMESTAMP
+                )
+            """)
+
+            # Insert token
+            cursor.execute("INSERT INTO password_reset_tokens (token, user_id, expires_at, is_used) VALUES (%s, %s, %s, FALSE)", (token, user_id, expires_at))
+            conn.commit()
+            print("Inserted password_reset_tokens record into DB")
+
+            # Build reset link (use environment or default origin)
+            origin = os.getenv('BASE_URL', 'http://localhost:3000')
+            reset_link = f"{origin}/login?token={token}"
+
+            # Send email using existing email service (we'll use send_otp_email as the helper is similar)
+            try:
+                # For simplicity send a basic email via smtplib here
+                import smtplib
+                from email.mime.text import MIMEText
+                from email.mime.multipart import MIMEMultipart
+
+                smtp_email = os.getenv('SMTP_EMAIL')
+                smtp_password = os.getenv('SMTP_PASSWORD')
+                smtp_server = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
+                smtp_port = int(os.getenv('SMTP_PORT', 587))
+
+                msg = MIMEMultipart('alternative')
+                msg['Subject'] = 'UrbanFlow Password Reset'
+                msg['From'] = smtp_email
+                msg['To'] = email
+
+                body_text = f"Click the link to reset your password: {reset_link}. This link expires in 1 hour."
+                html_body = f"<p>Hello {name},</p><p>To reset your UrbanFlow password, click this link:</p><p><a href=\"{reset_link}\">Reset my password</a></p><p>This link expires in 1 hour.</p>"
+                msg.attach(MIMEText(body_text, 'plain'))
+                msg.attach(MIMEText(html_body, 'html'))
+
+                server = smtplib.SMTP(smtp_server, smtp_port)
+                server.starttls()
+                server.login(smtp_email, smtp_password)
+                server.send_message(msg)
+                server.quit()
+            except Exception as e:
+                print(f"Failed to send password reset email: {e}")
+            else:
+                print("Password reset email sent successfully")
+
+            return jsonify(generic_response), 200
+
+        except Exception as e:
+            print(f"Forgot password error: {e}")
+            return jsonify(generic_response), 200
+        finally:
+            if conn:
+                conn.close()
+
+    except Exception as e:
+        print(f"Forgot password outer error: {e}")
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
+
+
+# ============================================================
+# ROUTE: Reset Password
+# ============================================================
+@auth_bp.route('/reset-password', methods=['POST'])
+def reset_password():
+    """
+    Reset a user's password using a valid token.
+    Request body: { token: string, newPassword: string }
+    """
+    try:
+        data = request.get_json() or {}
+        token = data.get('token')
+        new_password = data.get('newPassword')
+
+        if not token or not new_password:
+            return jsonify({'success': False, 'error': 'Token and new password are required'}), 400
+
+        if len(new_password) < 8:
+            return jsonify({'success': False, 'error': 'Password must be at least 8 characters long'}), 400
+
+        conn = None
+        try:
+            conn = db._get_connection()
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+            # Find valid token
+            cursor.execute("SELECT id, user_id, expires_at, is_used FROM password_reset_tokens WHERE token = %s", (token,))
+            token_row = cursor.fetchone()
+
+            if not token_row:
+                return jsonify({'success': False, 'error': 'Invalid or expired token'}), 400
+
+            if token_row['is_used']:
+                return jsonify({'success': False, 'error': 'This reset link has already been used'}), 400
+
+            if token_row['expires_at'] < datetime.utcnow():
+                return jsonify({'success': False, 'error': 'This reset link has expired'}), 400
+
+            user_id = token_row['user_id']
+
+            # Update user's password
+            new_password_hash = generate_password_hash(new_password)
+            cursor.execute("UPDATE users SET password_hash = %s, updated_at = NOW() WHERE user_id = %s", (new_password_hash, user_id))
+
+            # Invalidate token
+            cursor.execute("UPDATE password_reset_tokens SET is_used = TRUE, used_at = NOW() WHERE id = %s", (token_row['id'],))
+            conn.commit()
+
+            return jsonify({'success': True, 'message': 'Password updated successfully'}), 200
+
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            print(f"Reset password error: {e}")
+            return jsonify({'success': False, 'error': 'Failed to reset password'}), 500
+        finally:
+            if conn:
+                conn.close()
+
+    except Exception as e:
+        print(f"Reset password outer error: {e}")
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
