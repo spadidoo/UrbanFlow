@@ -1,6 +1,6 @@
 "use client";
 
-import Navbar from "@/components/NavBar";
+//import Navbar from "@/components/NavBar";
 import dynamic from "next/dynamic";
 
 const HomeMapWithSidebar = dynamic(
@@ -18,11 +18,6 @@ const HomeMapWithSidebar = dynamic(
 export default function HomePage() {
   return (
     <div className="h-screen w-full relative">
-      {/* Navbar - Fixed on top, overlapping map */}
-      <div className="absolute top-0 left-0 right-0 z-[1001]">
-        <Navbar />
-      </div>
-
       {/* Map - Full screen behind navbar */}
       <HomeMapWithSidebar />
     </div>
