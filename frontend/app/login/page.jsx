@@ -208,12 +208,7 @@ export default function LoginPage() {
   // Show loading spinner while checking authentication
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
-      </div>
+      <LoadingScreen />
     );
   }
 
@@ -504,7 +499,7 @@ export default function LoginPage() {
                         type="button"
                         onClick={() => setShowNewPassword(!showNewPassword)}
                         disabled={resetLoading}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none disabled:opacity-50 text-gray-600"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 hover:text-gray-700 focus:outline-none disabled:opacity-50 text-gray-600"
                         aria-label={showNewPassword ? "Hide password" : "Show password"}
                       >
                         {showNewPassword ? (
@@ -565,7 +560,7 @@ export default function LoginPage() {
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                         disabled={resetLoading}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none disabled:opacity-50 text-gray-600"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 hover:text-gray-700 focus:outline-none disabled:opacity-50 text-gray-600"
                         aria-label={showConfirmPassword ? "Hide password" : "Show password"}
                       >
                         {showConfirmPassword ? (

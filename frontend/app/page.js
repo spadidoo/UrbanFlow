@@ -2,16 +2,13 @@
 
 import Navbar from "@/components/NavBar";
 import dynamic from "next/dynamic";
+import LoadingScreen from "@/components/LoadingScreen";
 
 const HomeMapWithSidebar = dynamic(
   () => import("@/components/HomeMapWithSidebar"),
   {
     ssr: false,
-    loading: () => (
-      <div className="h-screen w-full bg-gray-200 flex items-center justify-center">
-        Loading map...
-      </div>
-    ),
+    loading: () => <LoadingScreen />,
   }
 );
 
