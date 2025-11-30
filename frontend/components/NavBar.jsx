@@ -58,20 +58,21 @@ export default function Navbar() {
             >
               Contact
             </Link>
-
-            {/* Login Icon */}
+            {/*----}"""
+            {/* Login Icon 
             <Link
               href="/login"
-              className="ml-4 bg-white text-blue-600 p-2 rounded-full hover:bg-blue-50 transition"
+              className="ml-4 bg-white text-blue-600 p-2 w-12 h-12 rounded-full hover:bg-blue-50 transition items-center justify-center overflow-hidden"
               title="Urban Planner Login"
             >
               <img
                 src="urban_planner_icon.png"
-                className="h-7 w-7"
+                className="w-full h-full object-cover"
                 fill="none"
                 viewBox="1 1 24 24"
               />
             </Link>
+              */}
           </div>
         </div>
       </div>
