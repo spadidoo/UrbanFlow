@@ -511,16 +511,32 @@ class TrafficPredictor:
             return R * c
         
         # Check proximity to schools
+        # Check proximity to schools
         for school in self.calamba_context.get('schools', []):
             if school.get('lat', 0) == 0:
                 continue
             distance = haversine_distance(lat, lng, school['lat'], school['lng'])
+            
+            # ✅ CHECK BOTH DISMISSAL AND MORNING RUSH
             if distance <= school.get('impact_radius_m', 300):
-                # Check if it's dismissal time
+                # Check dismissal time
                 dismissal_hours = school.get('friday_dismissal_hours' if is_friday else 'dismissal_hours', [])
                 if hour in dismissal_hours:
                     school_mult = school.get('delay_multiplier', 1.3)
                     multiplier = max(multiplier, school_mult)
+                
+                # ✅ ADD THIS: Check morning rush
+                morning_hours = school.get('morning_rush_hours', [])
+                if hour in morning_hours:
+                    morning_mult = school.get('morning_multiplier', 1.5)
+                    multiplier = max(multiplier, morning_mult)
+            
+            # ✅ ADD THIS: Check extended cascade zone
+            cascade_radius = school.get('cascade_radius_m', 0)
+            if cascade_radius > 0 and distance <= cascade_radius:
+                if hour in dismissal_hours or hour in morning_hours:
+                    # Still affected but slightly less
+                    multiplier = max(multiplier, school_mult * 0.75)
         
         # Check proximity to bottlenecks
         for bottleneck in self.calamba_context.get('bottlenecks', []):
