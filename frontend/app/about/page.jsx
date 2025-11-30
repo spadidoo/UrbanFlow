@@ -5,7 +5,7 @@ export default function AboutPage() {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       
-      <main className="container mx-auto px-4 py-16">
+      <main className="container mx-auto px-4 py-25">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <h1 className="text-4xl font-bold text-gray-800 mb-6">

@@ -504,7 +504,6 @@ def get_finished_reports():
         # Get query parameters
         search_query = request.args.get('query', '').strip()
         filter_date = request.args.get('date', '').strip()
-        filter_location = request.args.get('location', '').strip()
         filter_type = request.args.get('type', '').strip()
         user_id = request.args.get('user_id', type=int)
         
@@ -559,10 +558,6 @@ def get_finished_reports():
                 query += " AND DATE(sr.start_time) = %s"
                 params.append(filter_date)
             
-            if filter_location:
-                query += " AND LOWER(sr.disruption_location) LIKE %s"
-                params.append(f'%{filter_location.lower()}%')
-            
             if filter_type and filter_type.lower() != 'all':
                 query += " AND LOWER(sr.disruption_type) = %s"
                 params.append(filter_type.lower())
@@ -583,23 +578,21 @@ def get_finished_reports():
                 end_date = sim['end_time'].strftime('%Y-%m-%d') if sim['end_time'] else 'N/A'
                 date_range = f"{start_date} to {end_date}" if start_date != end_date else start_date
                 
-                # Extract barangay from location
-                location = sim['disruption_location'] or 'Unknown Location'
                 
-                reports.append({
-                    'id': sim['simulation_id'],
-                    'title': title,
-                    'location': location,
-                    'date': date_range,
-                    'start_date': start_date,
-                    'end_date': end_date,
-                    'type': (sim['disruption_type'] or 'general').capitalize(),
-                    'severity_level': sim['severity_level'] or 'moderate',
-                    'status': 'Published' if sim.get('is_published') else 'Completed',
-                    'total_affected_segments': sim['total_affected_segments'] or 0,
-                    'average_delay_ratio': float(sim['average_delay_ratio']) if sim['average_delay_ratio'] else 0.0,
-                    'created_at': sim['created_at'].isoformat() if sim['created_at'] else None,
-                })
+            reports.append({
+                'id': sim['simulation_id'],
+                'title': title,
+                'location': sim.get('disruption_location') or sim.get('location') or 'Unknown',  # ✅ Define location here
+                'date': date_range,
+                'start_date': start_date,
+                'end_date': end_date,
+                'type': (sim['disruption_type'] or 'general').capitalize(),
+                'severity_level': sim['severity_level'] or 'moderate',
+                'status': 'Published' if sim.get('is_published') else 'Completed',
+                'total_affected_segments': sim['total_affected_segments'] or 0,
+                'average_delay_ratio': float(sim['average_delay_ratio']) if sim['average_delay_ratio'] else 0.0,
+                'created_at': sim['created_at'].isoformat() if sim['created_at'] else None,
+            })
             
             return jsonify({
                 'success': True,
