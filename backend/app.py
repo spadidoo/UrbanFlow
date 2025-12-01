@@ -261,23 +261,6 @@ Message:
             'error': 'Failed to send message. Please try again later.'
         }), 500
 
-@app.route('/')
-def serve_frontend():
-    return send_from_directory(app.static_folder, 'index.html')
-
-@app.route('/<path:path>')
-def serve_static(path):
-    return send_from_directory(app.static_folder, path)
-
-# API routes
-@app.route('/api/health')
-def health_check():
-    return {'status': 'healthy', 'message': 'UrbanFlow API is running'}
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
-
 
 @app.route('/api/google-directions', methods=['POST'])
 def google_directions():

@@ -1051,6 +1051,12 @@ export default function SmartResultsMap({
     if (!mapInstanceRef.current || !simulationResults || !mapReady || loading)
       return;
 
+     
+    if (!layerGroupsRef.current?.shadows || !layerGroupsRef.current?.mainRoads) {
+      console.warn("⚠️ Layer groups not ready yet, waiting...");
+      return;
+    }
+
     const map = mapInstanceRef.current;
     const { mainRoad, connectedRoads, nearbyRoads } = roadNetwork;
 
@@ -1099,6 +1105,12 @@ export default function SmartResultsMap({
     ) => {
       const coords = road.coordinates;
       if (coords.length < 2) return;
+
+      // ✅ CRITICAL: Verify layer groups exist before processing
+      if (!layerGroupsRef.current?.shadows || !layerGroupsRef.current?.mainRoads) {
+        console.warn("⚠️ Layer groups not initialized, skipping road drawing");
+        return; // Exit the entire function early
+      }
 
       // ✅ Severity-based radius expansion
       // ✅ FIXED: Smaller radius so gradient shows properly
@@ -1187,7 +1199,14 @@ export default function SmartResultsMap({
             renderer: canvasRenderer,
           }
         );
+        // ✅ Safety check before adding to layer group
+        if (!layerGroupsRef.current?.shadows) {
+          console.warn("⚠️ Shadow layer group missing, skipping segment");
+          continue; // ✅ Use 'continue' instead of 'return' since we're in a for loop
+        }
+
         layerGroupsRef.current.shadows.addLayer(shadow);
+        
         layersRef.current.push(shadow);
 
         const segment = L.polyline(
@@ -1212,6 +1231,12 @@ export default function SmartResultsMap({
         );
 
         const targetGroup = isMainRoad ? "mainRoads" : groupType;
+
+        if (!layerGroupsRef.current?.[targetGroup]) {
+          console.warn(`⚠️ Layer group "${targetGroup}" not initialized yet`);
+          continue; // ✅ Skip this segment instead of proceeding
+        }
+
         layerGroupsRef.current[targetGroup].addLayer(segment);
         layersRef.current.push(segment);
 
