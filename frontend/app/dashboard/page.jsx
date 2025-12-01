@@ -1,10 +1,10 @@
 "use client";
 
 import PlannerNavbar from "@/components/PlannerNavBar";
-import { useRouter } from "next/navigation";
-import { useEffect, useState, useRef } from "react";
-import { useAuth } from "@/context/AuthContext";
 import SimulationPreviewModal from "@/components/SimulationPreviewModal";
+import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -17,11 +17,12 @@ import {
 
 // Leaflet imports with SSR check
 let L;
-if (typeof window !== 'undefined') {
-  L = require('leaflet');
+if (typeof window !== "undefined") {
+  L = require("leaflet");
   delete L.Icon.Default.prototype._getIconUrl;
   L.Icon.Default.mergeOptions({
-    iconRetinaUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
+    iconRetinaUrl:
+      "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
     iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
     shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
   });
@@ -47,14 +48,14 @@ function MiniOngoingMap() {
   // In MiniOngoingMap component, update the useEffect that initializes the map:
   // Initialize map - FIX FOR DOUBLE INITIALIZATION
   useEffect(() => {
-    if (typeof window === 'undefined' || !mapRef.current) return;
-    
+    if (typeof window === "undefined" || !mapRef.current) return;
+
     // ✅ CRITICAL FIX: Check if container already has a map
     if (mapRef.current._leaflet_id) {
-      console.log('🗺️ Map already initialized, skipping...');
+      console.log("🗺️ Map already initialized, skipping...");
       return;
     }
-    
+
     // ✅ CRITICAL FIX: Remove existing map before creating new one
     if (mapInstanceRef.current) {
       try {
@@ -62,7 +63,7 @@ function MiniOngoingMap() {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
       } catch (e) {
-        console.log('Map cleanup error:', e);
+        console.log("Map cleanup error:", e);
       }
     }
 
@@ -77,11 +78,11 @@ function MiniOngoingMap() {
       });
 
       // Set map pane z-index to stay below modals
-      if (map.getPane('mapPane')) {
-        map.getPane('mapPane').style.zIndex = '1';
+      if (map.getPane("mapPane")) {
+        map.getPane("mapPane").style.zIndex = "1";
       }
-      if (map.getPane('overlayPane')) {
-        map.getPane('overlayPane').style.zIndex = '2';
+      if (map.getPane("overlayPane")) {
+        map.getPane("overlayPane").style.zIndex = "2";
       }
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -90,26 +91,29 @@ function MiniOngoingMap() {
       }).addTo(map);
 
       mapInstanceRef.current = map;
-      
-      console.log('✅ Mini Map initialized successfully');
+
+      console.log("✅ Mini Map initialized successfully");
     } catch (error) {
-      console.error('Error initializing map:', error);
+      console.error("Error initializing map:", error);
     }
 
     // ✅ CLEANUP FUNCTION - Remove map on unmount
     return () => {
-      console.log('🧹 Cleaning up mini map...');
-      
+      console.log("🧹 Cleaning up mini map...");
+
       // Clear all layers first
-      layersRef.current.forEach(layer => {
+      layersRef.current.forEach((layer) => {
         try {
-          if (mapInstanceRef.current && mapInstanceRef.current.hasLayer(layer)) {
+          if (
+            mapInstanceRef.current &&
+            mapInstanceRef.current.hasLayer(layer)
+          ) {
             mapInstanceRef.current.removeLayer(layer);
           }
         } catch (e) {}
       });
       layersRef.current = [];
-      
+
       // Then remove map
       if (mapInstanceRef.current) {
         try {
@@ -118,7 +122,7 @@ function MiniOngoingMap() {
           mapInstanceRef.current = null;
         } catch (e) {}
       }
-      
+
       // Clear the _leaflet_id from the container
       if (mapRef.current) {
         delete mapRef.current._leaflet_id;
@@ -136,27 +140,32 @@ function MiniOngoingMap() {
   const fetchOngoingDisruptions = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:5000/api/published-disruptions');
+      const response = await fetch(
+        "http://localhost:5000/api/published-disruptions"
+      );
       const data = await response.json();
 
       if (data.success) {
         const now = new Date();
         const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-        
+
         const activeDisruptions = (data.disruptions || [])
-          .map(d => ({
+          .map((d) => ({
             ...d,
-            status: getDisruptionStatus(d, now, weekFromNow)
+            status: getDisruptionStatus(d, now, weekFromNow),
           }))
-          .filter(d => {
+          .filter((d) => {
             // Only show active or upcoming disruptions
-            return d.status === 'active' || d.status === 'upcoming';
+            return d.status === "active" || d.status === "upcoming";
           });
-        
-        console.log('🗺️ Mini Map - Total disruptions:', data.disruptions?.length);
-        console.log('🗺️ Mini Map - Active/Upcoming:', activeDisruptions.length);
-        console.log('🗺️ Mini Map - Disruptions:', activeDisruptions);
-        
+
+        console.log(
+          "🗺️ Mini Map - Total disruptions:",
+          data.disruptions?.length
+        );
+        console.log("🗺️ Mini Map - Active/Upcoming:", activeDisruptions.length);
+        console.log("🗺️ Mini Map - Disruptions:", activeDisruptions);
+
         setDisruptions(activeDisruptions);
       }
     } catch (err) {
@@ -168,60 +177,74 @@ function MiniOngoingMap() {
 
   const getDisruptionStatus = (disruption, now, weekFromNow) => {
     if (!disruption.start_date || !disruption.end_date) {
-      console.warn('⚠️ Disruption missing dates:', disruption.title);
-      return 'unknown';
+      console.warn("⚠️ Disruption missing dates:", disruption.title);
+      return "unknown";
     }
-    
+
     const start = new Date(disruption.start_date);
     const end = new Date(disruption.end_date);
-    
+
     if (now >= start && now <= end) {
-      console.log('✅ Active disruption:', disruption.title);
-      return 'active';
+      console.log("✅ Active disruption:", disruption.title);
+      return "active";
     }
     if (start > now && start <= weekFromNow) {
-      console.log('📅 Upcoming disruption:', disruption.title);
-      return 'upcoming';
+      console.log("📅 Upcoming disruption:", disruption.title);
+      return "upcoming";
     }
     if (end < now) {
-      console.log('⏹️ Past disruption:', disruption.title);
-      return 'past';
+      console.log("⏹️ Past disruption:", disruption.title);
+      return "past";
     }
-    
-    console.log('🔮 Future disruption:', disruption.title);
-    return 'future';
+
+    console.log("🔮 Future disruption:", disruption.title);
+    return "future";
   };
 
   const drawDisruptionsOnMap = () => {
-    if (!mapInstanceRef.current || typeof window === 'undefined') return;
+    if (!mapInstanceRef.current || typeof window === "undefined") return;
 
     const map = mapInstanceRef.current;
 
     // Clear old layers
-    layersRef.current.forEach(layer => {
+    layersRef.current.forEach((layer) => {
       try {
         map.removeLayer(layer);
       } catch (e) {}
     });
     layersRef.current = [];
 
-      // 🔍 DEBUG: Log what we're about to draw
-    console.log('📍 Drawing disruptions:', disruptions.length)
-    console.log('Active:', disruptions.filter(d => d.status === 'active').length)
-    console.log('Upcoming:', disruptions.filter(d => d.status === 'upcoming').length)
+    // 🔍 DEBUG: Log what we're about to draw
+    console.log("📍 Drawing disruptions:", disruptions.length);
+    console.log(
+      "Active:",
+      disruptions.filter((d) => d.status === "active").length
+    );
+    console.log(
+      "Upcoming:",
+      disruptions.filter((d) => d.status === "upcoming").length
+    );
 
     // Draw each disruption
-    disruptions.forEach(disruption => {
+    disruptions.forEach((disruption) => {
       if (!disruption.latitude || !disruption.longitude) {
-        console.warn('⚠️ Mini Map - Disruption missing coordinates:', disruption.title);
+        console.warn(
+          "⚠️ Mini Map - Disruption missing coordinates:",
+          disruption.title
+        );
         return;
       }
 
-      console.log('🎯 Mini Map - Drawing:', disruption.title, 'Status:', disruption.status);
+      console.log(
+        "🎯 Mini Map - Drawing:",
+        disruption.title,
+        "Status:",
+        disruption.status
+      );
 
       const severity = disruption.avg_severity || 1.5;
       const color = getSeverityColor(severity);
-      const icon = disruption.status === 'upcoming' ? '📅' : '🚧';
+      const icon = disruption.status === "upcoming" ? "📅" : "🚧";
 
       // Draw circular impact zone
       const circle = L.circle([disruption.latitude, disruption.longitude], {
@@ -237,7 +260,10 @@ function MiniOngoingMap() {
       // Add marker
       const marker = L.marker([disruption.latitude, disruption.longitude], {
         icon: L.divIcon({
-          className: disruption.status === 'upcoming' ? 'disruption-marker-upcoming' : 'disruption-marker-active',
+          className:
+            disruption.status === "upcoming"
+              ? "disruption-marker-upcoming"
+              : "disruption-marker-active",
           html: `
             <div style="position: relative; width: 36px; height: 36px;">
               <div style="
@@ -278,7 +304,7 @@ function MiniOngoingMap() {
           iconSize: [36, 36],
           iconAnchor: [18, 18],
         }),
-        zIndexOffset: 1000
+        zIndexOffset: 1000,
       }).addTo(map);
 
       marker.bindPopup(createPopup(disruption));
@@ -287,7 +313,7 @@ function MiniOngoingMap() {
 
     // Fit map to show all disruptions
     if (disruptions.length > 0) {
-      const bounds = disruptions.map(d => [d.latitude, d.longitude]);
+      const bounds = disruptions.map((d) => [d.latitude, d.longitude]);
       try {
         map.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 });
       } catch (e) {}
@@ -295,50 +321,63 @@ function MiniOngoingMap() {
   };
 
   const createPopup = (disruption) => {
-    const isActive = disruption.status === 'active';
-    const icon = isActive ? '🚧' : '📅';
-    const statusLabel = isActive ? 'Active' : 'Upcoming';
-    const statusColor = isActive ? '#ef4444' : '#3b82f6';
-    
+    const isActive = disruption.status === "active";
+    const icon = isActive ? "🚧" : "📅";
+    const statusLabel = isActive ? "Active" : "Upcoming";
+    const statusColor = isActive ? "#ef4444" : "#3b82f6";
+
     return `
       <div style="font-family: -apple-system, sans-serif; padding: 10px; min-width: 200px;">
         <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #1f2937;">
-          ${icon} ${disruption.title || 'Traffic Disruption'}
+          ${icon} ${disruption.title || "Traffic Disruption"}
         </h3>
         <p style="margin: 4px 0; font-size: 11px; color: #6b7280;">
-          📍 ${disruption.location || 'Location not specified'}
+          📍 ${disruption.location || "Location not specified"}
         </p>
         <div style="margin-top: 8px;">
           <span style="background: ${statusColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">
             ${statusLabel}
           </span>
         </div>
-        ${isActive ? `
+        ${
+          isActive
+            ? `
           <div style="margin-top: 8px; padding: 6px; background: #f9fafb; border-radius: 4px;">
             <p style="margin: 2px 0; font-size: 10px; color: #4b5563;">
               <strong>Delay:</strong> +${disruption.expected_delay || 0} min
             </p>
             <p style="margin: 2px 0; font-size: 10px; color: #4b5563;">
-              <strong>Level:</strong> ${disruption.congestion_level || 'Unknown'}
+              <strong>Level:</strong> ${
+                disruption.congestion_level || "Unknown"
+              }
             </p>
           </div>
-        ` : `
+        `
+            : `
           <div style="margin-top: 8px; padding: 6px; background: #eff6ff; border-radius: 4px;">
             <p style="margin: 2px 0; font-size: 10px; color: #1e40af;">
-              <strong>Starts:</strong> ${disruption.start_date ? new Date(disruption.start_date).toLocaleString('en-US', {
-                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-              }) : 'TBD'}
+              <strong>Starts:</strong> ${
+                disruption.start_date
+                  ? new Date(disruption.start_date).toLocaleString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : "TBD"
+              }
             </p>
           </div>
-        `}
+        `
+        }
       </div>
     `;
   };
 
   const getSeverityColor = (severity) => {
-    if (severity < 1.5) return '#22c55e'; // green
-    if (severity < 2.5) return '#fbbf24'; // yellow
-    return '#ef4444'; // red
+    if (severity < 1.5) return "#22c55e"; // green
+    if (severity < 2.5) return "#fbbf24"; // yellow
+    return "#ef4444"; // red
   };
 
   return (
@@ -360,10 +399,10 @@ function MiniOngoingMap() {
         </div>
       )}
       {/* ✅ IMPORTANT: Add id to prevent double initialization */}
-      <div 
-        ref={mapRef} 
+      <div
+        ref={mapRef}
         id="mini-ongoing-map"
-        className="w-full h-full rounded-lg" 
+        className="w-full h-full rounded-lg"
         style={{ zIndex: 1 }}
       />
     </div>
@@ -406,7 +445,7 @@ export default function DashboardPage() {
   // Heatmap data state - ALL 24 hours
   const [heatmapData, setHeatmapData] = useState({
     times: [],
-    roads: []
+    roads: [],
   });
 
   // Weekly trend data
@@ -440,30 +479,30 @@ export default function DashboardPage() {
   // ============================================
   const checkBackendHealth = async () => {
     const startTime = Date.now();
-    
+
     try {
-      const response = await fetch('http://localhost:5000/api/health');
+      const response = await fetch("http://localhost:5000/api/health");
       const endTime = Date.now();
       const responseTime = endTime - startTime;
-      
+
       if (response.ok) {
         setBackendStatus({
-          ml_model: 'active',
-          database: 'active',
-          response_time: `${responseTime}ms`
+          ml_model: "active",
+          database: "active",
+          response_time: `${responseTime}ms`,
         });
       } else {
         setBackendStatus({
-          ml_model: 'error',
-          database: 'error',
-          response_time: 'N/A'
+          ml_model: "error",
+          database: "error",
+          response_time: "N/A",
         });
       }
     } catch (err) {
       setBackendStatus({
-        ml_model: 'error',
-        database: 'error',
-        response_time: 'N/A'
+        ml_model: "error",
+        database: "error",
+        response_time: "N/A",
       });
     }
   };
@@ -478,11 +517,13 @@ export default function DashboardPage() {
       // - TomTom Traffic Flow: https://api.tomtom.com/traffic/services/4/flowSegmentData
       // - Waze for Cities: https://www.waze.com/ccp-api/
       // - Your own backend endpoint: http://localhost:5000/api/traffic-status
-      
+
       const response = await fetch(
-        `http://localhost:5000/api/traffic-status?road=${encodeURIComponent(roadName)}&hour=${hour}`
+        `http://localhost:5000/api/traffic-status?road=${encodeURIComponent(
+          roadName
+        )}&hour=${hour}`
       );
-      
+
       if (response.ok) {
         const data = await response.json();
         // Expected format: { congestion_level: 1.5, timestamp: "..." }
@@ -490,7 +531,9 @@ export default function DashboardPage() {
       }
       return null;
     } catch (err) {
-      console.log(`⚠️ Real-time traffic API not available for ${roadName} at ${hour}:00`);
+      console.log(
+        `⚠️ Real-time traffic API not available for ${roadName} at ${hour}:00`
+      );
       return null;
     }
   };
@@ -505,150 +548,162 @@ export default function DashboardPage() {
   // ============================================
   const calculateHeatmap = async (simulations) => {
     console.log("🔥 Calculating 24-hour heatmap (independent mode)");
-    
+
     // ✅ ALWAYS USE THESE TOP 3 AREAS - NO DEPENDENCY ON SIMULATIONS
     const topAreas = [
-      { name: 'Bucal', lat: 14.1894, lng: 121.1653 },
-      { name: 'Parian', lat: 14.2115, lng: 121.1653 },
-      { name: 'Turbina', lat: 14.2331, lng: 121.1653 }
+      { name: "Bucal", lat: 14.1894, lng: 121.1653 },
+      { name: "Parian", lat: 14.2115, lng: 121.1653 },
+      { name: "Turbina", lat: 14.2331, lng: 121.1653 },
     ];
-    
-    console.log("📍 Fixed top 3 areas:", topAreas.map(a => a.name).join(', '));
+
+    console.log(
+      "📍 Fixed top 3 areas:",
+      topAreas.map((a) => a.name).join(", ")
+    );
 
     const currentHour = new Date().getHours();
-    
+
     // Generate ALL 24 hours (0-23)
     const allHours = Array.from({ length: 24 }, (_, i) => i);
-    
+
     // Format time labels
-    const timeLabels = allHours.map(h => {
+    const timeLabels = allHours.map((h) => {
       let label;
       if (h === 0) label = "12AM";
       else if (h === 12) label = "12PM";
       else if (h < 12) label = `${h}AM`;
       else label = `${h - 12}PM`;
-      
+
       if (h === currentHour) label += " 🔴"; // Live indicator
-      
+
       return label;
     });
 
     // Calculate values for each area across all 24 hours
-    const roadData = await Promise.all(topAreas.map(async area => {
-      console.log(`\n📊 Processing ${area.name}...`);
+    const roadData = await Promise.all(
+      topAreas.map(async (area) => {
+        console.log(`\n📊 Processing ${area.name}...`);
 
-      // Generate values for all 24 hours
-      const values = await Promise.all(allHours.map(async hour => {
-        const isPast = hour < currentHour;
-        const isCurrent = hour === currentHour;
-        const isFuture = hour > currentHour;
+        // Generate values for all 24 hours
+        const values = await Promise.all(
+          allHours.map(async (hour) => {
+            const isPast = hour < currentHour;
+            const isCurrent = hour === currentHour;
+            const isFuture = hour > currentHour;
 
-        // ============================================================
-        // 1. TRY REAL-TIME API FOR CURRENT AND RECENT HOURS
-        // ============================================================
-        let realTimeValue = null;
-        if (isCurrent || (isPast && currentHour - hour <= 3)) {
-          try {
-            const response = await fetch(
-              `http://localhost:5000/api/traffic-status?area=${encodeURIComponent(area.name)}&hour=${hour}`
-            );
-            
-            if (response.ok) {
-              const data = await response.json();
-              realTimeValue = data.congestion_level || null;
-              
-              if (realTimeValue !== null) {
-                console.log(`  ✅ Real-time data for ${area.name} at ${hour}:00 = ${realTimeValue}`);
-                return Math.max(0.5, Math.min(3.0, realTimeValue));
+            // ============================================================
+            // 1. TRY REAL-TIME API FOR CURRENT AND RECENT HOURS
+            // ============================================================
+            let realTimeValue = null;
+            if (isCurrent || (isPast && currentHour - hour <= 3)) {
+              try {
+                const response = await fetch(
+                  `http://localhost:5000/api/traffic-status?area=${encodeURIComponent(
+                    area.name
+                  )}&hour=${hour}`
+                );
+
+                if (response.ok) {
+                  const data = await response.json();
+                  realTimeValue = data.congestion_level || null;
+
+                  if (realTimeValue !== null) {
+                    console.log(
+                      `  ✅ Real-time data for ${area.name} at ${hour}:00 = ${realTimeValue}`
+                    );
+                    return Math.max(0.5, Math.min(3.0, realTimeValue));
+                  }
+                }
+              } catch (err) {
+                // Real-time API not available, will use historical patterns
               }
             }
-          } catch (err) {
-            // Real-time API not available, will use historical patterns
-          }
-        }
 
-        // ============================================================
-        // 2. USE HISTORICAL PATTERNS + PREDICTION
-        // ============================================================
-        
-        // Base traffic pattern per area (from historical DWPH/POSO data)
-        let baseLevel = 1.0;
-        
-        // Area-specific base levels (adjust based on your historical data)
-        if (area.name === 'Bucal') baseLevel = 1.3; // Higher base traffic
-        else if (area.name === 'Parian') baseLevel = 1.5; // Highest base traffic
-        else if (area.name === 'Turbina') baseLevel = 1.2; // Moderate base traffic
-        
-        // Time-of-day multiplier (typical daily pattern)
-        let timeMultiplier = 1.0;
-        
-        if (hour >= 6 && hour <= 9) {
-          // Morning rush hour
-          timeMultiplier = 1.6;
-        } else if (hour >= 17 && hour <= 19) {
-          // Evening rush hour  
-          timeMultiplier = 1.8;
-        } else if (hour >= 12 && hour <= 14) {
-          // Lunch time
-          timeMultiplier = 1.3;
-        } else if (hour >= 10 && hour <= 11) {
-          // Mid-morning
-          timeMultiplier = 1.2;
-        } else if (hour >= 15 && hour <= 16) {
-          // Mid-afternoon
-          timeMultiplier = 1.3;
-        } else if (hour >= 20 && hour <= 22) {
-          // Evening
-          timeMultiplier = 1.1;
-        } else if (hour >= 23 || hour <= 5) {
-          // Late night / early morning
-          timeMultiplier = 0.4;
-        } else {
-          // Off-peak
-          timeMultiplier = 0.9;
-        }
-        
-        // Check if it's weekend
-        const today = new Date();
-        const isWeekend = today.getDay() === 0 || today.getDay() === 6;
-        if (isWeekend) {
-          // Reduce weekday rush hour patterns on weekends
-          if (hour >= 6 && hour <= 9) timeMultiplier *= 0.7;
-          if (hour >= 17 && hour <= 19) timeMultiplier *= 0.7;
-        }
-        
-        // Calculate final value
-        let value = baseLevel * timeMultiplier;
-        
-        // Add slight variation for realism
-        const randomVariation = (Math.random() - 0.5) * 0.2; // ±0.1
-        value += randomVariation;
-        
-        // Boost current hour slightly for emphasis
-        if (isCurrent) {
-          value *= 1.1;
-        }
-        
-        // For future hours, add uncertainty (slightly reduce confidence)
-        if (isFuture) {
-          value *= 0.95;
-        }
-        
-        // Ensure value is within bounds (0.5 = light, 3.0 = heavy)
-        return Math.max(0.5, Math.min(3.0, value));
-      }));
+            // ============================================================
+            // 2. USE HISTORICAL PATTERNS + PREDICTION
+            // ============================================================
 
-      return {
-        name: area.name,
-        values: values
-      };
-    }));
+            // Base traffic pattern per area (from historical DWPH/POSO data)
+            let baseLevel = 1.0;
+
+            // Area-specific base levels (adjust based on your historical data)
+            if (area.name === "Bucal") baseLevel = 1.3; // Higher base traffic
+            else if (area.name === "Parian")
+              baseLevel = 1.5; // Highest base traffic
+            else if (area.name === "Turbina") baseLevel = 1.2; // Moderate base traffic
+
+            // Time-of-day multiplier (typical daily pattern)
+            let timeMultiplier = 1.0;
+
+            if (hour >= 6 && hour <= 9) {
+              // Morning rush hour
+              timeMultiplier = 1.6;
+            } else if (hour >= 17 && hour <= 19) {
+              // Evening rush hour
+              timeMultiplier = 1.8;
+            } else if (hour >= 12 && hour <= 14) {
+              // Lunch time
+              timeMultiplier = 1.3;
+            } else if (hour >= 10 && hour <= 11) {
+              // Mid-morning
+              timeMultiplier = 1.2;
+            } else if (hour >= 15 && hour <= 16) {
+              // Mid-afternoon
+              timeMultiplier = 1.3;
+            } else if (hour >= 20 && hour <= 22) {
+              // Evening
+              timeMultiplier = 1.1;
+            } else if (hour >= 23 || hour <= 5) {
+              // Late night / early morning
+              timeMultiplier = 0.4;
+            } else {
+              // Off-peak
+              timeMultiplier = 0.9;
+            }
+
+            // Check if it's weekend
+            const today = new Date();
+            const isWeekend = today.getDay() === 0 || today.getDay() === 6;
+            if (isWeekend) {
+              // Reduce weekday rush hour patterns on weekends
+              if (hour >= 6 && hour <= 9) timeMultiplier *= 0.7;
+              if (hour >= 17 && hour <= 19) timeMultiplier *= 0.7;
+            }
+
+            // Calculate final value
+            let value = baseLevel * timeMultiplier;
+
+            // Add slight variation for realism
+            const randomVariation = (Math.random() - 0.5) * 0.2; // ±0.1
+            value += randomVariation;
+
+            // Boost current hour slightly for emphasis
+            if (isCurrent) {
+              value *= 1.1;
+            }
+
+            // For future hours, add uncertainty (slightly reduce confidence)
+            if (isFuture) {
+              value *= 0.95;
+            }
+
+            // Ensure value is within bounds (0.5 = light, 3.0 = heavy)
+            return Math.max(0.5, Math.min(3.0, value));
+          })
+        );
+
+        return {
+          name: area.name,
+          values: values,
+        };
+      })
+    );
 
     console.log("✅ 24-hour heatmap updated (independent mode)");
 
     setHeatmapData({
       times: timeLabels,
-      roads: roadData
+      roads: roadData,
     });
 
     // Auto-scroll to current hour after update
@@ -656,7 +711,6 @@ export default function DashboardPage() {
       scrollToCurrentHour();
     }, 100);
   };
-  
 
   // ============================================
   // AUTO-SCROLL TO CURRENT HOUR
@@ -668,7 +722,7 @@ export default function DashboardPage() {
       const scrollPosition = Math.max(0, (currentHour - 3) * 60);
       heatmapScrollRef.current.scrollTo({
         left: scrollPosition,
-        behavior: 'smooth'
+        behavior: "smooth",
       });
     }
   };
@@ -676,24 +730,24 @@ export default function DashboardPage() {
   // Add this function in page.jsx, before fetchDashboardData
   const calculateWeeklyTrend = (simulations) => {
     const dayMap = {
-      'Sunday': 0,
-      'Monday': 1,
-      'Tuesday': 2,
-      'Wednesday': 3,
-      'Thursday': 4,
-      'Friday': 5,
-      'Saturday': 6
+      Sunday: 0,
+      Monday: 1,
+      Tuesday: 2,
+      Wednesday: 3,
+      Thursday: 4,
+      Friday: 5,
+      Saturday: 6,
     };
 
-    const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const dayCounts = new Array(7).fill(0);
     const daySeverities = new Array(7).fill(0);
 
-    simulations.forEach(sim => {
+    simulations.forEach((sim) => {
       if (sim.start_time && sim.average_delay_ratio) {
         const startDate = new Date(sim.start_time);
         const dayIndex = startDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
-        
+
         dayCounts[dayIndex]++;
         daySeverities[dayIndex] += parseFloat(sim.average_delay_ratio);
       }
@@ -702,9 +756,10 @@ export default function DashboardPage() {
     // Calculate averages and format for chart
     return dayLabels.map((day, index) => ({
       day: day,
-      level: dayCounts[index] > 0 
-        ? parseFloat((daySeverities[index] / dayCounts[index]).toFixed(2))
-        : 0
+      level:
+        dayCounts[index] > 0
+          ? parseFloat((daySeverities[index] / dayCounts[index]).toFixed(2))
+          : 0,
     }));
   };
 
@@ -721,7 +776,6 @@ export default function DashboardPage() {
       );
       const savedData = await savedResponse.json();
 
-
       if (savedData.success) {
         setSavedSimulations(savedData.simulations);
 
@@ -734,12 +788,16 @@ export default function DashboardPage() {
         );
 
         const validSeverities = completed
-          .map(s => s.average_delay_ratio)
-          .filter(val => val !== null && val !== undefined && !isNaN(val) && val > 0);
-        
-        const avgSeverity = validSeverities.length > 0
-          ? validSeverities.reduce((sum, val) => sum + val, 0) / validSeverities.length
-          : 0;
+          .map((s) => s.average_delay_ratio)
+          .filter(
+            (val) => val !== null && val !== undefined && !isNaN(val) && val > 0
+          );
+
+        const avgSeverity =
+          validSeverities.length > 0
+            ? validSeverities.reduce((sum, val) => sum + val, 0) /
+              validSeverities.length
+            : 0;
 
         const avgLabel =
           avgSeverity < 1.5
@@ -758,7 +816,7 @@ export default function DashboardPage() {
         // ✅ ADD THIS - Calculate weekly trend from actual data
         const weeklyData = calculateWeeklyTrend(savedData.simulations);
         setWeeklyTrend(weeklyData);
-        
+
         console.log("📊 Weekly trend data:", weeklyData);
 
         console.log("🔄 Calculating 24-hour heatmap...");
@@ -799,23 +857,26 @@ export default function DashboardPage() {
     fetchDashboardData();
     checkBackendHealth();
     setIsMounted(true);
-    
+
     // Calculate time until next hour
     const now = new Date();
-    const msUntilNextHour = (60 - now.getMinutes()) * 60 * 1000 - now.getSeconds() * 1000;
-    
-    console.log(`⏰ Next hourly refresh in ${Math.round(msUntilNextHour / 60000)} minutes`);
-    
+    const msUntilNextHour =
+      (60 - now.getMinutes()) * 60 * 1000 - now.getSeconds() * 1000;
+
+    console.log(
+      `⏰ Next hourly refresh in ${Math.round(msUntilNextHour / 60000)} minutes`
+    );
+
     // Set up hourly refresh at top of each hour
     const hourlyTimer = setTimeout(() => {
       console.log("🔄 HOURLY REFRESH - New hour started!");
       fetchDashboardData();
-      
+
       const hourlyInterval = setInterval(() => {
         console.log("🔄 HOURLY REFRESH");
         fetchDashboardData();
       }, 3600000);
-      
+
       return () => clearInterval(hourlyInterval);
     }, msUntilNextHour);
 
@@ -846,8 +907,8 @@ export default function DashboardPage() {
   };
 
   const getRelativeTime = (date) => {
-    if (!date) return 'Unknown';
-    
+    if (!date) return "Unknown";
+
     const now = new Date();
     const past = new Date(date);
     const diffMs = now - past;
@@ -855,10 +916,11 @@ export default function DashboardPage() {
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return 'Just now';
+    if (diffMins < 1) return "Just now";
     if (diffMins < 60) return `${diffMins} min ago`;
-    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    if (diffHours < 24)
+      return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+    return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
   };
 
   return (
@@ -872,9 +934,13 @@ export default function DashboardPage() {
             {/* Greeting */}
             <div className="mb-6">
               <h1 className="text-3xl font-bold text-gray-800">
-                Hello, <span style={{ color: "#F5820D" }}>{user?.firstName}</span>
+                Hello,{" "}
+                <span style={{ color: "#F5820D" }}>{user?.firstName}</span>
               </h1>
-              <p className="text-gray-600 mt-1"> Welcome back to your dashboard!</p>
+              <p className="text-gray-600 mt-1">
+                {" "}
+                Welcome back to your dashboard!
+              </p>
             </div>
 
             {/* Quick Actions */}
@@ -885,12 +951,20 @@ export default function DashboardPage() {
 
               <div className="grid md:grid-cols-3 gap-4">
                 {/* New Simulation */}
-                <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow" style={{ background: 'linear-gradient(135deg, #F5820D 0%, #FFA611 100%)' }}>
+                <div
+                  className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #F5820D 0%, #FFA611 100%)",
+                  }}
+                >
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
                       <span className="text-2xl font-light text-white">+</span>
                     </div>
-                    <h3 className="text-lg font-semibold text-white">New Simulation</h3>
+                    <h3 className="text-lg font-semibold text-white">
+                      New Simulation
+                    </h3>
                   </div>
                   <p className="text-sm text-white/90 mb-4 leading-relaxed">
                     Define a disruption, run the simulation, review results.
@@ -901,9 +975,11 @@ export default function DashboardPage() {
                   >
                     Create
                   </button>
-                  
+
                   <div className="mt-4 pt-4 border-t border-white/20">
-                    <p className="text-xs text-white/80 mb-1">Saved Scenarios</p>
+                    <p className="text-xs text-white/80 mb-1">
+                      Saved Scenarios
+                    </p>
                     <p className="text-2xl font-bold text-white">
                       {loading ? "..." : stats.totalSaved}
                     </p>
@@ -911,14 +987,26 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Saved Scenarios */}
-                <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow" style={{ background: 'linear-gradient(150deg, #F5820D 0%, #FFA611 100%)' }}>
+                <div
+                  className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow"
+                  style={{
+                    background:
+                      "linear-gradient(150deg, #F5820D 0%, #FFA611 100%)",
+                  }}
+                >
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
-                      <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34-3-3-3zm3-10H5V5h10v4z"/>
+                      <svg
+                        className="w-6 h-6 text-white"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34-3-3-3zm3-10H5V5h10v4z" />
                       </svg>
                     </div>
-                    <h3 className="text-lg font-semibold text-white">Saved Scenarios</h3>
+                    <h3 className="text-lg font-semibold text-white">
+                      Saved Scenarios
+                    </h3>
                   </div>
                   <p className="text-sm text-white/90 mb-4 leading-relaxed">
                     Open and edit previously saved simulations or resume drafts.
@@ -936,15 +1024,29 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Published Results */}
-                <div className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow" style={{ background: 'linear-gradient(190deg, #F5820D 0%, #FFA611 100%)' }}>
+                <div
+                  className="rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow"
+                  style={{
+                    background:
+                      "linear-gradient(190deg, #F5820D 0%, #FFA611 100%)",
+                  }}
+                >
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
-                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                        <circle cx="12" cy="12" r="10"/>
-                        <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                      <svg
+                        className="w-6 h-6 text-white"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
                       </svg>
                     </div>
-                    <h3 className="text-lg font-semibold text-white">Published Results</h3>
+                    <h3 className="text-lg font-semibold text-white">
+                      Published Results
+                    </h3>
                   </div>
                   <p className="text-sm text-white/90 mb-4 leading-relaxed">
                     View simulations already published to the public map.
@@ -1028,13 +1130,15 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {savedSimulations.slice(0, 3).map((sim) => (
+                  {savedSimulations
+                    .filter((sim, index, self) => 
+                      index === self.findIndex(s => s.simulation_id === sim.simulation_id)
+                    )
+                    .slice(0, 3)
+                    .map((sim) => (
                     <div
                       key={sim.simulation_id}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition cursor-pointer"
-                      onClick={() =>
-                        router.push(`/planner/simulation/${sim.simulation_id}`)
-                      }
+                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                     >
                       <div className="flex-1">
                         <p className="font-semibold text-gray-800">
@@ -1096,7 +1200,8 @@ export default function DashboardPage() {
                     24-Hour Traffic Timeline
                   </h2>
                   <p className="text-xs text-gray-500 mt-1">
-                    Real-time tracking • Past hours fade • Current hour • Future predictions
+                    Real-time tracking • Past hours fade • Current hour • Future
+                    predictions
                   </p>
                 </div>
                 <button
@@ -1108,113 +1213,130 @@ export default function DashboardPage() {
                 </button>
               </div>
 
-             {/* Scrollable Heatmap Container */}
-            <div 
-              ref={heatmapScrollRef}
-              className="overflow-x-auto overflow-y-visible pb-2"
-              style={{ scrollBehavior: 'smooth' }}
-            >
-              {heatmapData.roads.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <p>Loading 24-hour data...</p>
-                </div>
-              ) : (
-                <table className="text-xs border-collapse" style={{ tableLayout: 'fixed' }}>
-                  <thead>
-                    <tr>
-                      <th className="sticky left-0 bg-white z-10 text-left p-2 font-semibold text-gray-700 border-r border-gray-200" style={{ minWidth: '100px', width: '100px' }}>
-                        Location
-                      </th>
-                      {heatmapData.times.map((time, idx) => {
-                        const currentHour = new Date().getHours();
-                        const isCurrent = idx === currentHour;
-                        const isPast = idx < currentHour;
-                        
-                        // Remove emoji for consistent width
-                        const timeText = time.replace(/🔴/g, '').replace(/\s+/g, ' ').trim();
-                        
-                        return (
-                          <th
-                            key={idx}
-                            className={`p-2 font-semibold text-center transition-opacity duration-500 ${
-                              isCurrent 
-                                ? 'text-red-600 bg-red-50' 
-                                : isPast 
-                                ? 'text-gray-400 opacity-50' 
-                                : 'text-gray-700'
-                            }`}
-                            style={{ 
-                              minWidth: '60px', 
-                              width: '60px',
-                              maxWidth: '60px'
-                            }}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              <span className="whitespace-nowrap text-xs">{timeText}</span>
-                              {isCurrent && (
-                                <div 
-                                  className="w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0" 
-                                  title="Current Hour"
-                                />
-                              )}
-                            </div>
-                          </th>
-                        );
-                      })}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {heatmapData.roads.map((road, roadIdx) => (
-                      <tr key={roadIdx}>
-                        <td className="sticky left-0 bg-white z-10 p-2 font-medium text-gray-800 text-xs border-r border-gray-200">
-                          {road.name}
-                        </td>
-                        {road.values.map((value, timeIdx) => {
+              {/* Scrollable Heatmap Container */}
+              <div
+                ref={heatmapScrollRef}
+                className="overflow-x-auto overflow-y-visible pb-2"
+                style={{ scrollBehavior: "smooth" }}
+              >
+                {heatmapData.roads.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>Loading 24-hour data...</p>
+                  </div>
+                ) : (
+                  <table
+                    className="text-xs border-collapse"
+                    style={{ tableLayout: "fixed" }}
+                  >
+                    <thead>
+                      <tr>
+                        <th
+                          className="sticky left-0 bg-white z-10 text-left p-2 font-semibold text-gray-700 border-r border-gray-200"
+                          style={{ minWidth: "100px", width: "100px" }}
+                        >
+                          Location
+                        </th>
+                        {heatmapData.times.map((time, idx) => {
                           const currentHour = new Date().getHours();
-                          const isCurrent = timeIdx === currentHour;
-                          const isPast = timeIdx < currentHour;
-                          
-                          let opacity = 1.0;
-                          if (isPast) {
-                            const hoursSince = currentHour - timeIdx;
-                            opacity = Math.max(0.3, 1.0 - (hoursSince * 0.1));
-                          }
-                          
+                          const isCurrent = idx === currentHour;
+                          const isPast = idx < currentHour;
+
+                          // Remove emoji for consistent width
+                          const timeText = time
+                            .replace(/🔴/g, "")
+                            .replace(/\s+/g, " ")
+                            .trim();
+
                           return (
-                            <td 
-                              key={timeIdx} 
-                              className="p-1 text-center"
-                              style={{ 
-                                minWidth: '60px',
-                                maxWidth: '60px',
-                                width: '60px'
+                            <th
+                              key={idx}
+                              className={`p-2 font-semibold text-center transition-opacity duration-500 ${
+                                isCurrent
+                                  ? "text-red-600 bg-red-50"
+                                  : isPast
+                                  ? "text-gray-400 opacity-50"
+                                  : "text-gray-700"
+                              }`}
+                              style={{
+                                minWidth: "60px",
+                                width: "60px",
+                                maxWidth: "60px",
                               }}
                             >
-                              <div
-                                className={`h-12 w-12 rounded flex items-center justify-center text-white font-bold text-xs mx-auto ${getCongestionColor(
-                                  value
-                                )} hover:scale-110 transition-transform cursor-pointer ${
-                                  isCurrent ? 'ring-4 ring-red-400' : ''
-                                  //isCurrent ? 'ring-4 ring-red-400 animate-[pulse_1s_ease-in-out_infinite]' : ''
-                                }`}
-                                style={{ opacity }}
-                                title={`${road.name} at ${timeIdx}:00\n${getCongestionLabel(
-                                  value
-                                )} (${value.toFixed(1)})\n${
-                                  isPast ? '✓ Passed' : isCurrent ? '🔴 LIVE' : '📊 Predicted'
-                                }`}
-                              >
-                                {value.toFixed(1)}
+                              <div className="flex items-center justify-center gap-1">
+                                <span className="whitespace-nowrap text-xs">
+                                  {timeText}
+                                </span>
+                                {isCurrent && (
+                                  <div
+                                    className="w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0"
+                                    title="Current Hour"
+                                  />
+                                )}
                               </div>
-                            </td>
+                            </th>
                           );
                         })}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
+                    </thead>
+                    <tbody>
+                      {heatmapData.roads.map((road, roadIdx) => (
+                        <tr key={roadIdx}>
+                          <td className="sticky left-0 bg-white z-10 p-2 font-medium text-gray-800 text-xs border-r border-gray-200">
+                            {road.name}
+                          </td>
+                          {road.values.map((value, timeIdx) => {
+                            const currentHour = new Date().getHours();
+                            const isCurrent = timeIdx === currentHour;
+                            const isPast = timeIdx < currentHour;
+
+                            let opacity = 1.0;
+                            if (isPast) {
+                              const hoursSince = currentHour - timeIdx;
+                              opacity = Math.max(0.3, 1.0 - hoursSince * 0.1);
+                            }
+
+                            return (
+                              <td
+                                key={timeIdx}
+                                className="p-1 text-center"
+                                style={{
+                                  minWidth: "60px",
+                                  maxWidth: "60px",
+                                  width: "60px",
+                                }}
+                              >
+                                <div
+                                  className={`h-12 w-12 rounded flex items-center justify-center text-white font-bold text-xs mx-auto ${getCongestionColor(
+                                    value
+                                  )} hover:scale-110 transition-transform cursor-pointer ${
+                                    isCurrent ? "ring-4 ring-red-400" : ""
+                                    //isCurrent ? 'ring-4 ring-red-400 animate-[pulse_1s_ease-in-out_infinite]' : ''
+                                  }`}
+                                  style={{ opacity }}
+                                  title={`${
+                                    road.name
+                                  } at ${timeIdx}:00\n${getCongestionLabel(
+                                    value
+                                  )} (${value.toFixed(1)})\n${
+                                    isPast
+                                      ? "✓ Passed"
+                                      : isCurrent
+                                      ? "🔴 LIVE"
+                                      : "📊 Predicted"
+                                  }`}
+                                >
+                                  {value.toFixed(1)}
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
               {/* Legend */}
               <div className="flex justify-between items-center mt-4 pt-4 border-t">
                 <div className="flex gap-4 text-xs">
@@ -1231,11 +1353,14 @@ export default function DashboardPage() {
                     <span className="text-gray-600">Heavy</span>
                   </div>
                 </div>
-                
+
                 <div className="text-xs text-gray-500">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                    <span>Updates hourly • Last: {isMounted ? lastUpdate.toLocaleTimeString() : '--:--'}</span>
+                    <span>
+                      Updates hourly • Last:{" "}
+                      {isMounted ? lastUpdate.toLocaleTimeString() : "--:--"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1285,25 +1410,32 @@ export default function DashboardPage() {
                 </LineChart>
               </ResponsiveContainer>
               <p className="text-xs text-gray-500 text-center mt-2">
-                {loading ? 'Loading...' : 
-                 savedSimulations.length === 0 ? 'No data yet - create simulations to see trends' :
-                 `Based on ${savedSimulations.length} simulation${savedSimulations.length > 1 ? 's' : ''}`
-                }
+                {loading
+                  ? "Loading..."
+                  : savedSimulations.length === 0
+                  ? "No data yet - create simulations to see trends"
+                  : `Based on ${savedSimulations.length} simulation${
+                      savedSimulations.length > 1 ? "s" : ""
+                    }`}
               </p>
             </div>
           </div>
 
           {/* Right Sidebar */}
           <div className="col-span-12 lg:col-span-4 space-y-6">
-           {/* System Status */}
+            {/* System Status */}
             <div className="bg-white rounded-lg shadow-md p-6">
               <h3 className="text-lg font-bold text-gray-800 mb-4">
                 System Status
               </h3>
               <div className="space-y-3">
-                <div className={`flex items-center justify-between p-3 rounded-lg ${
-                  backendStatus.ml_model === 'active' ? 'bg-green-50' : 'bg-red-50'
-                }`}>
+                <div
+                  className={`flex items-center justify-between p-3 rounded-lg ${
+                    backendStatus.ml_model === "active"
+                      ? "bg-green-50"
+                      : "bg-red-50"
+                  }`}
+                >
                   <div className="flex items-center gap-3">
                     <div className="text-2xl">🤖</div>
                     <div>
@@ -1311,10 +1443,14 @@ export default function DashboardPage() {
                       <p className="text-xs text-gray-600">Random Forest</p>
                     </div>
                   </div>
-                  <span className={`px-2 py-1 text-white text-xs font-semibold rounded ${
-                    backendStatus.ml_model === 'active' ? 'bg-green-500' : 'bg-red-500'
-                  }`}>
-                    {backendStatus.ml_model === 'active' ? 'Active' : 'Offline'}
+                  <span
+                    className={`px-2 py-1 text-white text-xs font-semibold rounded ${
+                      backendStatus.ml_model === "active"
+                        ? "bg-green-500"
+                        : "bg-red-500"
+                    }`}
+                  >
+                    {backendStatus.ml_model === "active" ? "Active" : "Offline"}
                   </span>
                 </div>
 
@@ -1329,13 +1465,21 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <span className="text-sm font-semibold text-blue-600">
-                    {loading ? '...' : savedSimulations.length > 0 ? getRelativeTime(savedSimulations[0].created_at) : 'Never'}
+                    {loading
+                      ? "..."
+                      : savedSimulations.length > 0
+                      ? getRelativeTime(savedSimulations[0].created_at)
+                      : "Never"}
                   </span>
                 </div>
 
-                <div className={`flex items-center justify-between p-3 rounded-lg ${
-                  backendStatus.database === 'active' ? 'bg-green-50' : 'bg-red-50'
-                }`}>
+                <div
+                  className={`flex items-center justify-between p-3 rounded-lg ${
+                    backendStatus.database === "active"
+                      ? "bg-green-50"
+                      : "bg-red-50"
+                  }`}
+                >
                   <div className="flex items-center gap-3">
                     <div className="text-2xl">⚡</div>
                     <div>
@@ -1345,9 +1489,13 @@ export default function DashboardPage() {
                       <p className="text-xs text-gray-600">Response time</p>
                     </div>
                   </div>
-                  <span className={`text-sm font-semibold ${
-                    backendStatus.database === 'active' ? 'text-green-600' : 'text-red-600'
-                  }`}>
+                  <span
+                    className={`text-sm font-semibold ${
+                      backendStatus.database === "active"
+                        ? "text-green-600"
+                        : "text-red-600"
+                    }`}
+                  >
                     {backendStatus.response_time}
                   </span>
                 </div>
@@ -1378,12 +1526,12 @@ export default function DashboardPage() {
                     Generate Report
                   </span>
                 </button>
-                <button 
+                <button
                   onClick={() => router.push("/settings")}
-                  className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition text-left">
+                  className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition text-left"
+                >
                   <span className="text-xl">⚙️</span>
-                  <span className="font-medium text-gray-700">
-                    Settings</span>
+                  <span className="font-medium text-gray-700">Settings</span>
                 </button>
               </div>
             </div>
@@ -1407,32 +1555,33 @@ export default function DashboardPage() {
                   <>
                     {savedSimulations.slice(0, 3).map((sim) => {
                       const simDate = new Date(sim.created_at);
-                      const hoursSince = (new Date() - simDate) / (1000 * 60 * 60);
-                      
+                      const hoursSince =
+                        (new Date() - simDate) / (1000 * 60 * 60);
+
                       let icon, bgColor, borderColor, title;
-                      
-                      if (sim.simulation_status === 'published') {
-                        icon = '✅';
-                        bgColor = 'bg-green-50';
-                        borderColor = 'border-green-500';
-                        title = 'Report generated';
+
+                      if (sim.simulation_status === "published") {
+                        icon = "✅";
+                        bgColor = "bg-green-50";
+                        borderColor = "border-green-500";
+                        title = "Report generated";
                       } else if (hoursSince < 1) {
-                        icon = 'ℹ️';
-                        bgColor = 'bg-blue-50';
-                        borderColor = 'border-blue-500';
-                        title = 'Simulation ready';
+                        icon = "ℹ️";
+                        bgColor = "bg-blue-50";
+                        borderColor = "border-blue-500";
+                        title = "Simulation ready";
                       } else {
-                        icon = '⚠️';
-                        bgColor = 'bg-yellow-50';
-                        borderColor = 'border-yellow-500';
-                        title = 'Draft expiring';
+                        icon = "⚠️";
+                        bgColor = "bg-yellow-50";
+                        borderColor = "border-yellow-500";
+                        title = "Draft expiring";
                       }
 
                       return (
-                        <div 
+                        <div
                           key={sim.simulation_id}
                           className={`flex gap-2 p-2 ${bgColor} border-l-4 ${borderColor} rounded text-sm cursor-pointer hover:shadow-md transition`}
-                          onClick={() => router.push('/data')}
+                          onClick={() => router.push("/data")}
                         >
                           <span>{icon}</span>
                           <div className="flex-1">
@@ -1449,8 +1598,8 @@ export default function DashboardPage() {
                   </>
                 )}
 
-                <button 
-                  onClick={() => router.push('/data')}
+                <button
+                  onClick={() => router.push("/data")}
                   className="w-full mt-3 text-orange-500 text-sm font-semibold hover:underline"
                 >
                   View all →
@@ -1476,20 +1625,23 @@ export default function DashboardPage() {
                   View Full Map
                 </button>
               </div>
-              
-              <div className="h-[400px] rounded-lg overflow-hidden border border-gray-200" key="mini-map-container">
+
+              <div
+                className="h-[400px] rounded-lg overflow-hidden border border-gray-200"
+                key="mini-map-container"
+              >
                 <MiniOngoingMap />
               </div>
             </div>
           </div>
         </div>
       </main>
-       {/* Simulation Preview Modal */}
-        <SimulationPreviewModal
-          simulation={selectedSimulation}
-          isOpen={isModalOpen}
-          onClose={handleCloseModal}
-        />
+      {/* Simulation Preview Modal */}
+      <SimulationPreviewModal
+        simulation={selectedSimulation}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+      />
     </div>
   );
 }

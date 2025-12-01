@@ -11,7 +11,6 @@ import dynamic from "next/dynamic";
 import { use, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 
-
 const SmartResultsMap = dynamic(() => import("@/components/SmartResultsMap"), {
   ssr: false,
   loading: () => (
@@ -83,6 +82,20 @@ export default function SimulationPage() {
   // Load simulation data if editing
   //=======================================
   // Replaced your existing useEffect in simulation/page.jsx:
+
+  // RIGHT AT THE TOP - before any other code
+  useEffect(() => {
+    const editSession = sessionStorage.getItem("editSimulation");
+    console.log("🔍 RAW sessionStorage:", editSession);
+    if (editSession) {
+      const parsed = JSON.parse(editSession);
+      console.log("🔍 PARSED editSimulation:", parsed);
+      console.log("🔍 Has _isEditMode?", parsed._isEditMode);
+      console.log("🔍 Has _originalId?", parsed._originalId);
+    } else {
+      console.log("❌ No editSimulation in sessionStorage");
+    }
+  }, []);
 
   useEffect(() => {
     const editData = sessionStorage.getItem("editSimulation");
@@ -266,9 +279,6 @@ export default function SimulationPage() {
         } else {
           console.log("❌ No valid hourly_predictions found");
         }
-
-        // Clear from session storage after loading
-        sessionStorage.removeItem("editSimulation");
 
         alert("📝 Simulation loaded for editing");
       } catch (error) {
@@ -552,6 +562,13 @@ export default function SimulationPage() {
 
       console.log("💾 Using user_id:", currentUserId);
 
+      // ✅ Check if we're in edit mode
+      const editSession = sessionStorage.getItem("editSimulation");
+      const isEditMode = editSession ? JSON.parse(editSession)._isEditMode : false;
+      const originalSimId = editSession ? JSON.parse(editSession)._originalId : null;
+
+      console.log("📝 Edit mode:", isEditMode, "Original ID:", originalSimId);
+
       // ✅ Create Date objects from form inputs (these are in LOCAL time)
       const startDate = new Date(
         `${formData.startDate}T${formData.startTime}:00`
@@ -601,6 +618,8 @@ export default function SimulationPage() {
               : results.summary.avg_severity < 1.5
               ? "moderate"
               : "severe",
+          is_edited: isEditMode,  // ← ADD THIS
+          original_simulation_id: originalSimId  // ← ADD THIS
         },
         results_data: {
           summary: results.summary,
@@ -627,8 +646,14 @@ export default function SimulationPage() {
       if (data.success) {
         setSaveSuccess(true);
         setSavedSimulationId(data.simulation_id);
+        
+        // ✅ Clear edit session after successful save
+        if (isEditMode) {
+          sessionStorage.removeItem("editSimulation");
+        }
+        
         alert(
-          `✅ Simulation saved successfully!\nSimulation ID: ${data.simulation_id}`
+          `✅ Simulation ${isEditMode ? 'updated' : 'saved'} successfully!\nSimulation ID: ${data.simulation_id}`
         );
       } else {
         throw new Error(data.error || "Failed to save simulation");
@@ -1769,7 +1794,7 @@ export default function SimulationPage() {
       {showOTPModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-8 max-w-md w-full">
-            <h2 className="text-2xl font-bold mb-4">Verify & Publish</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Verify & Publish</h2>
 
             {!otpSent ? (
               <>
@@ -1822,7 +1847,7 @@ export default function SimulationPage() {
                     setOTPCode(e.target.value.replace(/\D/g, ""))
                   }
                   placeholder="000000"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-center text-2xl tracking-widest mb-4"
+                  className="w-full px-4 py-3 border border-gray-700 rounded-lg text-center text-2xl text-gray-900 placeholder-gray-400 tracking-widest mb-4"
                 />
 
                 {otpError && (

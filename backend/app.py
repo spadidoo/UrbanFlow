@@ -36,7 +36,6 @@ import smtplib
 from flask import Blueprint, request, jsonify
 from flask_mail import Message
 import requests
-from routes.public import public_bp
 
 
 load_dotenv()
@@ -1844,6 +1843,8 @@ def save_simulation():
                 'success': False,
                 'error': 'Failed to save simulation'
             }), 500
+        
+        
             
     except Exception as e:
         import traceback

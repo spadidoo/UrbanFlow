@@ -163,14 +163,24 @@ class DatabaseService:
                     road_info,
                     time_segments_data,
                     hourly_predictions,
-                    aggregated_view
+                    aggregated_view,
+                    is_edited,
+                    last_edited_at
                 ) VALUES (
                     %s, %s, %s, %s, %s, 
                     ST_GeomFromText(%s, 4326), 
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                 )
                 RETURNING simulation_id
             """
+
+            is_edited = simulation_data.get('is_edited', False)
+            last_edited = datetime.now() if is_edited else None
+
+            print(f"💾 Saving edit metadata:")
+            print(f"   is_edited: {is_edited}")
+            print(f"   last_edited_at: {last_edited}")
+
             
             cursor.execute(insert_query, (
                 user_id,
@@ -190,7 +200,9 @@ class DatabaseService:
                 Json(results_data.get('road_info')),
                 Json(results_data.get('time_segments')),
                 Json(results_data.get('hourly_predictions', [])),  # ✅ Save hourly data
-                Json(results_data.get('aggregated_view'))  # ✅ Save aggregated view
+                Json(results_data.get('aggregated_view')),  # ✅ Save aggregated view
+                simulation_data.get('is_edited', False),
+                datetime.now() if simulation_data.get('is_edited') else None
             ))
             
             simulation_id = cursor.fetchone()[0]
@@ -711,7 +723,9 @@ class DatabaseService:
                     total_affected_segments,
                     average_delay_ratio,
                     created_at,
-                    updated_at
+                    updated_at,
+                    is_edited,
+                    last_edited_at
                 FROM simulation_runs
                 WHERE user_id = %s
             """

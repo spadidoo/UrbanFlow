@@ -688,19 +688,6 @@ export default function HomeMapWithSidebar() {
     const delayMin = hourPrediction?.delay_info?.additional_delay_min || disruption.expected_delay || 0;
     const color = getImpactColor(severity);
 
-    // ✅ DETAILED DEBUG
-    console.log(`
-    🕐 HOUR CHECK for "${disruption.title}"
-    ├─ Current Hour: ${currentHour}
-    ├─ Has hourly_predictions: ${disruption.hourly_predictions ? 'YES' : 'NO'}
-    ├─ Predictions count: ${disruption.hourly_predictions?.length || 0}
-    ├─ Found hour data: ${hourPrediction ? 'YES' : 'NO'}
-    ├─ Severity: ${severity.toFixed(2)} (${hourPrediction ? 'HOURLY' : 'FALLBACK'})
-    ├─ Delay: ${delayMin} min
-    ├─ Color: ${color}
-    └─ Should be: ${severity >= 1.5 ? 'LONG RED' : severity >= 1.0 ? 'MEDIUM ORANGE' : 'SHORT GREEN'}
-    `);
-
     // ✅ Log all 24 hours for comparison
     if (disruption.hourly_predictions) {
       console.table(
@@ -745,29 +732,6 @@ export default function HomeMapWithSidebar() {
     marker.bindPopup(createActivePopup(disruption));
     layersRef.current.push(marker);
 
-    // ✅ ADD SEVERITY LABEL on map
-    const severityLabel = L.marker([disruption.latitude, disruption.longitude], {
-      icon: L.divIcon({
-        className: 'severity-label',
-        html: `
-          <div style="
-            background: ${severity >= 1.5 ? '#dc2626' : severity >= 1.0 ? '#f59e0b' : '#22c55e'};
-            color: white;
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: bold;
-            white-space: nowrap;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-            transform: translateY(-60px);
-          ">
-            ${currentHour}:00 | ${severity.toFixed(1)} | ${delayMin}min
-          </div>
-        `,
-        iconSize: [0, 0],
-      })
-    }).addTo(map);
-    layersRef.current.push(severityLabel);
 
     if (!showCongestion) return;
 
@@ -1327,6 +1291,26 @@ export default function HomeMapWithSidebar() {
             </div>
             <span className="font-semibold text-gray-700 ml-3">Support</span>
           </Link>
+                      {/* DPWH Acknowledgment */}
+          <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center flex-shrink-0 shadow-sm">
+                <span className="text-xl">🏛️</span>
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-sm text-gray-800 mb-1">Acknowledgment</h3>
+                <p className="text-xs text-gray-600 mb-2">Traffic data provided by DPWH Region IV-A</p>
+                <div className="flex flex-col gap-1.5">
+                  <a href="https://www.dpwh.gov.ph/dpwh/" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1">
+                    <span>🌐 Visit DPWH Website</span>
+                  </a>
+                  <a href="https://dpwh.maps.arcgis.com/apps/webappviewer/index.html?id=e2cf12e43f1247b2a436c87033f8fbc9" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1">
+                    <span>🗺️ DPWH GIS Traffic Map</span>
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

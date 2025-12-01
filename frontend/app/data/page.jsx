@@ -72,6 +72,24 @@ export default function DataPage() {
     }
   }, [activeTab]);
 
+  // ✅ ADD THIS NEW EFFECT - Check for published updates
+  useEffect(() => {
+    // Listen for publish events from other tabs
+    const handleStorageChange = (e) => {
+      if (e.key === 'simulationPublished') {
+        console.log("🔄 Detected publish event, refreshing...");
+        fetchDisruptions();
+        localStorage.removeItem('simulationPublished');
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [userId]);
+
   // ============================================================
   // Clean up stale publish payloads
   // ============================================================
@@ -333,8 +351,28 @@ export default function DataPage() {
         const simulationsData = response.simulations || [];
         console.log(`✅ Found ${simulationsData.length} simulations`);
         console.log("📋 First simulation:", simulationsData[0]);
-        
+        // ✅ ADD THIS DEBUG
+        console.log("🔍 Edit data check:");
+        simulationsData.forEach(sim => {
+          if (sim.is_edited) {
+            console.log(`   Simulation ${sim.simulation_id}:`, {
+              is_edited: sim.is_edited,
+              last_edited_at: sim.last_edited_at
+            });
+          }
+        });
+
+
         setDisruptions(simulationsData);
+
+        // ✅ DEBUG - Check if edited data exists
+        console.log("🔍 Checking for edited simulations:");
+        simulationsData.forEach(sim => {
+          console.log(`Sim ${sim.simulation_id}:`, {
+            is_edited: sim.is_edited,
+            last_edited_at: sim.last_edited_at
+          });
+        });
         
         if (simulationsData.length === 0) {
           console.log("ℹ️ No simulations found for this user");
@@ -430,9 +468,25 @@ export default function DataPage() {
       
       if (details) {
         const simulationData = details.simulation || details;
-        console.log(" Saving to session:", simulationData);
+        console.log("💾 Saving to session:", simulationData);
         
-        sessionStorage.setItem("editSimulation", JSON.stringify(simulationData));
+        // Mark as edit mode - Remove the old is_edited fields first
+        const { is_edited, last_edited_at, ...cleanData } = simulationData;
+        
+        const editData = {
+          ...cleanData,
+          _isEditMode: true,
+          _originalId: simulation.simulation_id
+        };
+        
+        console.log("✏️ Edit mode data:", editData);
+        sessionStorage.setItem("editSimulation", JSON.stringify(editData));
+
+        // ✅ ADD THIS DEBUG
+        console.log("✅ Stored in sessionStorage:", sessionStorage.getItem("editSimulation"));
+        console.log("✅ Can read back?", JSON.parse(sessionStorage.getItem("editSimulation"))._isEditMode);
+
+
         router.push("/simulation");
       }
     } catch (error) {
@@ -549,6 +603,12 @@ export default function DataPage() {
 
         // Update publish success state
         setSuccess(true);
+
+        // ✅ ADD THIS - Notify other tabs
+        localStorage.setItem('simulationPublished', Date.now().toString());
+
+        // ✅ ADD THIS LINE - Refresh the disruptions list
+        fetchDisruptions();
 
         // Show success message
         alert(
@@ -905,9 +965,14 @@ export default function DataPage() {
                     <span className={`px-2 py-1 text-xs rounded-full font-semibold ${getSeverityColor(d.severity_level)}`}>
                       {d.severity_level || "N/A"}
                     </span>
+                    {d.is_edited && d.last_edited_at && (
+                      <span className="px-2 py-1 text-xs rounded-full font-semibold bg-yellow-100 text-yellow-700">
+                        Edited {new Date(d.last_edited_at).toLocaleDateString()}
+                      </span>
+                    )}
                   </div>
                 </div>
-
+          
                 <div className="text-sm text-gray-600 space-y-2 mb-4 bg-gray-50 rounded p-3">
                   <p className="flex items-center gap-2">
                     <span className="font-semibold"> Location:</span> {d.disruption_location || "Unknown"}
@@ -982,6 +1047,13 @@ export default function DataPage() {
                     {d.simulation_status === "published" && (
                       <span className="px-2 py-1 text-xs rounded-full font-semibold bg-purple-100 text-purple-700">Published ✓</span>
                     )}
+                    
+                    {d.is_edited && d.last_edited_at && (
+                      <span className="px-2 py-1 text-xs rounded-full font-semibold bg-yellow-100 text-yellow-700">
+                        Edited {new Date(d.last_edited_at).toLocaleDateString()}
+                      </span>
+                    )}
+
                     <span className={`px-2 py-1 text-xs rounded-full font-semibold ${getSeverityColor(d.severity_level)}`}>{d.severity_level || "N/A"}</span>
                   </div>
                 </div>
@@ -1049,6 +1121,11 @@ export default function DataPage() {
                   <div className="flex flex-col gap-1">
                     {d.simulation_status === "published" && (
                       <span className="px-2 py-1 text-xs rounded-full font-semibold bg-purple-100 text-purple-700">Published ✓</span>
+                    )}
+                    {d.is_edited && d.last_edited_at && (
+                      <span className="px-2 py-1 text-xs rounded-full font-semibold bg-yellow-100 text-yellow-700">
+                        Edited {new Date(d.last_edited_at).toLocaleDateString()}
+                      </span>
                     )}
                     <span className={`px-2 py-1 text-xs rounded-full font-semibold ${getSeverityColor(d.severity_level)}`}>{d.severity_level || "N/A"}</span>
                   </div>
