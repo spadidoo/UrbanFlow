@@ -72,6 +72,24 @@ export default function DataPage() {
     }
   }, [activeTab]);
 
+  // ✅ ADD THIS NEW EFFECT - Check for published updates
+  useEffect(() => {
+    // Listen for publish events from other tabs
+    const handleStorageChange = (e) => {
+      if (e.key === 'simulationPublished') {
+        console.log("🔄 Detected publish event, refreshing...");
+        fetchDisruptions();
+        localStorage.removeItem('simulationPublished');
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [userId]);
+
   // ============================================================
   // Clean up stale publish payloads
   // ============================================================
@@ -314,7 +332,7 @@ export default function DataPage() {
       setLoading(false);
       return;
     }
-    
+
     try {
       setLoading(true);
       setError(null);
@@ -333,8 +351,28 @@ export default function DataPage() {
         const simulationsData = response.simulations || [];
         console.log(`✅ Found ${simulationsData.length} simulations`);
         console.log("📋 First simulation:", simulationsData[0]);
-        
+        // ✅ ADD THIS DEBUG
+        console.log("🔍 Edit data check:");
+        simulationsData.forEach(sim => {
+          if (sim.is_edited) {
+            console.log(`   Simulation ${sim.simulation_id}:`, {
+              is_edited: sim.is_edited,
+              last_edited_at: sim.last_edited_at
+            });
+          }
+        });
+
+
         setDisruptions(simulationsData);
+
+        // ✅ DEBUG - Check if edited data exists
+        console.log("🔍 Checking for edited simulations:");
+        simulationsData.forEach(sim => {
+          console.log(`Sim ${sim.simulation_id}:`, {
+            is_edited: sim.is_edited,
+            last_edited_at: sim.last_edited_at
+          });
+        });
         
         if (simulationsData.length === 0) {
           console.log("ℹ️ No simulations found for this user");
@@ -365,13 +403,13 @@ export default function DataPage() {
     );
   };
 
-const selectAll = () => {
-  if (selectedDisruptions.length === sortedDisruptions.length) {
-    setSelectedDisruptions([]);
-  } else {
-    setSelectedDisruptions(sortedDisruptions.map((d) => d.simulation_id));
-  }
-};
+  const selectAll = () => {
+    if (selectedDisruptions.length === sortedDisruptions.length) {
+      setSelectedDisruptions([]);
+    } else {
+      setSelectedDisruptions(sortedDisruptions.map((d) => d.simulation_id));
+    }
+  };
 
   // ============================================================
   // 🔍 FIXED: Filter Disruptions with Null Checks
@@ -430,9 +468,25 @@ const selectAll = () => {
       
       if (details) {
         const simulationData = details.simulation || details;
-        console.log(" Saving to session:", simulationData);
+        console.log("💾 Saving to session:", simulationData);
         
-        sessionStorage.setItem("editSimulation", JSON.stringify(simulationData));
+        // Mark as edit mode - Remove the old is_edited fields first
+        const { is_edited, last_edited_at, ...cleanData } = simulationData;
+        
+        const editData = {
+          ...cleanData,
+          _isEditMode: true,
+          _originalId: simulation.simulation_id
+        };
+        
+        console.log("✏️ Edit mode data:", editData);
+        sessionStorage.setItem("editSimulation", JSON.stringify(editData));
+
+        // ✅ ADD THIS DEBUG
+        console.log("✅ Stored in sessionStorage:", sessionStorage.getItem("editSimulation"));
+        console.log("✅ Can read back?", JSON.parse(sessionStorage.getItem("editSimulation"))._isEditMode);
+
+
         router.push("/simulation");
       }
     } catch (error) {
@@ -495,7 +549,7 @@ const selectAll = () => {
   // VERIFY OTP AND PUBLISH
   // ============================================================
   const handleVerifyAndPublish = async () => {
-    if (!otpCode || otpCode.length !== 6) {	
+    if (!otpCode || otpCode.length !== 6) {
       setOTPError("Please enter a valid 6-digit OTP");
       return;
     }
@@ -504,38 +558,74 @@ const selectAll = () => {
       setOTPLoading(true);
       setOTPError(null);
 
-      const storedData = sessionStorage.getItem('publishPayload');
+      // Get stored publish payload
+      const storedData = sessionStorage.getItem("publishPayload");
       if (!storedData) {
         throw new Error("Publish data not found. Please try again.");
       }
 
-      const { payload, originPage, type } = JSON.parse(storedData);
+      const { payload } = JSON.parse(storedData);
 
-      const response = await api.verifyPublishOTP(
-        payload.simulation_id,
-        otpCode,
-        payload.title,
-        payload.public_description,
-        payload.user_id
+      console.log("📤 Sending to verify:", {
+        simulation_id: payload.simulation_id,
+        otp_code: otpCode,
+        user_id: payload.user_id,
+      });
+
+      // ✅ FIXED: Call the VERIFY endpoint, not send-publish-otp
+      const response = await fetch(
+        "http://localhost:5000/api/verify-publish-otp",  // ← Changed this line
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            simulation_id: payload.simulation_id,
+            otp_code: otpCode,
+            title: payload.title,
+            public_description: payload.public_description,
+            user_id: payload.user_id,
+          }),
+        }
       );
 
-      if (response.success) {
-        sessionStorage.removeItem('publishPayload');
-        setShowOTPModal(false);
-        
-        alert(
-          `✅ ${type === 'simulation' ? 'Simulation' : 'Data'} published successfully!\n\n` +
-          `Public URL: ${response.public_url || ''}\n` +
-          `This ${type} is now visible on the public map.`
-        );
+      const data = await response.json();
 
+      if (data.success) {
+        // Clear stored payload
+        sessionStorage.removeItem("publishPayload");
+
+        // Close modal
+        setShowOTPModal(false);
+        setOTPCode("");
+        setOTPSent(false);
+
+        // Update publish success state
+        setSuccess(true);
+
+        // ✅ ADD THIS - Notify other tabs
+        localStorage.setItem('simulationPublished', Date.now().toString());
+
+        // ✅ ADD THIS LINE - Refresh the disruptions list
         fetchDisruptions();
+
+        // Show success message
+        alert(
+          `✅ Simulation published successfully!\n\n` +
+            `Public URL: ${
+              data.public_url || window.location.origin + "/map"
+            }\n` +
+            `This simulation is now visible on the public map.`
+        );
       } else {
-        setOTPError(response.error || "Invalid OTP");
+        setOTPError(data.error || "Invalid OTP");
       }
     } catch (error) {
       console.error("Error verifying OTP:", error);
-      setOTPError(error.message || "Verification failed. Please check your OTP.");
+      setOTPError(
+        error.message || "Verification failed. Please check your OTP."
+      );
     } finally {
       setOTPLoading(false);
     }
@@ -875,9 +965,14 @@ const selectAll = () => {
                     <span className={`px-2 py-1 text-xs rounded-full font-semibold ${getSeverityColor(d.severity_level)}`}>
                       {d.severity_level || "N/A"}
                     </span>
+                    {d.is_edited && d.last_edited_at && (
+                      <span className="px-2 py-1 text-xs rounded-full font-semibold bg-yellow-100 text-yellow-700">
+                        Edited {new Date(d.last_edited_at).toLocaleDateString()}
+                      </span>
+                    )}
                   </div>
                 </div>
-
+          
                 <div className="text-sm text-gray-600 space-y-2 mb-4 bg-gray-50 rounded p-3">
                   <p className="flex items-center gap-2">
                     <span className="font-semibold"> Location:</span> {d.disruption_location || "Unknown"}
@@ -952,6 +1047,13 @@ const selectAll = () => {
                     {d.simulation_status === "published" && (
                       <span className="px-2 py-1 text-xs rounded-full font-semibold bg-purple-100 text-purple-700">Published ✓</span>
                     )}
+                    
+                    {d.is_edited && d.last_edited_at && (
+                      <span className="px-2 py-1 text-xs rounded-full font-semibold bg-yellow-100 text-yellow-700">
+                        Edited {new Date(d.last_edited_at).toLocaleDateString()}
+                      </span>
+                    )}
+
                     <span className={`px-2 py-1 text-xs rounded-full font-semibold ${getSeverityColor(d.severity_level)}`}>{d.severity_level || "N/A"}</span>
                   </div>
                 </div>
@@ -1019,6 +1121,11 @@ const selectAll = () => {
                   <div className="flex flex-col gap-1">
                     {d.simulation_status === "published" && (
                       <span className="px-2 py-1 text-xs rounded-full font-semibold bg-purple-100 text-purple-700">Published ✓</span>
+                    )}
+                    {d.is_edited && d.last_edited_at && (
+                      <span className="px-2 py-1 text-xs rounded-full font-semibold bg-yellow-100 text-yellow-700">
+                        Edited {new Date(d.last_edited_at).toLocaleDateString()}
+                      </span>
                     )}
                     <span className={`px-2 py-1 text-xs rounded-full font-semibold ${getSeverityColor(d.severity_level)}`}>{d.severity_level || "N/A"}</span>
                   </div>
