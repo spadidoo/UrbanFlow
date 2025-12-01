@@ -22,22 +22,52 @@ class DatabaseService:
     """
     
     def __init__(self):
-        """Initialize database connection - SUPABASE POOLER"""
-        self.connection_params = {
-            'dbname': 'postgres',
-            'user': 'postgres.ndozyvnrmryyidehykmu',
-            'password': 'urbanflow123',
-            'host': 'aws-1-ap-south-1.pooler.supabase.com',
-            'port': '6543'
-        }
+        """Initialize database connection - Uses environment variable in production"""
+        # 🔥 CRITICAL: Use environment variable for Render deployment
+        database_url = os.environ.get('DATABASE_URL')
+        
+        if database_url:
+            # Production: Use DATABASE_URL from Render
+            print("🚀 Using DATABASE_URL from environment (Production mode)")
+            self.connection_params = self._parse_database_url(database_url)
+        else:
+            # Development: Fallback to hardcoded credentials
+            print("⚠️ Using hardcoded credentials (Development mode)")
+            self.connection_params = {
+                'dbname': 'postgres',
+                'user': 'postgres.ndozyvnrmryyidehykmu',
+                'password': 'urbanflow123',
+                'host': 'aws-1-ap-south-1.pooler.supabase.com',
+                'port': '6543'
+            }
+        
         self._test_connection()
+
+    def _parse_database_url(self, url: str) -> dict:
+        """Parse PostgreSQL connection URL into connection parameters"""
+        from urllib.parse import urlparse
+        
+        result = urlparse(url)
+        
+        return {
+            'dbname': result.path[1:],  # Remove leading '/'
+            'user': result.username,
+            'password': result.password,
+            'host': result.hostname,
+            'port': result.port or 5432
+        }
 
     def _test_connection(self):
         """Test database connection on initialization"""
         try:
             conn = psycopg2.connect(**self.connection_params)
+            cursor = conn.cursor()
+            cursor.execute("SELECT version();")
+            db_version = cursor.fetchone()
+            cursor.close()
             conn.close()
-            print("✅ Database connection successful!")
+            print(f"✅ Database connection successful!")
+            print(f"📊 Connected to: {self.connection_params.get('host')}")
         except Exception as e:
             print(f"❌ Database connection failed: {e}")
             raise
