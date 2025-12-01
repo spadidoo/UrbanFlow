@@ -1,9 +1,10 @@
 "use client";
 
-import Navbar from "@/components/NavBar";
+import LogoHeader from "@/components/LogoHeader";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import LoadingScreen from "@/components/LoadingScreen";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -41,6 +42,18 @@ export default function LoginPage() {
 
   // Use ref to track if we've already redirected
   const hasRedirected = useRef(false);
+
+  // Disable page scrolling while on login page (restore on unmount)
+  useEffect(() => {
+    const prev =
+      typeof document !== "undefined" ? document.body.style.overflow : null;
+    if (typeof document !== "undefined")
+      document.body.style.overflow = "hidden";
+    return () => {
+      if (typeof document !== "undefined")
+        document.body.style.overflow = prev || "";
+    };
+  }, []);
 
   // Check for token in URL on mount - if present, show reset password view
   useEffect(() => {
@@ -207,9 +220,7 @@ export default function LoginPage() {
 
   // Show loading spinner while checking authentication
   if (authLoading) {
-    return (
-      <LoadingScreen />
-    );
+    return <LoadingScreen />;
   }
 
   // RENDER: Main layout with conditional card content based on mode
@@ -224,17 +235,29 @@ export default function LoginPage() {
           opacity: 0.5,
         }}
       ></div>
-      <Navbar />
-
-      <main className="container mx-auto px-4 relative z-10" style={{ minHeight: 'calc(100vh - 80px)', display: 'flex', alignItems: 'center', paddingTop: '0', paddingBottom: '0' }}>
+      <div className="-mb-10">
+        <LogoHeader />
+      </div>
+      <main
+        className="container mx-auto px-4 relative z-10"
+        style={{
+          minHeight: "calc(100vh - 80px)",
+          display: "flex",
+          alignItems: "center",
+          paddingTop: "0",
+          paddingBottom: "0",
+        }}
+      >
+      
         <div className="max-w-md mx-auto w-full">
+          
           {/* Card Container - content changes based on mode */}
-          <div className="bg-white rounded-lg shadow-xl p-8">
+          <div className="bg-white rounded-lg shadow-xl p-9">
             {/* MODE: LOGIN */}
             {mode === "login" && (
               <div className="py-2">
                 {/* Header */}
-                <div className="text-center mb-10">
+                <div className="text-center mb-6">
                   <div className="mx-auto w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mb-4">
                     <img
                       src="urban_planner_icon.png"
@@ -249,7 +272,7 @@ export default function LoginPage() {
 
                 {/* Error Message */}
                 {error && (
-                  <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                  <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
                     <div className="flex items-center gap-2">
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -269,7 +292,7 @@ export default function LoginPage() {
                 )}
 
                 {/* Login Form */}
-                <form onSubmit={handleSubmit} className="space-y-6">
+                <form onSubmit={handleSubmit} className="space-y-4">
                   {/* Email */}
                   <div>
                     <input
@@ -411,7 +434,10 @@ export default function LoginPage() {
                   </div>
                 )}
 
-                <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
+                <form
+                  onSubmit={handleForgotPasswordSubmit}
+                  className="space-y-4"
+                >
                   <div>
                     <label className="block text-gray-700 font-semibold mb-2">
                       Email
@@ -480,7 +506,10 @@ export default function LoginPage() {
                   </div>
                 )}
 
-                <form onSubmit={handleResetPasswordSubmit} className="space-y-4">
+                <form
+                  onSubmit={handleResetPasswordSubmit}
+                  className="space-y-4"
+                >
                   <div>
                     <label className="block text-gray-700 font-semibold mb-2">
                       New password
@@ -500,7 +529,9 @@ export default function LoginPage() {
                         onClick={() => setShowNewPassword(!showNewPassword)}
                         disabled={resetLoading}
                         className="absolute right-2 top-1/2 -translate-y-1/2 hover:text-gray-700 focus:outline-none disabled:opacity-50 text-gray-600"
-                        aria-label={showNewPassword ? "Hide password" : "Show password"}
+                        aria-label={
+                          showNewPassword ? "Hide password" : "Show password"
+                        }
                       >
                         {showNewPassword ? (
                           <svg
@@ -558,10 +589,16 @@ export default function LoginPage() {
                       />
                       <button
                         type="button"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        onClick={() =>
+                          setShowConfirmPassword(!showConfirmPassword)
+                        }
                         disabled={resetLoading}
                         className="absolute right-2 top-1/2 -translate-y-1/2 hover:text-gray-700 focus:outline-none disabled:opacity-50 text-gray-600"
-                        aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                        aria-label={
+                          showConfirmPassword
+                            ? "Hide password"
+                            : "Show password"
+                        }
                       >
                         {showConfirmPassword ? (
                           <svg

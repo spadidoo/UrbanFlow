@@ -314,7 +314,7 @@ export default function DataPage() {
       setLoading(false);
       return;
     }
-    
+
     try {
       setLoading(true);
       setError(null);
@@ -365,13 +365,13 @@ export default function DataPage() {
     );
   };
 
-const selectAll = () => {
-  if (selectedDisruptions.length === sortedDisruptions.length) {
-    setSelectedDisruptions([]);
-  } else {
-    setSelectedDisruptions(sortedDisruptions.map((d) => d.simulation_id));
-  }
-};
+  const selectAll = () => {
+    if (selectedDisruptions.length === sortedDisruptions.length) {
+      setSelectedDisruptions([]);
+    } else {
+      setSelectedDisruptions(sortedDisruptions.map((d) => d.simulation_id));
+    }
+  };
 
   // ============================================================
   // 🔍 FIXED: Filter Disruptions with Null Checks
@@ -495,7 +495,7 @@ const selectAll = () => {
   // VERIFY OTP AND PUBLISH
   // ============================================================
   const handleVerifyAndPublish = async () => {
-    if (!otpCode || otpCode.length !== 6) {	
+    if (!otpCode || otpCode.length !== 6) {
       setOTPError("Please enter a valid 6-digit OTP");
       return;
     }
@@ -504,38 +504,68 @@ const selectAll = () => {
       setOTPLoading(true);
       setOTPError(null);
 
-      const storedData = sessionStorage.getItem('publishPayload');
+      // Get stored publish payload
+      const storedData = sessionStorage.getItem("publishPayload");
       if (!storedData) {
         throw new Error("Publish data not found. Please try again.");
       }
 
-      const { payload, originPage, type } = JSON.parse(storedData);
+      const { payload } = JSON.parse(storedData);
 
-      const response = await api.verifyPublishOTP(
-        payload.simulation_id,
-        otpCode,
-        payload.title,
-        payload.public_description,
-        payload.user_id
+      console.log("📤 Sending to verify:", {
+        simulation_id: payload.simulation_id,
+        otp_code: otpCode,
+        user_id: payload.user_id,
+      });
+
+      // ✅ FIXED: Call the VERIFY endpoint, not send-publish-otp
+      const response = await fetch(
+        "http://localhost:5000/api/verify-publish-otp",  // ← Changed this line
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            simulation_id: payload.simulation_id,
+            otp_code: otpCode,
+            title: payload.title,
+            public_description: payload.public_description,
+            user_id: payload.user_id,
+          }),
+        }
       );
 
-      if (response.success) {
-        sessionStorage.removeItem('publishPayload');
-        setShowOTPModal(false);
-        
-        alert(
-          `✅ ${type === 'simulation' ? 'Simulation' : 'Data'} published successfully!\n\n` +
-          `Public URL: ${response.public_url || ''}\n` +
-          `This ${type} is now visible on the public map.`
-        );
+      const data = await response.json();
 
-        fetchDisruptions();
+      if (data.success) {
+        // Clear stored payload
+        sessionStorage.removeItem("publishPayload");
+
+        // Close modal
+        setShowOTPModal(false);
+        setOTPCode("");
+        setOTPSent(false);
+
+        // Update publish success state
+        setSuccess(true);
+
+        // Show success message
+        alert(
+          `✅ Simulation published successfully!\n\n` +
+            `Public URL: ${
+              data.public_url || window.location.origin + "/map"
+            }\n` +
+            `This simulation is now visible on the public map.`
+        );
       } else {
-        setOTPError(response.error || "Invalid OTP");
+        setOTPError(data.error || "Invalid OTP");
       }
     } catch (error) {
       console.error("Error verifying OTP:", error);
-      setOTPError(error.message || "Verification failed. Please check your OTP.");
+      setOTPError(
+        error.message || "Verification failed. Please check your OTP."
+      );
     } finally {
       setOTPLoading(false);
     }

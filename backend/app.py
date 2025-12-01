@@ -36,7 +36,7 @@ import smtplib
 from flask import Blueprint, request, jsonify
 from flask_mail import Message
 import requests
-
+from routes.public import public_bp
 
 
 load_dotenv()
@@ -1750,6 +1750,59 @@ def save_simulation():
         user_id = data.get('user_id')  # Default to planner1 (id=2)
         simulation_data = data.get('simulation_data', {})
         results_data = data.get('results_data', {})
+
+        # ✅ ENSURE road coordinates are included
+        if 'road_info' not in results_data:
+            results_data['road_info'] = simulation_data.get('road_info', {})
+
+        # ✅ CRITICAL: Extract road coordinates for severity_lines
+        road_coords = None
+
+        # Try to get from results_data first
+        if results_data.get('road_info'):
+            road_coords = results_data['road_info'].get('coordinates')
+
+        # Fallback: Try simulation_data
+        if not road_coords and simulation_data.get('road_info'):
+            road_coords = simulation_data['road_info'].get('coordinates')
+
+        # Last resort: Generate from disruption point
+        if not road_coords:
+            sim_coords = simulation_data.get('coordinates', {})
+            if sim_coords.get('lat') and sim_coords.get('lng'):
+                lat, lng = sim_coords['lat'], sim_coords['lng']
+                road_coords = [
+                    [lat - 0.002, lng - 0.002],
+                    [lat, lng],
+                    [lat + 0.002, lng + 0.002]
+                ]
+                print(f"  ℹ️ Generated road coordinates from disruption point")
+                
+                # Store in road_info
+                if 'road_info' not in results_data:
+                    results_data['road_info'] = {}
+                results_data['road_info']['coordinates'] = road_coords
+
+        # ✅ NOW: Attach coordinates to ALL severity_lines
+        if road_coords and results_data.get('hourly_predictions'):
+            print(f"\n📍 Attaching road coordinates to severity_lines")
+            
+            # Generate severity_lines from hourly_predictions
+            severity_lines = []
+            
+            for prediction in results_data['hourly_predictions']:
+                line_entry = {
+                    'hour': prediction.get('hour'),
+                    'time_period': prediction.get('datetime'),
+                    'severity_value': prediction.get('severity'),
+                    'severity_level': prediction.get('severity_label', '').lower(),
+                    'delay_minutes': prediction.get('delay_info', {}).get('additional_delay_min', 0),
+                    'coordinates': road_coords,  # ✅ CRITICAL
+                    'granularity': 'hourly'
+                }
+                severity_lines.append(line_entry)
+            
+           
         
         # Validate required fields
         required_fields = ['scenario_name', 'disruption_type', 'area', 'road_corridor']
@@ -1978,10 +2031,6 @@ def unpublish_simulation():
 
 @app.route('/api/published-disruptions', methods=['GET'])
 def get_published_disruptions():
-    """
-    Get all published simulations for the public map
-    This replaces the mock data in HomeMapWithSidebar.jsx
-    """
     conn = None
     try:
         conn = db._get_connection()
@@ -2007,11 +2056,14 @@ def get_published_disruptions():
                 sr.severity_level,
                 sr.total_affected_segments,
                 sr.average_delay_ratio,
+                sr.severity_lines,  -- ✅ CRITICAL
+                sr.road_info,
                 ST_Y(sr.disruption_geometry) as latitude,
                 ST_X(sr.disruption_geometry) as longitude,
                 sr.hourly_predictions::text as hourly_predictions_json,
                 u.organization,
-                u.full_name
+                u.first_name,
+                u.last_name
             FROM published_runs pr
             INNER JOIN simulation_runs sr ON pr.simulation_id = sr.simulation_id
             LEFT JOIN users u ON pr.published_by = u.user_id
@@ -2028,66 +2080,101 @@ def get_published_disruptions():
         # Transform to frontend format
         disruptions = []
         for sim in simulations:
-            # Extract coordinates from simulation_data
-            # ✅ GET COORDINATES DIRECTLY FROM POSTGIS FUNCTIONS
+            # ✅ CRITICAL: Extract and parse severity_lines
+            severity_lines = sim.get('severity_lines')
+            
+            print(f"\n{'='*60}")
+            print(f"📍 Processing: {sim['title']}")
+            print(f"   - Raw severity_lines type: {type(severity_lines)}")
+            print(f"   - Raw severity_lines value: {severity_lines}")
+            
+            # Parse severity_lines if it's a string
+            if severity_lines:
+                if isinstance(severity_lines, str):
+                    import json
+                    try:
+                        severity_lines = json.loads(severity_lines)
+                        print(f"   ✅ Parsed severity_lines: {len(severity_lines)} lines")
+                        # ✅ VALIDATE: Ensure coordinates exist
+                        valid_lines = []
+                        for line in severity_lines:
+                            coords = line.get('coordinates')
+                            if coords and isinstance(coords, list) and len(coords) > 0:
+                                valid_lines.append(line)
+                            else:
+                                print(f"   ⚠️ Skipping line without coordinates: {line.get('time_period', 'unknown')}")
+                        
+                        severity_lines = valid_lines
+                        print(f"   ✅ Validated: {len(severity_lines)} lines have coordinates")
+                    except Exception as e:
+                        print(f"   ❌ Failed to parse severity_lines: {e}")
+                        severity_lines = []
+                elif isinstance(severity_lines, list):
+                    print(f"   ✅ Already a list: {len(severity_lines)} lines")
+                else:
+                    print(f"   ⚠️ Unknown type for severity_lines")
+                    severity_lines = []
+            else:
+                print(f"   ❌ No severity_lines data")
+                severity_lines = []
+
+            # Attempt to enrich severity_lines with geometry from road_info if missing
+            raw_road_info = sim.get('road_info')
+            road_info = None
+            if raw_road_info:
+                try:
+                    if isinstance(raw_road_info, str):
+                        import json
+                        road_info = json.loads(raw_road_info)
+                        # ✅ CRITICAL: Attach road coordinates to EVERY severity line
+                        if road_coords and isinstance(severity_lines, list):
+                            for line_entry in severity_lines:
+                                if not line_entry.get('coordinates'):
+                                    line_entry['coordinates'] = road_coords
+                                    print(f"   ✅ Attached road coordinates to line: {line_entry.get('time_period', 'unknown')}")
+                    elif isinstance(raw_road_info, dict):
+                        road_info = raw_road_info
+                except Exception as e:
+                    print(f"   ❌ Failed to parse road_info: {e}")
+                    road_info = None
+
+            road_coords = None
+            if road_info:
+                # Common keys used by frontend: 'coordinates'
+                road_coords = road_info.get('coordinates') or road_info.get('coords') or road_info.get('geometry')
+                print(f"   ℹ️ road_info coords present: {bool(road_coords)}")
+
+            if road_coords and isinstance(severity_lines, list):
+                updated = 0
+                for entry in severity_lines:
+                    if not entry.get('coordinates'):
+                        entry['coordinates'] = road_coords
+                        updated += 1
+                if updated:
+                    print(f"   ✅ Attached road coordinates to {updated} severity_lines entries")
+            
+            # Extract coordinates
             latitude = sim.get('latitude')
             longitude = sim.get('longitude')
-            road_coordinates = None
-
-            if latitude and longitude:
-                print(f"✅ {sim['title']}: lat={latitude}, lng={longitude}")
-            else:
-                print(f"❌ No coordinates for: {sim['title']}")
-                # Use fallback
-                location = sim.get('disruption_location', '')
-                coords = get_coordinates_for_location(location)
-                latitude = coords['lat']
-                longitude = coords['lng']
-
-            wkt = sim.get('disruption_geometry_wkt')
-            if wkt:
-                # Parse "POINT(121.1640 14.2096)"
-                import re
-                match = re.match(r'POINT\(([0-9.]+)\s+([0-9.]+)\)', wkt)
-                if match:
-                    longitude = float(match.group(1))
-                    latitude = float(match.group(2))
-                    print(f"✅ {sim['title']}: lat={latitude}, lng={longitude}")
-                else:
-                    print(f"❌ Could not parse WKT: {wkt}")
-            else:
-                print(f"⚠️ No geometry for: {sim['title']}")
             
-            simulation_data = sim.get('simulation_data')
-            if simulation_data:
-                if isinstance(simulation_data, str):
-                    import json
-                    simulation_data = json.loads(simulation_data)
-                
-                coords = simulation_data.get('coordinates', {})
-                latitude = coords.get('lat')
-                longitude = coords.get('lng') or coords.get('lon')
-                
-                # Get road coordinates if available (for drawing lines)
-                road_coordinates = simulation_data.get('road_coordinates_json')
-            
-            # Fallback to location-based coordinates if not in simulation_data
             if not latitude or not longitude:
+                print(f"   ❌ No coordinates for {sim['title']}")
                 location = sim.get('disruption_location', '')
                 coords = get_coordinates_for_location(location)
                 latitude = coords['lat']
                 longitude = coords['lng']
+            else:
+                print(f"   ✅ Coordinates: ({latitude}, {longitude})")
             
-            # Extract hourly predictions from results_data
-            hourly_predictions = None
-            results_data = sim.get('results_data')
-            if results_data:
-                if isinstance(results_data, str):
-                    import json
-                    results_data = json.loads(results_data)
-                
-                # Get hourly predictions for active disruptions
-                hourly_predictions = results_data.get('hourly_predictions')
+            # Extract hourly predictions
+            hourly_predictions = []
+            if sim.get('hourly_predictions_json'):
+                import json
+                try:
+                    hourly_predictions = json.loads(sim['hourly_predictions_json'])
+                    print(f"   ✅ Loaded {len(hourly_predictions)} hourly predictions")
+                except Exception as e:
+                    print(f"   ❌ Failed to parse hourly_predictions: {e}")
             
             # Calculate expected delay
             avg_delay_ratio = float(sim.get('average_delay_ratio') or 1.0)
@@ -2129,15 +2216,20 @@ def get_published_disruptions():
                 'organization': sim.get('organization', 'DPWH'),
                 'latitude': latitude,
                 'longitude': longitude,
-                'road_coordinates': road_coordinates,  # For drawing road lines
-                'hourly_predictions': hourly_predictions  # For detailed visualization
+                'severity_lines': severity_lines,  # ✅ CRITICAL
+                'hourly_predictions': hourly_predictions
             }
+            
+            print(f"   ✅ Final disruption has {len(severity_lines)} severity_lines")
+            if len(severity_lines) > 0:
+                print(f"   📊 Sample line: {severity_lines[0]}")
             
             disruptions.append(disruption)
         
-        print(f"✅ Returning {len(disruptions)} disruptions with coordinates")
+        print(f"\n{'='*60}")
+        print(f"✅ Returning {len(disruptions)} disruptions")
         for d in disruptions[:3]:
-            print(f"   - {d['title']}: ({d['latitude']}, {d['longitude']})")
+            print(f"   - {d['title']}: {len(d.get('severity_lines', []))} lines, ({d['latitude']}, {d['longitude']})")
         
         return jsonify({
             'success': True,
@@ -2149,6 +2241,185 @@ def get_published_disruptions():
         import traceback
         print(f"\n❌ Error in get_published_disruptions:")
         traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+        
+    finally:
+        if conn:
+            conn.close()
+
+# Add this to app.py, after your existing /api/published-disruptions route
+
+@app.route('/api/public/disruptions', methods=['GET'])
+def get_public_disruptions_realtime():
+    """
+    ✅ Get all active published disruptions with REAL-TIME severity data
+    Returns disruptions with hourly predictions that change based on current hour
+    """
+    conn = None
+    try:
+        conn = db._get_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Get current time (Philippines timezone)
+        ph_tz = pytz.timezone('Asia/Manila')
+        current_time = datetime.now(ph_tz)
+        current_hour = current_time.hour
+        current_date = current_time.date()
+        
+        print(f"🕐 Current time: {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"📅 Current hour: {current_hour}")
+        
+        # Query published simulations with severity_lines
+        query = """
+            SELECT 
+                pr.published_id,
+                pr.simulation_id,
+                pr.title,
+                pr.public_description,
+                pr.published_at,
+                pr.is_active,
+                pr.slug,
+                sr.simulation_name,
+                sr.description,
+                sr.disruption_type,
+                sr.disruption_location,
+                sr.start_time,
+                sr.end_time,
+                sr.severity_level,
+                sr.total_affected_segments,
+                sr.average_delay_ratio,
+                sr.severity_lines,  -- ✅ NEW: Get severity lines
+                ST_Y(sr.disruption_geometry) as latitude,
+                ST_X(sr.disruption_geometry) as longitude,
+                u.organization,
+                u.first_name,
+                u.last_name
+            FROM published_runs pr
+            INNER JOIN simulation_runs sr ON pr.simulation_id = sr.simulation_id
+            LEFT JOIN users u ON pr.published_by = u.user_id
+            WHERE pr.is_active = TRUE
+            AND sr.simulation_status != 'deleted'
+            ORDER BY pr.published_at DESC
+        """
+        
+        cursor.execute(query)
+        simulations = cursor.fetchall()
+        
+        print(f"\n📊 Fetched {len(simulations)} published disruptions")
+        
+        active_disruptions = []
+        
+        for sim in simulations:
+            # Check if disruption is currently active
+            start_time = sim['start_time']
+            end_time = sim['end_time']
+            
+            # Make timezone-aware if needed
+            if start_time and start_time.tzinfo is None:
+                start_time = ph_tz.localize(start_time)
+            if end_time and end_time.tzinfo is None:
+                end_time = ph_tz.localize(end_time)
+            
+            # Skip if not currently active
+            if not (start_time <= current_time <= end_time):
+                print(f"⏭️ Skipping {sim['title']} - not active now")
+                continue
+            
+            # ✅ Get severity lines from database
+            severity_lines = sim.get('severity_lines', [])
+            
+            if not severity_lines:
+                print(f"⚠️ No severity lines for {sim['title']}")
+                continue
+            
+            # ✅ Find the severity data for current hour
+            current_severity = None
+            
+            for line in severity_lines:
+                granularity = line.get('granularity', 'hourly')
+                
+                if granularity == 'hourly':
+                    # Match by hour
+                    line_hour = line.get('hour')
+                    if line_hour == current_hour:
+                        current_severity = line
+                        break
+                
+                elif granularity == 'daily':
+                    # Match by date
+                    time_period = line.get('time_period', '')
+                    if current_date.isoformat() in time_period:
+                        current_severity = line
+                        break
+            
+            # If no exact match, use average or first available
+            if not current_severity and severity_lines:
+                current_severity = severity_lines[0]
+                print(f"⚠️ Using fallback severity for {sim['title']}")
+            
+            # Extract coordinates
+            latitude = sim.get('latitude')
+            longitude = sim.get('longitude')
+            
+            if not latitude or not longitude:
+                print(f"⚠️ No coordinates for {sim['title']}")
+                continue
+            
+            # ✅ Get severity color
+            severity_level = current_severity.get('severity_level', 'moderate')
+            severity_value = current_severity.get('severity_value', 1.0)
+            
+            # Map severity to color
+            if severity_level == 'light' or severity_value < 1.0:
+                color = '#4ade80'  # Green
+            elif severity_level == 'moderate' or severity_value < 2.0:
+                color = '#fbbf24'  # Yellow
+            else:
+                color = '#ef4444'  # Red
+            
+            # Build disruption object
+            disruption = {
+                'id': sim['simulation_id'],
+                'title': sim['title'],
+                'slug': sim['slug'],
+                'location': sim['disruption_location'],
+                'type': sim['disruption_type'] or 'roadwork',
+                'start_time': start_time.isoformat(),
+                'end_time': end_time.isoformat(),
+                'latitude': float(latitude),
+                'longitude': float(longitude),
+                'current_severity': {
+                    'level': severity_level,
+                    'value': float(severity_value),
+                    'delay_minutes': int(current_severity.get('delay_minutes', 0)),
+                    'time_period': current_severity.get('time_period'),
+                    'hour': current_hour,
+                    'color': color
+                },
+                'all_hours': severity_lines,  # ✅ Include all hours for client-side updates
+                'organization': sim.get('organization', 'DPWH'),
+                'published_by': f"{sim.get('first_name', '')} {sim.get('last_name', '')}".strip() or 'Unknown'
+            }
+            
+            active_disruptions.append(disruption)
+            print(f"✅ Added {sim['title']} - {severity_level} severity at hour {current_hour}")
+        
+        return jsonify({
+            'success': True,
+            'disruptions': active_disruptions,
+            'current_time': current_time.isoformat(),
+            'current_hour': current_hour,
+            'count': len(active_disruptions)
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Error fetching public disruptions: {e}")
+        import traceback
+        traceback.print_exc()
+        
         return jsonify({
             'success': False,
             'error': str(e)

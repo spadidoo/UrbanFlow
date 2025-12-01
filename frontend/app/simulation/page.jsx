@@ -750,7 +750,7 @@ export default function SimulationPage() {
           },
           body: JSON.stringify({
             simulation_id: payload.simulation_id,
-            otp: otpCode,
+            otp_code: otpCode,
             title: payload.title,
             public_description: payload.public_description,
             user_id: payload.user_id,

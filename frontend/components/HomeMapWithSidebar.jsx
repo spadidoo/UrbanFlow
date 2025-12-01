@@ -15,6 +15,163 @@ if (typeof window !== "undefined") {
   });
 }
 
+// Utility: decode an encoded polyline (Google/OSM polyline algorithm)
+// Returns array of [lat, lng]
+function decodePolyline(encoded) {
+  if (!encoded || typeof encoded !== "string") return [];
+  let index = 0,
+    lat = 0,
+    lng = 0,
+    coordinates = [];
+
+  while (index < encoded.length) {
+    let b,
+      shift = 0,
+      result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const deltaLat = result & 1 ? ~(result >> 1) : result >> 1;
+    lat += deltaLat;
+
+    shift = 0;
+    result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const deltaLng = result & 1 ? ~(result >> 1) : result >> 1;
+    lng += deltaLng;
+
+    coordinates.push([lat / 1e5, lng / 1e5]);
+  }
+
+  return coordinates;
+}
+
+// Helper: Calculate distance between two points in meters
+function getDistanceMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Fetch road network from OSM for a location
+async function fetchRoadsFromOSM(lat, lng, radius = 350) {
+  const query = `
+    [out:json][timeout:10];
+    (
+      way["highway"~"trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary"]["name"](around:${radius},${lat},${lng});
+    );
+    out body;
+    >;
+    out skel qt;
+  `;
+
+  try {
+    const response = await fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST",
+      body: `data=${encodeURIComponent(query)}`,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    });
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const nodes = data.elements.filter((el) => el.type === "node");
+    const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+
+    const roads = data.elements
+      .filter((el) => el.type === "way" && el.tags?.highway)
+      .map((way) => {
+        const coords = way.nodes
+          .map((nodeId) => nodeMap.get(nodeId))
+          .filter((n) => n)
+          .map((n) => [n.lat, n.lon]);
+
+        if (coords.length < 2) return null;
+
+        return {
+          id: way.id,
+          name: way.tags.name || way.tags.highway,
+          type: way.tags.highway,
+          coordinates: coords,
+        };
+      })
+      .filter(Boolean);
+
+    return roads;
+  } catch (err) {
+    console.warn("OSM fetch failed:", err);
+    return null;
+  }
+}
+
+// Calculate road length
+function calculateRoadLength(coords) {
+  let length = 0;
+  for (let i = 0; i < coords.length - 1; i++) {
+    length += getDistanceMeters(
+      coords[i].lat,
+      coords[i].lng,
+      coords[i + 1].lat,
+      coords[i + 1].lng
+    );
+  }
+  return (length / 1000).toFixed(2);
+}
+
+// Get color based on severity (0-2.5 scale)
+function getImpactColor(severity) {
+  if (severity < 0.5) return "#22c55e"; // Green
+  if (severity < 1.0) return "#84cc16"; // Yellow-green
+  if (severity < 1.5) return "#f59e0b"; // Orange
+  if (severity < 2.0) return "#ea580c"; // Dark orange
+  return "#dc2626"; // Red
+}
+
+// Filter roads by importance (only major roads)
+function shouldIncludeRoad(road, distToCenter) {
+  const roadName = road.name?.toLowerCase() || "";
+  const roadType = road.type;
+  
+  // ✅ Always include major highways/named roads
+  const isMajorRoad = 
+    roadName.includes("national") ||
+    roadName.includes("maharlika") ||
+    roadName.includes("highway") ||
+    roadName.includes("chipeco") ||
+    roadName.includes("turbina") ||
+    roadName.includes("bucal") ||
+    roadName.includes("ipil") ||
+    ["trunk", "trunk_link", "primary", "primary_link"].includes(roadType);
+  
+  if (isMajorRoad) return true;
+  
+  // ✅ Include secondary roads only if very close
+  if (["secondary", "secondary_link"].includes(roadType) && distToCenter < 200) {
+    return true;
+  }
+  
+  // ✅ Include tertiary only if extremely close
+  if (roadType === "tertiary" && distToCenter < 100) {
+    return true;
+  }
+  
+  // ❌ Exclude everything else (residential, service, unnamed)
+  return false;
+}
+
 export default function HomeMapWithSidebar() {
   // ============ STATE ============
   const [menuOpen, setMenuOpen] = useState(false);
@@ -50,6 +207,8 @@ export default function HomeMapWithSidebar() {
   const [touchStart, setTouchStart] = useState(0);
   const [touchEnd, setTouchEnd] = useState(0);
   const bottomSheetRef = useRef(null);
+
+  const [currentHour, setCurrentHour] = useState(new Date().getHours());
 
   // ============ BOTTOM SHEET HANDLERS ============
 
@@ -111,6 +270,14 @@ export default function HomeMapWithSidebar() {
   }, []);
 
   useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentHour(new Date().getHours());
+    }, 60000); // Update every minute to catch hour changes
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
 
     const map = L.map(mapRef.current, {
@@ -139,7 +306,13 @@ export default function HomeMapWithSidebar() {
   useEffect(() => {
     if (!mapInstanceRef.current || disruptions.length === 0) return;
     drawDisruptionsOnMap();
-  }, [disruptions, selectedDisruption, showReports, showCongestion]);
+  }, [
+    disruptions,
+    selectedDisruption,
+    showReports,
+    showCongestion,
+    currentHour,
+  ]);
 
   const fetchDisruptions = async () => {
     try {
@@ -460,7 +633,7 @@ export default function HomeMapWithSidebar() {
     }
   };
 
-  const drawDisruptionsOnMap = () => {
+  const drawDisruptionsOnMap = async () => {
     if (!mapInstanceRef.current) return;
 
     const map = mapInstanceRef.current;
@@ -473,19 +646,16 @@ export default function HomeMapWithSidebar() {
     });
     layersRef.current = [];
 
-    // ✅ Only draw if showReports is enabled
-    if (!showReports) {
-      return; // Exit early if reports are hidden
-    }
+    if (!showReports) return;
 
     // Draw disruptions based on status
-    disruptions.forEach((disruption) => {
+    for (const disruption of disruptions) {
       if (disruption.status === "active") {
-        drawActiveDisruption(disruption);
+        await drawActiveDisruption(disruption);
       } else if (disruption.status === "upcoming") {
         drawUpcomingDisruption(disruption);
       }
-    });
+    }
 
     // Fit map to show all disruptions
     const validDisruptions = disruptions.filter(
@@ -501,86 +671,68 @@ export default function HomeMapWithSidebar() {
       } catch (e) {}
     }
   };
-
   // FIND drawActiveDisruption function (around line 160):
-  const drawActiveDisruption = (disruption) => {
-    if (!disruption.latitude || !disruption.longitude) {
-      console.warn("⚠️ Disruption missing coordinates:", disruption.title);
-      return;
-    }
+  const drawActiveDisruption = async (disruption) => {
+    if (!disruption.latitude || !disruption.longitude) return;
 
     const map = mapInstanceRef.current;
     const isSelected = selectedDisruption?.id === disruption.id;
+    const center = { lat: disruption.latitude, lng: disruption.longitude };
 
-    // Use real-time severity if available
-    const severity =
-      disruption.realtime?.congestion_ratio || disruption.avg_severity || 1.5;
-    const color = getSeverityColor(severity);
-
-    console.log(
-      "✅ Drawing active disruption:",
-      disruption.title,
-      "at",
-      disruption.latitude,
-      disruption.longitude,
-      "color:",
-      color
+    // ✅ Get severity for CURRENT HOUR (not average)
+    // ✅ Get severity for CURRENT HOUR (not average)
+    const hourPrediction = disruption.hourly_predictions?.find(
+      (h) => h.hour === currentHour
     );
+    const severity = hourPrediction?.severity || disruption.avg_severity || 1.5;
+    const delayMin = hourPrediction?.delay_info?.additional_delay_min || disruption.expected_delay || 0;
+    const color = getImpactColor(severity);
 
-    // ✅ Only draw circular impact zone if showCongestion is enabled
-    if (showCongestion) {
-      const circle = L.circle([disruption.latitude, disruption.longitude], {
-        radius: 500,
-        color: color,
-        fillColor: color,
-        fillOpacity: isSelected ? 0.3 : 0.2,
-        weight: isSelected ? 3 : 2,
-      }).addTo(map);
+    // ✅ DETAILED DEBUG
+    console.log(`
+    🕐 HOUR CHECK for "${disruption.title}"
+    ├─ Current Hour: ${currentHour}
+    ├─ Has hourly_predictions: ${disruption.hourly_predictions ? 'YES' : 'NO'}
+    ├─ Predictions count: ${disruption.hourly_predictions?.length || 0}
+    ├─ Found hour data: ${hourPrediction ? 'YES' : 'NO'}
+    ├─ Severity: ${severity.toFixed(2)} (${hourPrediction ? 'HOURLY' : 'FALLBACK'})
+    ├─ Delay: ${delayMin} min
+    ├─ Color: ${color}
+    └─ Should be: ${severity >= 1.5 ? 'LONG RED' : severity >= 1.0 ? 'MEDIUM ORANGE' : 'SHORT GREEN'}
+    `);
 
-      layersRef.current.push(circle);
+    // ✅ Log all 24 hours for comparison
+    if (disruption.hourly_predictions) {
+      console.table(
+        disruption.hourly_predictions.map(h => ({
+          Hour: h.hour,
+          Severity: h.severity?.toFixed(2),
+          Delay: h.delay_info?.additional_delay_min,
+          Label: h.severity_label
+        }))
+      );
     }
 
-    // Add marker with explicit z-index
+    // Draw marker
     const marker = L.marker([disruption.latitude, disruption.longitude], {
       icon: L.divIcon({
         className: "disruption-marker-active",
         html: `
-          <div style="position: relative; width: ${
-            isSelected ? "48px" : "36px"
-          }; height: ${isSelected ? "48px" : "36px"};">
+          <div style="position: relative; width: ${isSelected ? "48px" : "36px"}; height: ${isSelected ? "48px" : "36px"};">
             <div style="
-              position: absolute;
-              top: 50%;
-              left: 50%;
+              position: absolute; top: 50%; left: 50%;
               transform: translate(-50%, -50%);
-              width: ${isSelected ? "70px" : "50px"};
-              height: ${isSelected ? "70px" : "50px"};
-              border: 3px solid ${color};
-              border-radius: 50%;
-              opacity: 0.3;
-              animation: pulse-active 2s ease-out infinite;
+              width: ${isSelected ? "70px" : "50px"}; height: ${isSelected ? "70px" : "50px"};
+              border: 3px solid ${color}; border-radius: 50%;
+              opacity: 0.3; animation: pulse-active 2s ease-out infinite;
             "></div>
             <div style="
-              background: white;
-              border: 3px solid ${color};
-              border-radius: 50%;
-              width: ${isSelected ? "48px" : "36px"};
-              height: ${isSelected ? "48px" : "36px"};
-              display: flex;
-              align-items: center;
-              justify-content: center;
+              background: white; border: 3px solid ${color}; border-radius: 50%;
+              width: ${isSelected ? "48px" : "36px"}; height: ${isSelected ? "48px" : "36px"};
+              display: flex; align-items: center; justify-content: center;
               font-size: ${isSelected ? "24px" : "18px"};
               box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-              cursor: pointer;
-              position: relative;
-              z-index: 1000;
             ">🚧</div>
-            <style>
-              @keyframes pulse-active {
-                0% { transform: translate(-50%, -50%) scale(1); opacity: 0.3; }
-                100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
-              }
-            </style>
           </div>
         `,
         iconSize: [isSelected ? 48 : 36, isSelected ? 48 : 36],
@@ -591,8 +743,118 @@ export default function HomeMapWithSidebar() {
 
     marker.on("click", () => handleViewOnMap(disruption));
     marker.bindPopup(createActivePopup(disruption));
-
     layersRef.current.push(marker);
+
+    // ✅ ADD SEVERITY LABEL on map
+    const severityLabel = L.marker([disruption.latitude, disruption.longitude], {
+      icon: L.divIcon({
+        className: 'severity-label',
+        html: `
+          <div style="
+            background: ${severity >= 1.5 ? '#dc2626' : severity >= 1.0 ? '#f59e0b' : '#22c55e'};
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            transform: translateY(-60px);
+          ">
+            ${currentHour}:00 | ${severity.toFixed(1)} | ${delayMin}min
+          </div>
+        `,
+        iconSize: [0, 0],
+      })
+    }).addTo(map);
+    layersRef.current.push(severityLabel);
+
+    if (!showCongestion) return;
+
+    // Fetch roads
+    const roads = await fetchRoadsFromOSM(center.lat, center.lng, 400);
+
+    if (!roads || roads.length === 0) {
+      const circle = L.circle([center.lat, center.lng], {
+        radius: 300,
+        color: color,
+        fillColor: color,
+        fillOpacity: 0.2,
+        weight: 2,
+      }).addTo(map);
+      layersRef.current.push(circle);
+      return;
+    }
+
+    // ✅ Draw roads with CURRENT HOUR severity
+    // ✅ Draw roads with CURRENT HOUR severity (filtered)
+    roads.forEach((road) => {
+      const coords = road.coordinates;
+      if (coords.length < 2) return;
+
+      // Calculate min distance to disruption center
+      const minDistToCenter = Math.min(
+        ...coords.map(c => getDistanceMeters(center.lat, center.lng, c[0], c[1]))
+      );
+
+      // ✅ FILTER: Skip unimportant roads
+      if (!shouldIncludeRoad(road, minDistToCenter)) {
+        return; // Skip this road
+      }
+
+      for (let i = 0; i < coords.length - 1; i++) {
+        const startCoord = coords[i];
+        const endCoord = coords[i + 1];
+
+        const midLat = (startCoord[0] + endCoord[0]) / 2;
+        const midLng = (startCoord[1] + endCoord[1]) / 2;
+        const distToCenter = getDistanceMeters(center.lat, center.lng, midLat, midLng);
+
+        // ✅ Severity affects max render distance
+        const maxDist = severity >= 1.5 ? 600 : severity >= 1.0 ? 450 : 350;
+        if (distToCenter > maxDist) continue;
+
+        let segmentColor, weight, opacity;
+
+        if (distToCenter < 80) {
+          segmentColor = severity >= 1.5 ? "#dc2626" : severity >= 1.0 ? "#ea580c" : "#f59e0b";
+          weight = 9;
+          opacity = 0.9;
+        } else if (distToCenter < 150) {
+          segmentColor = severity >= 1.5 ? "#ea580c" : severity >= 1.0 ? "#f59e0b" : "#eab308";
+          weight = 7;
+          opacity = 0.8;
+        } else if (distToCenter < 250) {
+          segmentColor = severity >= 1.5 ? "#f59e0b" : "#eab308";
+          weight = 6;
+          opacity = 0.7;
+        } else {
+          segmentColor = "#84cc16";
+          weight = 5;
+          opacity = 0.5;
+        }
+
+        // Shadow
+        const shadow = L.polyline(
+          [[startCoord[0], startCoord[1]], [endCoord[0], endCoord[1]]],
+          { color: "#1f2937", weight: weight + 3, opacity: 0.12, lineCap: "round" }
+        ).addTo(map);
+        layersRef.current.push(shadow);
+
+        // Segment
+        const segment = L.polyline(
+          [[startCoord[0], startCoord[1]], [endCoord[0], endCoord[1]]],
+          {
+            color: segmentColor,
+            weight: weight,
+            opacity: opacity,
+            lineCap: "round",
+            lineJoin: "round",
+          }
+        ).addTo(map);
+        layersRef.current.push(segment);
+      }
+    });
   };
 
   const drawUpcomingDisruption = (disruption) => {
