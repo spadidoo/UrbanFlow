@@ -325,7 +325,7 @@ export default function SimulationPage() {
 
       // Process road info through backend
       const response = await fetch(
-        "http://backend.urbanflowph.com/api/process-road-info",
+        "https://backend.urbanflowph.com/api/process-road-info",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -383,7 +383,7 @@ export default function SimulationPage() {
 
         // Process road info through backend
         const response = await fetch(
-          "http://backend.urbanflowph.com/api/process-road-info",
+          "https://backend.urbanflowph.com/api/process-road-info",
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -520,7 +520,7 @@ export default function SimulationPage() {
       console.log("🚀 Sending simulation request:", simulationData);
 
       const response = await fetch(
-        "http://backend.urbanflowph.com/api/simulate-disruption-realtime",
+        "https://backend.urbanflowph.com/api/simulate-disruption-realtime",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -631,7 +631,7 @@ export default function SimulationPage() {
       };
 
       const response = await fetch(
-        "http://backend.urbanflowph.com/api/save-simulation",
+        "https://backend.urbanflowph.com/api/save-simulation",
         {
           method: "POST",
           headers: {
@@ -715,7 +715,7 @@ export default function SimulationPage() {
       setOTPError(null);
 
       const response = await fetch(
-        "http://backend.urbanflowph.com/api/send-publish-otp",
+        "https://backend.urbanflowph.com/api/send-publish-otp",
         {
           method: "POST",
           headers: {
@@ -767,7 +767,7 @@ export default function SimulationPage() {
 
       // Verify OTP and publish
       const response = await fetch(
-        "http://backend.urbanflowph.com/api/verify-publish-otp",
+        "https://backend.urbanflowph.com/api/verify-publish-otp",
         {
           method: "POST",
           headers: {

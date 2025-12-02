@@ -12,7 +12,7 @@ export function AuthProvider({ children }) {
   const router = useRouter();
 
   // ✅ FIXED: Properly construct base URL and auth URL
-  const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://backend.urbanflowph.com";
+  const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://backend.urbanflowph.com";
   const API_BASE_URL = `${BASE_URL}/api/auth`; // Auth endpoints are at /api/auth/*
 
   useEffect(() => {

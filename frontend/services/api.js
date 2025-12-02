@@ -2,7 +2,7 @@
 // COMPLETE VERSION - Includes all existing methods + new reports methods
 
 // API Configuration
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://backend.urbanflowph.com";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://backend.urbanflowph.com";
 
 // Helper function for API calls
 async function apiCall(endpoint, options = {}) {
