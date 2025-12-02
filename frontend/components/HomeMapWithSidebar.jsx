@@ -320,7 +320,7 @@ export default function HomeMapWithSidebar() {
       setError(null);
 
       const response = await fetch(
-        "http://localhost:5000/api/published-disruptions"
+        "http://backend.urbanflowph.com/api/published-disruptions"
       );
       const data = await response.json();
 
@@ -607,7 +607,7 @@ export default function HomeMapWithSidebar() {
   const fetchRealtimeForDisruption = async (disruption) => {
     try {
       const response = await fetch(
-        "http://localhost:5000/api/realtime-traffic",
+        "http://backend.urbanflowph.com/api/realtime-traffic",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

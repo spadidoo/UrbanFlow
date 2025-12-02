@@ -102,7 +102,7 @@ export default function ReportDetailsPage() {
   const handleExport = async (format) => {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/reports/${simulationId}/export?format=${format}`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://backend.urbanflowph.com'}/api/reports/${simulationId}/export?format=${format}`,
         { method: 'GET' }
       );
 

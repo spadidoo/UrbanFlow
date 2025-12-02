@@ -36,7 +36,7 @@ export default function ReportsPage() {
       
       // Use the new reports API endpoint that queries v_reports view
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/reports/list?user_id=${userId}`
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://backend.urbanflowph.com'}/api/reports/list?user_id=${userId}`
       );
       
       const data = await response.json();
@@ -95,7 +95,7 @@ export default function ReportsPage() {
   const handleExport = async (reportId, format) => {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/reports/${reportId}/export?format=${format}`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://backend.urbanflowph.com'}/api/reports/${reportId}/export?format=${format}`,
         {
           method: 'GET',
         }

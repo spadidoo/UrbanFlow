@@ -141,7 +141,7 @@ function MiniOngoingMap() {
     try {
       setLoading(true);
       const response = await fetch(
-        "http://localhost:5000/api/published-disruptions"
+        "http://backend.urbanflowph.com/api/published-disruptions"
       );
       const data = await response.json();
 
@@ -481,7 +481,7 @@ export default function DashboardPage() {
     const startTime = Date.now();
 
     try {
-      const response = await fetch("http://localhost:5000/api/health");
+      const response = await fetch("http://backend.urbanflowph.com/api/health");
       const endTime = Date.now();
       const responseTime = endTime - startTime;
 
@@ -516,10 +516,10 @@ export default function DashboardPage() {
       // Example endpoints you might use:
       // - TomTom Traffic Flow: https://api.tomtom.com/traffic/services/4/flowSegmentData
       // - Waze for Cities: https://www.waze.com/ccp-api/
-      // - Your own backend endpoint: http://localhost:5000/api/traffic-status
+      // - Your own backend endpoint: http://https://backend.urbanflowph.com/api/traffic-status
 
       const response = await fetch(
-        `http://localhost:5000/api/traffic-status?road=${encodeURIComponent(
+        `http://backend.urbanflowph.com/api/traffic-status?road=${encodeURIComponent(
           roadName
         )}&hour=${hour}`
       );
@@ -598,7 +598,7 @@ export default function DashboardPage() {
             if (isCurrent || (isPast && currentHour - hour <= 3)) {
               try {
                 const response = await fetch(
-                  `http://localhost:5000/api/traffic-status?area=${encodeURIComponent(
+                  `http://backend.urbanflowph.com/api/traffic-status?area=${encodeURIComponent(
                     area.name
                   )}&hour=${hour}`
                 );
@@ -772,7 +772,7 @@ export default function DashboardPage() {
 
     try {
       const savedResponse = await fetch(
-        `http://localhost:5000/api/my-simulations?user_id=${userId}`
+        `http://backend.urbanflowph.com/api/my-simulations?user_id=${userId}`
       );
       const savedData = await savedResponse.json();
 
@@ -824,7 +824,7 @@ export default function DashboardPage() {
       }
 
       const publishedResponse = await fetch(
-        "http://localhost:5000/api/published-simulations"
+        "http://backend.urbanflowph.com/api/published-simulations"
       );
       const publishedData = await publishedResponse.json();
 

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 // Backend URL from environment variable or default to localhost
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:5000';
+const BACKEND_URL = process.env.BACKEND_URL || 'http://https://backend.urbanflowph.com';
 
 /**
  * POST /api/auth/reset-password

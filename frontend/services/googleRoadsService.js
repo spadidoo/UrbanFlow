@@ -5,7 +5,7 @@
 const USE_GOOGLE_API = false; // Set to false to disable Google API
 
 // Backend URL
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://backend.urbanflowph.com';
 
 /**
  * Check if Google API is enabled
