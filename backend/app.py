@@ -2,6 +2,16 @@
 # Replace your entire app.py with this file
 import os
 from dotenv import load_dotenv
+
+# Load environment-specific .env file
+env = os.getenv('FLASK_ENV', 'development')
+if env == 'production':
+    load_dotenv('.env.production')
+    print("✅ Loaded .env.production")
+else:
+    load_dotenv('.env')
+    print("✅ Loaded .env (development)")
+
 from flask import Flask, render_template, request, jsonify,  send_from_directory
 from flask_cors import CORS
 from models.predictor import TrafficPredictor
@@ -39,6 +49,8 @@ import requests
 
 
 load_dotenv()
+
+
 
 app = Flask(__name__, static_folder='../frontend', static_url_path='/')
 CORS(app, resources={
@@ -4332,4 +4344,11 @@ def validate_calculations():
 # ============================================================
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    debug = os.getenv('FLASK_ENV') != 'production'
+    
+    app.run(
+        debug=debug,  # False in production
+        host='0.0.0.0',
+        port=port
+    )
