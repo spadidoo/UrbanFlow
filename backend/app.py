@@ -648,7 +648,127 @@ def get_finished_reports():
             'error': str(e)
         }), 500
 
+@app.route('/api/reports/generate', methods=['POST'])
+def generate_report():
+    """Generate a report for a simulation"""
+    try:
+        data = request.json
+        simulation_id = data.get('simulation_id')
+        user_id = data.get('user_id')
+        
+        if not simulation_id or not user_id:
+            return jsonify({
+                'success': False,
+                'error': 'Missing simulation_id or user_id'
+            }), 400
+        
+        # Get connection using your db pattern
+        conn = db._get_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cursor.execute("""
+            SELECT simulation_id, user_id, simulation_name
+            FROM simulation_runs
+            WHERE simulation_id = %s
+        """, (simulation_id,))
+        
+        simulation = cursor.fetchone()
+        
+        if not simulation:
+            cursor.close()
+            return jsonify({
+                'success': False,
+                'error': 'Simulation not found'
+            }), 404
+        
+        # Verify ownership
+        if simulation['user_id'] != user_id:
+            cursor.close()
+            return jsonify({
+                'success': False,
+                'error': 'Unauthorized'
+            }), 403
+        
+        # Mark simulation as having a report generated
+        cursor.execute("""
+            UPDATE simulation_runs 
+            SET has_report = TRUE, 
+                report_generated_at = CURRENT_TIMESTAMP
+            WHERE simulation_id = %s
+        """, (simulation_id,))
+        
+        conn.commit()
+        cursor.close()
+        
+        print(f"✓ Report generated for simulation {simulation_id}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Report generated successfully',
+            'report_id': simulation_id
+        })
+        
+    except Exception as e:
+        import traceback
+        print(f"✗ Error generating report: {e}")
+        traceback.print_exc()
+        try:
+            conn.rollback()
+        except:
+            pass
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
+
+@app.route('/api/reports/list', methods=['GET'])
+def get_reports():
+    """Get all available reports (uses v_reports view)"""
+    try:
+        from datetime import datetime, date
+        
+        user_id = request.args.get('user_id', type=int)
+        
+        # Get connection using your db pattern
+        conn = db._get_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        if user_id:
+            cursor.execute("""
+                SELECT * FROM v_reports
+                WHERE user_id = %s
+                ORDER BY report_generated_at DESC NULLS LAST, end_time DESC
+            """, (user_id,))
+        else:
+            cursor.execute("""
+                SELECT * FROM v_reports
+                ORDER BY report_generated_at DESC NULLS LAST, end_time DESC
+            """)
+        
+        reports = cursor.fetchall()
+        cursor.close()
+        
+        # Convert datetime objects to strings for JSON serialization
+        for report in reports:
+            for key, value in report.items():
+                if isinstance(value, (datetime, date)):
+                    report[key] = value.isoformat()
+        
+        return jsonify({
+            'success': True,
+            'reports': reports,
+            'count': len(reports)
+        })
+        
+    except Exception as e:
+        import traceback
+        print(f"✗ Error fetching reports: {e}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 # ============================================================
 # NEW ROUTE: Export Report as PDF
 # ============================================================

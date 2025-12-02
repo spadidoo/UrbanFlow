@@ -32,38 +32,39 @@ export default function ReportsPage() {
     setError(null);
     
     try {
-      console.log("🔄 Fetching reports for userId:", userId);
+      console.log("📄 Fetching reports for userId:", userId);
       
-      const response = await api.getMySimulations(userId);
+      // Use the new reports API endpoint that queries v_reports view
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/reports/list?user_id=${userId}`
+      );
       
-      console.log("📦 API Response:", response);
+      const data = await response.json();
       
-      if (response.success) {
-        const now = new Date();
-        const finished = response.simulations.filter(s => {
-          if (!s.end_time) return false;
-          const endDate = new Date(s.end_time);
-          console.log(`Checking ${s.simulation_name}: end=${endDate}, now=${now}, finished=${endDate < now}`);
-          return endDate < now;
-        });
+      console.log("📦 Reports API Response:", data);
+      
+      if (data.success) {
+        console.log("✅ Found reports:", data.count);
         
-        console.log("✅ Finished scenarios:", finished.length);
-        
-        const transformedReports = finished.map(s => ({
-          id: s.simulation_id,
-          title: s.simulation_name,
-          location: s.disruption_location,
-          type: s.disruption_type,
-          severity_level: s.severity_level,
-          status: s.simulation_status === 'published' ? 'Published' : 'Completed',
-          date: new Date(s.end_time).toLocaleDateString(),
-          start_date: s.start_time ? new Date(s.start_time).toISOString().split('T')[0] : '',
-          end_date: s.end_time ? new Date(s.end_time).toISOString().split('T')[0] : ''
+        const transformedReports = data.reports.map(r => ({
+          id: r.simulation_id,
+          title: r.simulation_name,
+          location: r.disruption_location,
+          type: r.disruption_type,
+          severity_level: r.severity_level,
+          status: r.is_published ? 'Published' : 'Completed',
+          date: r.end_time ? new Date(r.end_time).toLocaleDateString() : 'N/A',
+          start_date: r.start_time ? new Date(r.start_time).toISOString().split('T')[0] : '',
+          end_date: r.end_time ? new Date(r.end_time).toISOString().split('T')[0] : '',
+          has_report: r.has_report,
+          report_generated_at: r.report_generated_at,
+          total_affected_segments: r.total_affected_segments || 0,
+          average_delay_ratio: r.average_delay_ratio || 0
         }));
         
         setReports(transformedReports);
       } else {
-        setError("Failed to load reports");
+        setError(data.error || "Failed to load reports");
       }
     } catch (err) {
       console.error("❌ Error:", err);

@@ -669,6 +669,48 @@ export default function DataPage() {
   };
 
   // ============================================================
+  // HANDLE GENERATE REPORT
+  // ============================================================
+  const handleGenerateReport = async (simulation) => {
+    try {
+      console.log("📊 Generating report for simulation:", simulation.simulation_id);
+      
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/reports/generate`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            simulation_id: simulation.simulation_id,
+            user_id: userId,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Show success message
+        alert(
+          `✅ Report generated successfully!\n\n` +
+          `You will be redirected to the Reports page to view it.`
+        );
+        
+        // Redirect to reports page
+        router.push('/reports');
+      } else {
+        alert(`❌ Failed to generate report: ${data.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error("Error generating report:", error);
+      alert("❌ Failed to generate report. Please try again.");
+    }
+  };
+
+
+  // ============================================================
   // CONFIRM DELETE
   // ============================================================
   const handleConfirmDelete = async () => {
@@ -992,6 +1034,13 @@ export default function DataPage() {
                   <button onClick={() => handleEdit(d)} className="px-4 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-semibold">
                     Edit
                   </button>
+                   <button
+                    onClick={() => handleGenerateReport(d)}
+                    className="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-semibold"
+                    title="Generate Report"
+                  >
+                    📊 Generate Report
+                  </button>
                   {d.simulation_status === "published" ? (
                     <button onClick={() => handleUnpublish(d)} className="px-4 py-2 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition font-semibold">
                     Unpublish
@@ -1071,6 +1120,13 @@ export default function DataPage() {
 
                 <div className="flex justify-end gap-2">
                   <button onClick={() => handleEdit(d)} className="px-4 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-semibold"> Edit</button>
+                    <button
+                      onClick={() => handleGenerateReport(d)}
+                      className="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-semibold"
+                      title="Generate Report"
+                    >
+                      📊 Generate Report
+                    </button>
                   {d.simulation_status === "published" ? (
                     <button onClick={() => handleUnpublish(d)} className="px-4 py-2 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition font-semibold"> Unpublish</button>
                   ) : (
