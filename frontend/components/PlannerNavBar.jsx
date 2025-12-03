@@ -30,7 +30,7 @@ export default function PlannerNavbar() {
           {/* Logo */}
           <Link href="/dashboard" className="flex items-center space-x-1">
             <img
-              src="/DUPURBANFLOW.png"
+              src="/DupURBANFLOW.png"
               alt="UrbanFlow"
               className="h-20 w-auto sm:h-18 md:h-15"
             />

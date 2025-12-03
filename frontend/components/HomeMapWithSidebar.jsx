@@ -1084,7 +1084,9 @@ export default function HomeMapWithSidebar() {
 
     const map = mapInstanceRef.current;
     if (map) {
-      map.setView([disruption.latitude, disruption.longitude], 15, {
+      // Get current zoom level and maintain it (don't force zoom to 15)
+      const currentZoom = map.getZoom();
+      map.setView([disruption.latitude, disruption.longitude], currentZoom, {
         animate: true,
         duration: 1,
       });
@@ -1194,12 +1196,12 @@ export default function HomeMapWithSidebar() {
       </button>
 
       {/* ============ SLIDE-IN MENU ============ */}
-      <div
-        className={`pl-2 pr-4 py-3 fixed left-0 top-0 h-80 w-90 bg-white shadow-2xl z-[1003] transition-transform duration-300 ${
-          menuOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-        style={{ top: "0px", height: "calc(100vh - 0px)" }}
-      >
+        <div
+          className={`pl-2 pr-4 py-3 fixed left-0 top-0 w-full md:w-90 max-w-md bg-white shadow-2xl z-[1003] transition-transform duration-300 overflow-y-auto ${
+            menuOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+          style={{ top: "0px", height: "100vh" }}
+        >
         <div className="p-6 space-y-4">
           <h2 className="text-2xl font-bold text-gray-800 mb-6">UrbanFlow</h2>
 
@@ -1436,15 +1438,15 @@ export default function HomeMapWithSidebar() {
         </div>
       </div>
 
-      {/* Logo - Top Center */}
-      <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-[1002]">
+      {/* Logo - Below search bar on mobile, top center on desktop */}
+      <div className="absolute md:top-4 md:left-1/2 md:transform md:-translate-x-1/2 top-32 right-4 z-[1002]">
         <Link href="/" className="flex items-center space-x-1">
           <img
             src="/DupURBANFLOW.png"
             alt="UrbanFlow"
-            className="h-20 w-auto sm:h-15 md:h-12 scale-90"
+            className="h-12 w-auto md:h-20 md:scale-90 scale-75"
           />
-          <span className="text-xl font-bold" style={{ color: "#757575" }}>
+          <span className="text-base md:text-xl font-bold" style={{ color: "#757575" }}>
             UrbanFlow
           </span>
         </Link>

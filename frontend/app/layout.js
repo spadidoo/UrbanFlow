@@ -4,9 +4,12 @@ import LoadingScreen from '@/components/LoadingScreen'
 import { AuthProvider } from '@/context/AuthContext';
 
 export const metadata = {
-  title: 'UrbanFlow',
-  description: 'Traffic Prediction Dashboard',
-}
+  title: "UrbanFlow",
+  description: "Traffic disruption simulation and prediction",
+  icons: {
+    icon: '/URBANFLOW_logo.png', // or '/urbanflow-icon.png' depending on your file
+  },
+};
 
 export default function RootLayout({ children }) {
   return (

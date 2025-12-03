@@ -48,7 +48,7 @@ export default function LogoHeader({ className = "" }) {
             title="Menu"
           >
             <img
-              src="/URBANFLOW_logo.png"
+              src="/URBANFLOW_logo.PNG"
               alt="UrbanFlow"
               className="w-28 h-auto transform -translate-x-10 translate-y-3 transition-transform duration-200 group-hover:-translate-x-6"
             />
