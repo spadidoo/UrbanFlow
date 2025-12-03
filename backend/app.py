@@ -50,17 +50,27 @@ import requests
 
 load_dotenv()
 
+# Correct static path
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FRONTEND_DIR = os.path.join(BASE_DIR, '..', 'frontend')
 
+app = Flask(__name__, static_folder=FRONTEND_DIR, static_url_path='/')
 
-app = Flask(__name__, static_folder='../frontend', static_url_path='/')
+# CORS for production + dev
 CORS(app, resources={
     r"/api/*": {
-        "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
+        "origins": [
+            "https://urbanflowph.com",
+            "https://www.urbanflowph.com",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000"
+        ],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"],
         "supports_credentials": True
     }
 })
+
 
 # register blueprints after CORS
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
@@ -104,8 +114,12 @@ MAX_FILE_SIZE = 2 * 1024 * 1024
 # ============================================================
 
 print("Loading trained model...")
-predictor = TrafficPredictor()
-print("✓ Model loaded and ready!")
+try:
+    predictor = TrafficPredictor()
+    print("✓ Model loaded and ready!")
+except Exception as e:
+    print(f"⚠️ Model loading failed: {e}")
+    predictor = None
 
 # After creating the app
 traffic_service = TrafficAPIService()
@@ -1612,6 +1626,100 @@ def health_check():
 # ============================================================
 # NEW ROUTE: Get Real-Time Traffic Status for Area
 # ============================================================
+@app.route('/api/traffic/live-flow', methods=['GET'])
+def get_live_traffic_flow():
+    """Get live traffic flow for multiple points in Calamba using TomTom API"""
+    try:
+        bounds = request.args.get('bounds')
+        if not bounds:
+            return jsonify({'error': 'Bounds required'}), 400
+        
+        min_lat, min_lng, max_lat, max_lng = map(float, bounds.split(','))
+        
+        tomtom_key = os.getenv('TOMTOM_API_KEY', '')
+        if not tomtom_key:
+            return jsonify({'success': True, 'segments': [], 'message': 'No API key'}), 200
+        
+        # Create a grid of points across Calamba (4x4 grid = 16 points)
+        lat_step = (max_lat - min_lat) / 4
+        lng_step = (max_lng - min_lng) / 4
+        
+        all_segments = []
+        seen_roads = set()  # Avoid duplicate road segments
+        
+        for i in range(4):
+            for j in range(4):
+                lat = min_lat + (i + 0.5) * lat_step
+                lng = min_lng + (j + 0.5) * lng_step
+                
+                try:
+                    url = f"https://api.tomtom.com/traffic/services/4/flowSegmentData/relative/10/json"
+                    params = {
+                        'point': f"{lat},{lng}",
+                        'key': tomtom_key,
+                        'unit': 'KMPH'
+                    }
+                    
+                    response = requests.get(url, params=params, timeout=5)
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        
+                        if 'flowSegmentData' in data:
+                            seg = data['flowSegmentData']
+                            
+                            # Create unique road ID to avoid duplicates
+                            road_id = f"{seg.get('frc', '')}_{seg.get('currentSpeed', 0)}_{lat:.3f}_{lng:.3f}"
+                            
+                            if road_id not in seen_roads:
+                                seen_roads.add(road_id)
+                                
+                                free_flow = seg.get('freeFlowSpeed', 50)
+                                current = seg.get('currentSpeed', 50)
+                                
+                                ratio = current / free_flow if free_flow > 0 else 1
+                                
+                                if ratio >= 0.8:
+                                    severity = 'low'
+                                elif ratio >= 0.5:
+                                    severity = 'moderate'
+                                elif ratio >= 0.3:
+                                    severity = 'high'
+                                else:
+                                    severity = 'severe'
+                                
+                                coords = seg.get('coordinates', {}).get('coordinate', [])
+                                
+                                if coords:
+                                    all_segments.append({
+                                        'coordinates': coords,
+                                        'currentSpeed': current,
+                                        'freeFlowSpeed': free_flow,
+                                        'severity': severity,
+                                        'roadName': seg.get('roadName', 'Unknown Road')
+                                    })
+                    
+                    # Small delay to avoid rate limiting
+                    import time
+                    time.sleep(0.1)
+                    
+                except Exception as e:
+                    print(f"Error fetching point ({lat}, {lng}): {str(e)}")
+                    continue
+        
+        print(f"✓ Fetched {len(all_segments)} traffic segments for Calamba")
+        
+        return jsonify({
+            'success': True,
+            'timestamp': datetime.now().isoformat(),
+            'segments': all_segments,
+            'count': len(all_segments)
+        })
+        
+    except Exception as e:
+        print(f"Error in live traffic: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    
 @app.route('/api/traffic-status', methods=['GET'])
 def get_traffic_status():
     """
@@ -3266,8 +3374,12 @@ def simulate_disruption_realtime():
 
 @app.route('/')
 def home():
-    """Render the main page"""
-    return render_template('index.html')
+    """API status endpoint"""
+    return jsonify({
+        "status": "online",
+        "service": "UrbanFlow Backend API",
+        "message": "Backend is running successfully"
+    })
 
 
 # ============================================================
@@ -4055,8 +4167,7 @@ def preview_file(filename):
 @app.route('/api/send-publish-otp', methods=['POST'])
 def send_publish_otp():
     """
-    Generate and send OTP for publishing verification
-    In production, this would send an email. For now, we'll return it in response for testing.
+    Generate and send OTP for publishing verification using direct SMTP
     """
     try:
         data = request.get_json()
@@ -4072,22 +4183,13 @@ def send_publish_otp():
         # Generate 6-digit OTP
         otp_code = ''.join(random.choices(string.digits, k=6))
         
-        # Initialize variables to avoid linting warnings
         user_email = None
         user_name = None
-        # Store OTP in database
         conn = None
+        
         try:
             conn = db._get_connection()
             cursor = conn.cursor()
-            
-            # Set expiry to 10 minutes from now
-            expires_at = datetime.now() + timedelta(minutes=10)
-            
-            cursor.execute("""
-                INSERT INTO verification_otps (user_id, simulation_id, otp_code, expires_at)
-                VALUES (%s, %s, %s, %s)
-            """, (user_id, simulation_id, otp_code, expires_at))
             
             # Get user email
             cursor.execute("""
@@ -4105,13 +4207,102 @@ def send_publish_otp():
                 }), 404
             
             user_email, user_name = user
-
+            
+            # Set expiry to 10 minutes from now
+            expires_at = datetime.now() + timedelta(minutes=10)
+            
+            # Store OTP in database
+            cursor.execute("""
+                INSERT INTO verification_otps (user_id, simulation_id, otp_code, expires_at)
+                VALUES (%s, %s, %s, %s)
+            """, (user_id, simulation_id, otp_code, expires_at))
+            
             conn.commit()
             
-            # Send actual email
+            # Send email using direct SMTP
+            import smtplib
+            from email.mime.text import MIMEText
+            from email.mime.multipart import MIMEMultipart
+            
+            # Get SMTP credentials from environment
+            smtp_email = os.getenv('SMTP_EMAIL')
+            smtp_password = os.getenv('SMTP_PASSWORD')
+            smtp_server = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
+            smtp_port = int(os.getenv('SMTP_PORT', 587))
+            
+            print(f"📧 Sending OTP to {user_email}")
+            print(f"📮 SMTP: {smtp_server}:{smtp_port}")
+            print(f"👤 From: {smtp_email}")
+            
+            # Create message
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = 'UrbanFlow - Verification Code'
+            msg['From'] = f"UrbanFlow Traffic System <{smtp_email}>"
+            msg['To'] = user_email
+            msg['Message-ID'] = f"<{otp_code}.{datetime.now().timestamp()}@urbanflowph.com>"
+            msg['Date'] = datetime.now().strftime('%a, %d %b %Y %H:%M:%S +0800')
+            
+            # HTML body
+            html_body = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #2563eb;">UrbanFlow Verification Code</h2>
+                <p>Hello {user_name},</p>
+                <p>Your verification code for publishing the simulation is:</p>
+                
+                <div style="background-color: #f3f4f6; padding: 30px; text-align: center; margin: 20px 0; border-radius: 8px;">
+                    <h1 style="color: #1f2937; letter-spacing: 10px; margin: 0; font-size: 36px;">{otp_code}</h1>
+                </div>
+                
+                <p style="color: #6b7280;">This code will expire in <strong>10 minutes</strong>.</p>
+                <p style="color: #6b7280;">If you did not request this code, please ignore this email.</p>
+                
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;" />
+                <p style="color: #9ca3af; font-size: 12px;">
+                    UrbanFlow Traffic Management System<br/>
+                    Calamba City Public Order and Safety Office<br/>
+                    Calamba City, Laguna, Philippines
+                </p>
+            </body>
+            </html>
+            """
+            
+            # Plain text fallback
+            text_body = f"""
+Hello {user_name},
+
+Your verification code for publishing the simulation is:
+
+{otp_code}
+
+This code will expire in 10 minutes.
+
+If you did not request this code, please ignore this email.
+
+Best regards,
+UrbanFlow Team
+Calamba City Public Order and Safety Office
+            """
+            
+            msg.attach(MIMEText(text_body, 'plain'))
+            msg.attach(MIMEText(html_body, 'html'))
+            
+            # Send email
             try:
-                send_otp_email(user_email, user_name, otp_code, expires_minutes=10)
-                print(f"✓ OTP email sent to {user_email}")
+                # Use SMTP_SSL for port 465, SMTP for port 587
+                if smtp_port == 465:
+                    with smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=10) as server:
+                        server.login(smtp_email, smtp_password)
+                        server.send_message(msg)
+                else:
+                    with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as server:
+                        server.ehlo()
+                        server.starttls()
+                        server.ehlo()
+                        server.login(smtp_email, smtp_password)
+                        server.send_message(msg)
+                
+                print(f"✅ OTP email sent successfully to {user_email}")
                 
                 return jsonify({
                     'success': True,
@@ -4119,8 +4310,9 @@ def send_publish_otp():
                     'expires_in_minutes': 10
                 })
                 
-            except Exception as email_error:
-                # Rollback OTP if email fails
+            except smtplib.SMTPAuthenticationError as auth_err:
+                print(f"❌ SMTP Authentication Error: {auth_err}")
+                # Rollback OTP
                 cursor.execute(
                     "DELETE FROM verification_otps WHERE simulation_id = %s AND otp_code = %s",
                     (simulation_id, otp_code)
@@ -4129,8 +4321,23 @@ def send_publish_otp():
                 
                 return jsonify({
                     'success': False,
-                    'error': 'Failed to send verification email. Please try again.',
-                    'details': str(email_error)
+                    'error': 'Email authentication failed. Please check email configuration.',
+                    'details': str(auth_err)
+                }), 500
+            
+            except smtplib.SMTPException as smtp_err:
+                print(f"❌ SMTP Error: {smtp_err}")
+                # Rollback OTP
+                cursor.execute(
+                    "DELETE FROM verification_otps WHERE simulation_id = %s AND otp_code = %s",
+                    (simulation_id, otp_code)
+                )
+                conn.commit()
+                
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to send email. Please try again.',
+                    'details': str(smtp_err)
                 }), 500
             
         finally:
@@ -4138,12 +4345,14 @@ def send_publish_otp():
                 conn.close()
                 
     except Exception as e:
-        print(f"✗ Error sending OTP: {e}")
+        print(f"❌ ERROR in send_publish_otp: {e}")
         import traceback
         traceback.print_exc()
+        
         return jsonify({
             'success': False,
-            'error': 'An error occurred while processing your request'
+            'error': 'An error occurred while processing your request',
+            'details': str(e)
         }), 500
 
 @app.route('/api/verify-publish-otp', methods=['POST'])
@@ -4352,3 +4561,5 @@ if __name__ == '__main__':
         host='0.0.0.0',
         port=port
     )
+    
+    application = app  # for cPanel Passenger WSGI

@@ -3,6 +3,7 @@
 import L from "leaflet";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 
 // Fix Leaflet icons
 if (typeof window !== "undefined") {
@@ -255,6 +256,9 @@ export default function HomeMapWithSidebar() {
 
   const [currentHour, setCurrentHour] = useState(new Date().getHours());
 
+  const [liveTraffic, setLiveTraffic] = useState([]);
+  const [showLiveTraffic, setShowLiveTraffic] = useState(true);
+  const [lastTrafficUpdate, setLastTrafficUpdate] = useState(null);
   // ============ BOTTOM SHEET HANDLERS ============
 
   const toggleBottomSheet = () => {
@@ -281,23 +285,103 @@ export default function HomeMapWithSidebar() {
   };
 
   const handleTouchStart = (e) => {
+    console.log('👆 Touch Start:', e.targetTouches[0].clientY);
     setTouchStart(e.targetTouches[0].clientY);
+    setTouchEnd(e.targetTouches[0].clientY);
   };
 
   const handleTouchMove = (e) => {
+    console.log('👉 Touch Move:', e.targetTouches[0].clientY);
     setTouchEnd(e.targetTouches[0].clientY);
   };
 
   const handleTouchEnd = () => {
-    if (touchStart - touchEnd > 50) {
-      // Swiped up
-      setBottomSheetHeight("calc(100vh - 80px)");
+    const swipeDistance = touchStart - touchEnd;
+    const threshold = 50;
+    
+    console.log('✋ Touch End - Distance:', swipeDistance, 'Current Height:', bottomSheetHeight);
+
+    if (Math.abs(swipeDistance) < threshold) {
+      console.log('⚠️ Swipe too small, ignoring');
+      return;
     }
 
-    if (touchStart - touchEnd < -50) {
-      // Swiped down
-      setBottomSheetHeight("120px");
+    if (swipeDistance > threshold) {
+      // Swiped up
+      console.log('⬆️ Swiped UP');
+      if (bottomSheetHeight === "120px") {
+        setBottomSheetHeight("50vh");
+        setBottomSheetOpen(true);
+      } else if (bottomSheetHeight === "50vh") {
+        setBottomSheetHeight("85vh");
+      }
     }
+
+    if (swipeDistance < -threshold) {
+      // Swiped down
+      console.log('⬇️ Swiped DOWN');
+      if (bottomSheetHeight === "85vh") {
+        setBottomSheetHeight("50vh");
+      } else if (bottomSheetHeight === "50vh" || bottomSheetHeight === "120px") {
+        setBottomSheetHeight("120px");
+        setBottomSheetOpen(false);
+      }
+    }
+  };
+
+  // Mouse drag handlers (for desktop)
+  const handleMouseDown = (e) => {
+    console.log('🖱️ Mouse Down:', e.clientY);
+    setTouchStart(e.clientY);
+    setTouchEnd(e.clientY);
+  };
+
+  const handleMouseMove = (e) => {
+    if (touchStart !== 0) {
+      console.log('🖱️ Mouse Move:', e.clientY);
+      setTouchEnd(e.clientY);
+    }
+  };
+
+  const handleMouseUp = () => {
+    if (touchStart === 0) return;
+    
+    const swipeDistance = touchStart - touchEnd;
+    const threshold = 3;
+    
+    console.log('🖱️ Mouse Up - Distance:', swipeDistance, 'Current Height:', bottomSheetHeight);
+
+    if (Math.abs(swipeDistance) < threshold) {
+      console.log('⚠️ Drag too small, ignoring');
+      setTouchStart(0);
+      setTouchEnd(0);
+      return;
+    }
+
+    if (swipeDistance > threshold) {
+      // Dragged up
+      console.log('⬆️ Dragged UP');
+      if (bottomSheetHeight === "120px") {
+        setBottomSheetHeight("50vh");
+        setBottomSheetOpen(true);
+      } else if (bottomSheetHeight === "50vh") {
+        setBottomSheetHeight("85vh");
+      }
+    }
+
+    if (swipeDistance < -threshold) {
+      // Dragged down
+      console.log('⬇️ Dragged DOWN');
+      if (bottomSheetHeight === "85vh") {
+        setBottomSheetHeight("50vh");
+      } else if (bottomSheetHeight === "50vh" || bottomSheetHeight === "120px") {
+        setBottomSheetHeight("120px");
+        setBottomSheetOpen(false);
+      }
+    }
+
+    setTouchStart(0);
+    setTouchEnd(0);
   };
 
   // handler for menu
@@ -355,7 +439,7 @@ export default function HomeMapWithSidebar() {
     disruptions,
     showReports,
     showCongestion,
-    currentHour,
+    currentHour
   ]);
 
   const fetchDisruptions = async () => {
@@ -399,6 +483,94 @@ export default function HomeMapWithSidebar() {
       setLoading(false);
     }
   };
+
+  const fetchLiveTraffic = useCallback(async () => {
+    if (!mapInstanceRef.current) return;
+
+    try {
+      const bounds = mapInstanceRef.current.getBounds();
+      const boundsString = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
+
+      const response = await fetch(
+        `http://backend.urbanflowph.com/api/traffic/live-flow?bounds=${boundsString}`
+      );
+      const data = await response.json();
+
+      if (data.success && data.segments) {
+        setLiveTraffic(data.segments);
+        setLastTrafficUpdate(new Date(data.timestamp));
+        
+        // Draw traffic on map
+        drawLiveTrafficOnMap(data.segments);
+      }
+    } catch (error) {
+      console.error('Error fetching live traffic:', error);
+    }
+  }, []);
+
+  const drawLiveTrafficOnMap = (segments) => {
+    if (!mapInstanceRef.current || !showLiveTraffic) return;
+    
+    const map = mapInstanceRef.current;
+    
+    // Remove old traffic layers
+    layersRef.current = layersRef.current.filter(layer => {
+      if (layer._trafficLayer) {
+        map.removeLayer(layer);
+        return false;
+      }
+      return true;
+    });
+    
+    // Draw new traffic segments
+    segments.forEach((segment, index) => {
+      if (!segment.coordinates || segment.coordinates.length === 0) return;
+      
+      const positions = segment.coordinates.map(coord => [coord.latitude, coord.longitude]);
+      
+      const severityColors = {
+        low: '#22c55e',
+        moderate: '#eab308',
+        high: '#f97316',
+        severe: '#ef4444'
+      };
+      
+      const color = severityColors[segment.severity] || '#6b7280';
+      
+      const polyline = L.polyline(positions, {
+        color: color,
+        weight: 6,
+        opacity: 0.7,
+        lineCap: 'round'
+      }).addTo(map);
+      
+      polyline._trafficLayer = true; // Mark as traffic layer
+      
+      polyline.bindPopup(`
+        <div style="padding: 8px;">
+          <h3 style="margin: 0 0 6px 0; font-weight: bold;">Live Traffic</h3>
+          <p style="margin: 2px 0; font-size: 12px;">Current: ${Math.round(segment.currentSpeed)} km/h</p>
+          <p style="margin: 2px 0; font-size: 12px;">Free Flow: ${Math.round(segment.freeFlowSpeed)} km/h</p>
+          <p style="margin: 2px 0; font-size: 12px;">Status: <strong>${segment.severity.toUpperCase()}</strong></p>
+        </div>
+      `);
+      
+      layersRef.current.push(polyline);
+    });
+  };
+
+    // Auto-refresh live traffic
+  useEffect(() => {
+    if (mapInstanceRef.current && showLiveTraffic) {
+      fetchLiveTraffic();
+      
+      const interval = setInterval(() => {
+        fetchLiveTraffic();
+      }, 60000);
+
+      return () => clearInterval(interval);
+    }
+  }, [showLiveTraffic, fetchLiveTraffic]);
 
   // ============ AUTOCOMPLETE SEARCH FUNCTIONALITY ============
 
@@ -1406,6 +1578,39 @@ export default function HomeMapWithSidebar() {
             </div>
           </div>
 
+          {/* Toggle: Live Traffic */}
+          <div className="flex items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+            <div className="w-12 flex items-center justify-center flex-shrink-0">
+              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <div className="flex-1 flex flex-col leading-tight ml-3">
+              <span className="font-semibold text-gray-700">
+                Live Traffic
+              </span>
+              <p className="text-xs text-gray-500">
+                {showLiveTraffic
+                  ? "Real-time flow visible"
+                  : "Real-time flow hidden"}
+              </p>
+            </div>
+            <div className="w-11 flex items-center justify-center flex-shrink-0 ml-3">
+              <button
+                onClick={() => setShowLiveTraffic(!showLiveTraffic)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+                  showLiveTraffic ? "bg-blue-600" : "bg-gray-300"
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                    showLiveTraffic ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
           <hr className="my-4" />
 
           {/* Navigation Links */}
@@ -1647,13 +1852,21 @@ export default function HomeMapWithSidebar() {
           transform: menuOpen ? "translateY(100%)" : "translateY(0)",
           opacity: menuOpen ? 0 : 1,
         }}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
       >
         {/* Drag Handle */}
         <div
           onClick={toggleBottomSheet}
-          className="w-full py-4 cursor-pointer flex justify-center"
+          className="w-full py-4 cursor-grab active:cursor-grabbing flex justify-center select-none"
+          style={{ touchAction: 'none' }}
         >
-          <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
+          <div className="w-12 h-1.5 bg-gray-300 rounded-full hover:bg-gray-400 transition" />
         </div>
 
         {/* Content */}
