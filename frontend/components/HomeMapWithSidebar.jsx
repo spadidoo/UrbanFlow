@@ -492,7 +492,7 @@ export default function HomeMapWithSidebar() {
       const boundsString = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
 
       const response = await fetch(
-        `http://backend.urbanflowph.com/api/traffic/live-flow?bounds=${boundsString}`
+        `https://backend.urbanflowph.com/api/traffic/live-flow?bounds=${boundsString}`
       );
       const data = await response.json();
 
