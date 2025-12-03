@@ -28,7 +28,7 @@ export default function LoadingScreen({ maxMs = 2000 }) {
 
         <div className="logo-color-mask">
             {/* Color logo revealed with mask */}
-            <img src="/URBANFLOW_logo.png" alt="UrbanFlow Color" className="logo-color" width="180" />
+            <img src="/URBANFLOW_logo.PNG" alt="UrbanFlow Color" className="logo-color" width="180" />
         </div>
       </div>
     </div>

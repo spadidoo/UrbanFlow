@@ -1166,10 +1166,10 @@ export default function HomeMapWithSidebar() {
       `}</style>
 
       {/* ============ HAMBURGER MENU BUTTON ============ */}
-      <button
-        onClick={toggleMenu}
-        className="fixed top-20 left-4 z-[1003] bg-white p-3 rounded-lg shadow-lg hover:bg-gray-50 transition"
-      >
+        <button
+          onClick={toggleMenu}
+          className="fixed md:top-20 top-[76px] left-4 z-[1003] bg-white p-2 md:p-3 rounded-lg shadow-lg hover:bg-gray-50 transition"
+        >
         <svg
           xmlns="http://www.w3.org/2000/svg"
           className="h-6 w-6 text-gray-700"
@@ -1197,7 +1197,7 @@ export default function HomeMapWithSidebar() {
 
       {/* ============ SLIDE-IN MENU ============ */}
         <div
-          className={`pl-2 pr-4 py-3 fixed left-0 top-0 w-full md:w-90 max-w-md bg-white shadow-2xl z-[1003] transition-transform duration-300 overflow-y-auto ${
+          className={`pl-2 pr-4 py-3 fixed left-0 top-0 w-[85vw] md:w-90 max-w-md bg-white shadow-2xl z-[1003] transition-transform duration-300 overflow-y-auto ${
             menuOpen ? "translate-x-0" : "-translate-x-full"
           }`}
           style={{ top: "0px", height: "100vh" }}
@@ -1316,13 +1316,15 @@ export default function HomeMapWithSidebar() {
         </div>
       </div>
 
-      {/* ============ SEARCH BAR WITH AUTOCOMPLETE ============ */}
-      <div
-        className={`absolute top-5 transition-all duration-300 z-[1001] ${
-          menuOpen ? "left-[336px]" : "left-4"
-        }`}
-        ref={searchInputRef}
-      >
+        {/* ============ SEARCH BAR WITH AUTOCOMPLETE ============ */}
+        <div
+          className={`absolute md:top-5 top-11 transition-all duration-300 z-[1001] ${
+            menuOpen
+              ? "md:left-[400px] left-4" // On mobile stay left, desktop move right when menu open
+              : "left-4" // Back to left when menu is closed
+          }`}
+          ref={searchInputRef}
+        >
         <div className="bg-white rounded-lg shadow-lg p-3 w-96">
           <div className="flex items-center gap-2">
             <svg
@@ -1438,7 +1440,7 @@ export default function HomeMapWithSidebar() {
         </div>
       </div>
 
-      {/* Logo - Below search bar on mobile, top center on desktop */}
+     {/* Logo - Top center on desktop */}
       <div className="absolute top-4 left-1/2 transform -translate-x-1/2 md:block hidden z-[1002]">
         <Link href="/" className="flex items-center space-x-1">
           <img
@@ -1451,27 +1453,26 @@ export default function HomeMapWithSidebar() {
           </span>
         </Link>
       </div>
-
-      {/* Logo - Mobile only version (below search bar, right side) */}
-      <div className="absolute top-32 right-4 md:hidden z-[1002]">
+      {/* Logo - Mobile only version (centered, above search bar) */}
+      <div className="absolute top-1 left-1/2 transform -translate-x-1/2 md:hidden z-[1002]">
         <Link href="/" className="flex items-center space-x-1">
           <img
             src="/DupURBANFLOW.png"
             alt="UrbanFlow"
-            className="h-12 w-auto scale-75"
+            className="h-8 w-auto"
           />
-          <span className="text-base font-bold" style={{ color: "#757575" }}>
+          <span className="text-xs font-bold whitespace-nowrap" style={{ color: "#757575" }}>
             UrbanFlow
           </span>
         </Link>
       </div>
 
-      {/* Login Button - Fixed Top Right */}
-      <Link
-        href="/login"
-        className="absolute top-5 right-4 z-[1002] bg-white w-12 h-12 rounded-full shadow-lg hover:bg-blue-50 transition flex items-center justify-center overflow-hidden"
-        title="Urban Planner Login"
-      >
+      {/* Login Button - Desktop: Top Right, Mobile: Aligned with Logo */}
+        <Link
+          href="/login"
+          className="absolute md:top-5 md:right-4 top-1 right-4 z-[1002] bg-white w-8 h-8 md:w-12 md:h-12 rounded-full shadow-lg hover:bg-blue-50 transition flex items-center justify-center overflow-hidden"
+          title="Urban Planner Login"
+        >
         <img
           src="/urban_planner_icon.png"
           alt="Login"
