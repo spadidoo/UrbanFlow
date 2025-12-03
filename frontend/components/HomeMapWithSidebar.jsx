@@ -799,24 +799,29 @@ export default function HomeMapWithSidebar() {
         }
 
         // Shadow
-        const shadow = L.polyline(
-          [[startCoord[0], startCoord[1]], [endCoord[0], endCoord[1]]],
-          { color: "#1f2937", weight: weight + 3, opacity: 0.12, lineCap: "round" }
-        ).addTo(map);
-        layersRef.current.push(shadow);
+       // Shadow (for depth effect)
+        if (mapInstanceRef.current) {
+          const shadow = L.polyline(
+            [[startCoord[0], startCoord[1]], [endCoord[0], endCoord[1]]],
+            { color: "#1f2937", weight: weight + 3, opacity: 0.12, lineCap: "round" }
+          ).addTo(mapInstanceRef.current);
+          layersRef.current.push(shadow);
+        }
 
         // Segment
-        const segment = L.polyline(
-          [[startCoord[0], startCoord[1]], [endCoord[0], endCoord[1]]],
-          {
-            color: segmentColor,
-            weight: weight,
-            opacity: opacity,
-            lineCap: "round",
-            lineJoin: "round",
-          }
-        ).addTo(map);
-        layersRef.current.push(segment);
+        if (!mapInstanceRef.current) {
+          const segment = L.polyline(
+            [[startCoord[0], startCoord[1]], [endCoord[0], endCoord[1]]],
+            {
+              color: segmentColor,
+              weight: weight,
+              opacity: opacity,
+              lineCap: "round",
+              lineJoin: "round",
+            }
+          ).addTo(map);
+          layersRef.current.push(segment);
+        }
       }
     });
   };

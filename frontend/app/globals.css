@@ -23,8 +23,19 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
-  overflow: hidden; /* Prevent scrolling on mobile */
-  position: fixed; /* Lock the body in place */
+  overflow-x: hidden; /* Prevent horizontal scroll */
+}
+
+/* Prevent horizontal scroll on all devices */
+html {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+/* Only prevent vertical scroll on home page (map page) */
+body.map-page {
+  overflow: hidden;
+  position: fixed;
   width: 100%;
   height: 100%;
 }

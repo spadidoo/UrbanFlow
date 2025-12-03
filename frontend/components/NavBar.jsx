@@ -13,19 +13,19 @@ export default function Navbar() {
       className="fixed top-0 left-0 w-full text-white shadow-lg backdrop-blur-sm z-[1001]"
     >
       <div className="px-4">
-        <div className="flex justify-between items-center h-16">
+        <div className="flex justify-between items-center h-12 md:h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-1">
             <img
               src="/DupURBANFLOW.png"
               alt="UrbanFlow"
-              className="h-20 w-auto sm:h-15 md:h-12"
+              className="h-10 w-auto md:h-20"
             />
-            <span className="text-xl font-bold">UrbanFlow</span>
+            <span className="text-base md:text-xl font-bold">UrbanFlow</span>
           </Link>
 
           {/* Navigation Links */}
-          <div className="flex items-center space-x-6">
+          <div className="flex items-center space-x-3 md:space-x-6 text-sm md:text-base">
             <Link
               href="/"
               className={`hover:text-blue-200 transition ${
@@ -33,14 +33,6 @@ export default function Navbar() {
               }`}
             >
               Home
-            </Link>
-            <Link
-              href="/map"
-              className={`hover:text-blue-200 transition ${
-                isActive("/map") ? "border-b-2 border-white pb-1" : ""
-              }`}
-            >
-              Map
             </Link>
             <Link
               href="/about"
@@ -58,21 +50,6 @@ export default function Navbar() {
             >
               Contact
             </Link>
-            {/*----}"""
-            {/* Login Icon 
-            <Link
-              href="/login"
-              className="ml-4 bg-white text-blue-600 p-2 w-12 h-12 rounded-full hover:bg-blue-50 transition items-center justify-center overflow-hidden"
-              title="Urban Planner Login"
-            >
-              <img
-                src="urban_planner_icon.png"
-                className="w-full h-full object-cover"
-                fill="none"
-                viewBox="1 1 24 24"
-              />
-            </Link>
-              */}
           </div>
         </div>
       </div>

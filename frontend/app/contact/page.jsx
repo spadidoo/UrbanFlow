@@ -156,32 +156,31 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 overflow-y-auto">
       <Navbar />
 
-      <main className="container mx-auto px-4 py-25">
+      <main className="container mx-auto px-4 pt-16 md:pt-25 pb-8">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-4xl font-bold text-gray-800 mb-6">Contact Us</h1>
-
-          <div className="grid md:grid-cols-2 gap-8 mb-8">
+        <h1 className="text-2xl md:text-4xl font-bold text-gray-800 mb-4 md:mb-6">Contact Us</h1>
+          <div className="grid md:grid-cols-2 gap-4 md:gap-8 mb-4 md:mb-8">
             {/* Contact Details */}
-            <div className="bg-white rounded-lg shadow-md px-6 py-3">
-              <h2 className="text-2xl font-bold text-gray-800 mb-3">
+            <div className="bg-white rounded-lg shadow-md px-4 md:px-6 py-3 md:py-4">
+              <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-3">
                 Get in Touch
               </h2>
-              <div className="space-y-3">
-                <div className="flex items-start gap-4">
-                  <div className="text-blue-600 text-2xl"></div>
+              <div className="space-y-2 md:space-y-3">
+                <div className="flex items-start gap-3 md:gap-4">
+                  <div className="text-blue-600 text-xl md:text-2xl"></div>
                   <div>
-                    <h3 className="font-semibold text-gray-800">Email</h3>
-                    <p className="text-gray-600">urbanflow.service@gmail.com</p>
+                    <h3 className="font-semibold text-sm md:text-base text-gray-800">Email</h3>
+                    <p className="text-xs md:text-sm text-gray-600 break-all">urbanflow.service@gmail.com</p>
                   </div>
                 </div>
-                <div className="flex items-start gap-4">
-                  <div className="text-blue-600 text-2xl"></div>
+                <div className="flex items-start gap-3 md:gap-4">
+                  <div className="text-blue-600 text-xl md:text-2xl"></div>
                   <div>
-                    <h3 className="font-semibold text-gray-800">Address</h3>
-                    <p className="text-gray-600">
+                    <h3 className="font-semibold text-sm md:text-base text-gray-800">Address</h3>
+                    <p className="text-xs md:text-sm text-gray-600">
                       Ipil-ipil Street
                       <br />
                       Bucal, Calamba Laguna
@@ -220,7 +219,7 @@ export default function ContactPage() {
             </div>
             
 
-            {/* Contact Form */}
+         {/* Contact Form */}
             <div className="bg-white rounded-lg shadow-md p-8">
               <h2 className="text-2xl font-bold text-gray-800 mb-6">
                 Send a Message
@@ -244,7 +243,7 @@ export default function ContactPage() {
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-gray-700 font-semibold mb-2">
+                  <label className="block text-gray-700 text-sm md:text-base font-semibold mb-2">
                     Name
                   </label>
                   <input
@@ -253,7 +252,7 @@ export default function ContactPage() {
                     value={formData.name}
                     onChange={handleChange}
                     placeholder="Your name"
-                    className={`w-full px-4 py-2 border rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-500 ${
+                    className={`w-full px-3 md:px-4 py-2 text-sm md:text-base border rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-500 ${
                       errors.name ? "border-red-500" : "border-gray-300"
                     }`}
                   />
@@ -272,7 +271,7 @@ export default function ContactPage() {
                     value={formData.email}
                     onChange={handleChange}
                     placeholder="your.email@example.com"
-                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none text-gray-800 focus:ring-2 focus:ring-orange-500 ${
+                    className={`w-full px-3 md:px-4 py-2 text-sm md:text-base border rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-500 ${
                       errors.email ? "border-red-500" : "border-gray-300"
                     }`}
                   />
@@ -291,7 +290,7 @@ export default function ContactPage() {
                     value={formData.subject}
                     onChange={handleChange}
                     placeholder="What is this about?"
-                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none text-gray-800 focus:ring-2 focus:ring-orange-500 ${
+                    className={`w-full px-3 md:px-4 py-2 text-sm md:text-base border rounded-lg focus:outline-none text-gray-800 focus:ring-2 focus:ring-orange-500 ${
                       errors.subject ? "border-red-500" : "border-gray-300"
                     }`}
                   />
@@ -312,7 +311,7 @@ export default function ContactPage() {
                     value={formData.message}
                     onChange={handleChange}
                     placeholder="Your message..."
-                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none text-gray-800 focus:ring-2 focus:ring-orange-500 ${
+                    className={`w-full px-3 md:px-4 py-2 text-sm md:text-base border rounded-lg focus:outline-none text-gray-800 focus:ring-2 focus:ring-orange-500 ${
                       errors.message ? "border-red-500" : "border-gray-300"
                     }`}
                   ></textarea>
@@ -414,7 +413,7 @@ export default function ContactPage() {
       <footer className="bg-gray-800 text-white py-8 mt-16">
         <div className="container mx-auto px-4 text-center">
           <p>&copy; 2025 UrbanFlow - Calamba City Traffic Prediction System</p>
-          <p className="text-sm text-gray-400 mt-2">Thesis Project</p>
+          <p className="text-sm text-gray-400 mt-2">CS1 Thesis Project</p>
         </div>
       </footer>
     </div>
