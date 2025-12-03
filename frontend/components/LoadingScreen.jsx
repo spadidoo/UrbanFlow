@@ -1,22 +1,38 @@
 "use client"
 import { useEffect, useState } from "react"
 
-export default function LoadingScreen({ maxMs = 2000 }) {
+export default function LoadingScreen({ maxMs = 3000, minMs = 2000 }) {
   const [visible, setVisible] = useState(true)
+  const [startTime] = useState(Date.now())
 
   useEffect(() => {
-    const onLoad = () => setVisible(false)
-    if (typeof window !== "undefined") {
-      window.addEventListener("load", onLoad)
+    const onLoad = () => {
+      // Calculate how long the loading screen has been visible
+      const elapsed = Date.now() - startTime
+      const remaining = Math.max(0, minMs - elapsed)
+      
+      // Wait at least minMs before hiding, even if page loads faster
+      setTimeout(() => setVisible(false), remaining)
     }
-    const t = setTimeout(() => setVisible(false), maxMs)
+    
+    if (typeof window !== "undefined") {
+      if (document.readyState === 'complete') {
+        onLoad()
+      } else {
+        window.addEventListener("load", onLoad)
+      }
+    }
+    
+    // Maximum timeout as fallback
+    const maxTimeout = setTimeout(() => setVisible(false), maxMs)
+    
     return () => {
-      clearTimeout(t)
+      clearTimeout(maxTimeout)
       if (typeof window !== "undefined") {
         window.removeEventListener("load", onLoad)
       }
     }
-  }, [maxMs])
+  }, [maxMs, minMs, startTime])
 
   if (!visible) return null
 

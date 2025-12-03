@@ -576,8 +576,9 @@ export default function SimulationPage() {
       const endDate = new Date(`${formData.endDate}T${formData.endTime}:00`);
 
       // ✅ Convert to ISO string (this converts to UTC automatically)
-      const startDatetime = startDate.toISOString();
-      const endDatetime = endDate.toISOString();
+      // ✅ Convert to ISO string without milliseconds
+      const startDatetime = startDate.toISOString().replace(/\.\d{3}Z$/, '');
+      const endDatetime = endDate.toISOString().replace(/\.\d{3}Z$/, '');
 
       // ✅ GET THE ACTUAL COORDINATES FROM selectedLocation
       const coords = selectedLocation?.center || { lat: 14.2096, lng: 121.164 };
