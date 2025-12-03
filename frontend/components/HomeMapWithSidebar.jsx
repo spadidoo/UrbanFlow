@@ -1166,13 +1166,13 @@ export default function HomeMapWithSidebar() {
       `}</style>
 
       {/* ============ HAMBURGER MENU BUTTON ============ */}
-        <button
-          onClick={toggleMenu}
-          className="fixed md:top-20 top-[76px] left-4 z-[1003] bg-white p-2 md:p-3 rounded-lg shadow-lg hover:bg-gray-50 transition"
-        >
+      <button
+        onClick={toggleMenu}
+        className="fixed md:top-20 top-[100px] left-4 z-[1003] bg-white p-2 md:p-3 rounded-lg shadow-lg hover:bg-gray-50 transition"
+      >
         <svg
           xmlns="http://www.w3.org/2000/svg"
-          className="h-6 w-6 text-gray-700"
+          className="h-5 w-5 md:h-6 md:w-6 text-gray-700"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -1316,9 +1316,9 @@ export default function HomeMapWithSidebar() {
         </div>
       </div>
 
-        {/* ============ SEARCH BAR WITH AUTOCOMPLETE ============ */}
+       {/* ============ SEARCH BAR WITH AUTOCOMPLETE ============ */}
         <div
-          className={`absolute md:top-5 top-11 transition-all duration-300 z-[1001] ${
+          className={`absolute md:top-5 top-12 transition-all duration-300 z-[1001] ${
             menuOpen
               ? "md:left-[400px] left-4" // On mobile stay left, desktop move right when menu open
               : "left-4" // Back to left when menu is closed
@@ -1466,13 +1466,13 @@ export default function HomeMapWithSidebar() {
           </span>
         </Link>
       </div>
-
-      {/* Login Button - Desktop: Top Right, Mobile: Aligned with Logo */}
-        <Link
-          href="/login"
-          className="absolute md:top-5 md:right-4 top-1 right-4 z-[1002] bg-white w-8 h-8 md:w-12 md:h-12 rounded-full shadow-lg hover:bg-blue-50 transition flex items-center justify-center overflow-hidden"
-          title="Urban Planner Login"
-        >
+      
+     {/* Login Button - Desktop: Top Right, Mobile: Aligned with hamburger button on the right */}
+      <Link
+        href="/login"
+        className="absolute md:top-5 md:right-4 top-[100px] right-4 z-[1002] bg-white w-10 h-10 md:w-12 md:h-12 rounded-full shadow-lg hover:bg-blue-50 transition flex items-center justify-center overflow-hidden"
+        title="Urban Planner Login"
+      >
         <img
           src="/urban_planner_icon.png"
           alt="Login"
