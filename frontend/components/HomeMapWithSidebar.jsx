@@ -322,7 +322,7 @@ export default function HomeMapWithSidebar() {
         setBottomSheetHeight("50vh");
         setBottomSheetOpen(true);
       } else if (bottomSheetHeight === "50vh") {
-        setBottomSheetHeight("85vh");
+        setBottomSheetHeight("70vh");
       }
       resetTouch();
       return;
