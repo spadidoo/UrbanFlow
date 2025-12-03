@@ -24,7 +24,7 @@ export default function LoadingScreen({ maxMs = 2000 }) {
     <div className="uf-loading-overlay" role="status" aria-label="Loading UrbanFlow">
       <div className="uf-logo-fill-wrap">
         {/* Greyscale background logo */}
-        <img src="/URBANFLOW_logo.png" alt="UrbanFlow Grey" className="logo-grey" width="180" />
+        <img src="/URBANFLOW_logo.PNG" alt="UrbanFlow Grey" className="logo-grey" width="180" />
 
         <div className="logo-color-mask">
             {/* Color logo revealed with mask */}

@@ -7,7 +7,7 @@ export const metadata = {
   title: "UrbanFlow",
   description: "Traffic disruption simulation and prediction",
   icons: {
-    icon: '/URBANFLOW_logo.png', // or '/urbanflow-icon.png' depending on your file
+    icon: '/URBANFLOW_logo.PNG', // or '/urbanflow-icon.png' depending on your file
   },
 };
 

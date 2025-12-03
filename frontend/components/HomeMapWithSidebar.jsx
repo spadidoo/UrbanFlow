@@ -1439,14 +1439,28 @@ export default function HomeMapWithSidebar() {
       </div>
 
       {/* Logo - Below search bar on mobile, top center on desktop */}
-      <div className="absolute md:top-4 md:left-1/2 md:transform md:-translate-x-1/2 top-32 right-4 z-[1002]">
+      <div className="absolute top-4 left-1/2 transform -translate-x-1/2 md:block hidden z-[1002]">
         <Link href="/" className="flex items-center space-x-1">
           <img
             src="/DupURBANFLOW.png"
             alt="UrbanFlow"
-            className="h-12 w-auto md:h-20 md:scale-90 scale-75"
+            className="h-20 w-auto sm:h-15 md:h-12 scale-90"
           />
-          <span className="text-base md:text-xl font-bold" style={{ color: "#757575" }}>
+          <span className="text-xl font-bold" style={{ color: "#757575" }}>
+            UrbanFlow
+          </span>
+        </Link>
+      </div>
+
+      {/* Logo - Mobile only version (below search bar, right side) */}
+      <div className="absolute top-32 right-4 md:hidden z-[1002]">
+        <Link href="/" className="flex items-center space-x-1">
+          <img
+            src="/DupURBANFLOW.png"
+            alt="UrbanFlow"
+            className="h-12 w-auto scale-75"
+          />
+          <span className="text-base font-bold" style={{ color: "#757575" }}>
             UrbanFlow
           </span>
         </Link>
