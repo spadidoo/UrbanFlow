@@ -66,8 +66,27 @@ function getDistanceMeters(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// Fetch road network from OSM for a location
-async function fetchRoadsFromOSM(lat, lng, radius = 350) {
+async function fetchRoadsFromOSM(lat, lng, radius = 350, cacheRef) {
+  // ✅ Create cache key based on rounded coordinates (500m grid)
+  const cacheKey = `${Math.round(lat * 200) / 200},${Math.round(lng * 200) / 200}`;
+  
+  // ✅ Check cache first (includes both successful and failed requests)
+  if (cacheRef && cacheRef.current.has(cacheKey)) {
+    console.log(`✓ Using cached OSM data for ${cacheKey}`);
+    return cacheRef.current.get(cacheKey);
+  }
+
+  // ✅ Check error cache (don't retry failed requests for 5 minutes)
+  const errorKey = `error_${cacheKey}`;
+  if (cacheRef && cacheRef.current.has(errorKey)) {
+    const errorTime = cacheRef.current.get(errorKey);
+    if (Date.now() - errorTime < 5 * 60 * 1000) {
+      console.log(`⏳ Skipping OSM retry for ${cacheKey} (recent error)`);
+      return null;
+    }
+    cacheRef.current.delete(errorKey);
+  }
+
   const query = `
     [out:json][timeout:10];
     (
@@ -79,13 +98,22 @@ async function fetchRoadsFromOSM(lat, lng, radius = 350) {
   `;
 
   try {
+    console.log(`🌐 Fetching OSM data for ${cacheKey}...`);
+    
     const response = await fetch("https://overpass-api.de/api/interpreter", {
       method: "POST",
       body: `data=${encodeURIComponent(query)}`,
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
     });
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.warn(`❌ OSM API error ${response.status} for ${cacheKey}`);
+      // ✅ Cache error to prevent retry
+      if (cacheRef) {
+        cacheRef.current.set(errorKey, Date.now());
+      }
+      return null;
+    }
 
     const data = await response.json();
     const nodes = data.elements.filter((el) => el.type === "node");
@@ -110,11 +138,26 @@ async function fetchRoadsFromOSM(lat, lng, radius = 350) {
       })
       .filter(Boolean);
 
+    // ✅ Save successful result to cache
+    if (cacheRef) {
+      cacheRef.current.set(cacheKey, roads);
+      console.log(`✓ Cached OSM data for ${cacheKey} (${roads.length} roads)`);
+    }
+
     return roads;
   } catch (err) {
-    console.warn("OSM fetch failed:", err);
+    console.warn(`❌ OSM fetch exception for ${cacheKey}:`, err.message);
+    // ✅ Cache error to prevent retry
+    if (cacheRef) {
+      cacheRef.current.set(errorKey, Date.now());
+    }
     return null;
   }
+}
+
+// Helper: Sleep function for API rate limiting
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // Calculate road length
@@ -186,10 +229,12 @@ export default function HomeMapWithSidebar() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedDisruption, setSelectedDisruption] = useState(null);
+  const [loadingRoads, setLoadingRoads] = useState(false);
 
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const layersRef = useRef([]);
+  const osmCacheRef = useRef(new Map()); 
 
   // Search state
   const [searchResults, setSearchResults] = useState([]);
@@ -308,7 +353,6 @@ export default function HomeMapWithSidebar() {
     drawDisruptionsOnMap();
   }, [
     disruptions,
-    selectedDisruption,
     showReports,
     showCongestion,
     currentHour,
@@ -634,24 +678,39 @@ export default function HomeMapWithSidebar() {
   };
 
   const drawDisruptionsOnMap = async () => {
-    if (!mapInstanceRef.current) return;
+    if (!mapInstanceRef.current || !mapInstanceRef.current._loaded) return;
 
     const map = mapInstanceRef.current;
+   // setLoadingRoads(true);
 
-    // Clear old layers
-    layersRef.current.forEach((layer) => {
+    // ✅ Clear old layers - with force clear
+    const oldLayers = [...layersRef.current];
+    layersRef.current = [];
+    
+    oldLayers.forEach((layer) => {
       try {
-        map.removeLayer(layer);
-      } catch (e) {}
+        if (layer && map.hasLayer(layer)) {
+          map.removeLayer(layer);
+        }
+      } catch (e) {
+        console.warn('Layer removal failed:', e);
+      }
     });
+
     layersRef.current = [];
 
     if (!showReports) return;
 
-    // Draw disruptions based on status
-    for (const disruption of disruptions) {
+    // Draw disruptions based on status with rate limiting
+    for (let i = 0; i < disruptions.length; i++) {
+      const disruption = disruptions[i];
+      
       if (disruption.status === "active") {
         await drawActiveDisruption(disruption);
+        // ✅ Add delay between OSM API calls to prevent 429 errors
+        if (i < disruptions.length - 1) {
+          await sleep(3000); // 1s delay between each disruption
+        }
       } else if (disruption.status === "upcoming") {
         drawUpcomingDisruption(disruption);
       }
@@ -676,6 +735,8 @@ export default function HomeMapWithSidebar() {
     if (!disruption.latitude || !disruption.longitude) return;
 
     const map = mapInstanceRef.current;
+    if (!map || !map._loaded) return;
+    
     const isSelected = selectedDisruption?.id === disruption.id;
     const center = { lat: disruption.latitude, lng: disruption.longitude };
 
@@ -705,49 +766,89 @@ export default function HomeMapWithSidebar() {
       icon: L.divIcon({
         className: "disruption-marker-active",
         html: `
-          <div style="position: relative; width: ${isSelected ? "48px" : "36px"}; height: ${isSelected ? "48px" : "36px"};">
+          <div style="position: relative; width: 40px; height: 40px; pointer-events: none;">
             <div style="
               position: absolute; top: 50%; left: 50%;
               transform: translate(-50%, -50%);
-              width: ${isSelected ? "70px" : "50px"}; height: ${isSelected ? "70px" : "50px"};
-              border: 3px solid ${color}; border-radius: 50%;
-              opacity: 0.3; animation: pulse-active 2s ease-out infinite;
+              width: 48px; height: 48px;
+              border: 2px solid ${color}; border-radius: 50%;
+              opacity: ${isSelected ? "0.5" : "0.3"};
+              animation: pulse-active 2s ease-out infinite;
+              pointer-events: none;
             "></div>
             <div style="
-              background: white; border: 3px solid ${color}; border-radius: 50%;
-              width: ${isSelected ? "48px" : "36px"}; height: ${isSelected ? "48px" : "36px"};
+              background: white;
+              border: ${isSelected ? "4px" : "3px"} solid ${color};
+              border-radius: 50%;
+              width: 40px; height: 40px;
               display: flex; align-items: center; justify-content: center;
-              font-size: ${isSelected ? "24px" : "18px"};
-              box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+              font-size: 20px;
+              box-shadow: ${isSelected ? "0 6px 20px rgba(0,0,0,0.5)" : "0 4px 12px rgba(0,0,0,0.3)"};
+              cursor: pointer;
+              pointer-events: all;
+              position: relative;
+              z-index: 10;
             ">🚧</div>
           </div>
         `,
-        iconSize: [isSelected ? 48 : 36, isSelected ? 48 : 36],
-        iconAnchor: [isSelected ? 24 : 18, isSelected ? 24 : 18],
+        iconSize: [40, 40],
+        iconAnchor: [20, 20],
       }),
-      zIndexOffset: 1000,
+      zIndexOffset: isSelected ? 2000 : 1000,
     }).addTo(map);
 
-    marker.on("click", () => handleViewOnMap(disruption));
+  // ✅ Bind popup first
     marker.bindPopup(createActivePopup(disruption));
+    
+    // ✅ Then add click handler
+    marker.on("click", (e) => {
+      L.DomEvent.stopPropagation(e);
+      setSelectedDisruption(disruption);
+      
+      // Close menu/bottom sheet
+      setMenuOpen(false);
+      setBottomSheetHeight("120px");
+      
+      // Popup opens automatically via Leaflet
+    });
+    
     layersRef.current.push(marker);
 
 
     if (!showCongestion) return;
 
     // Fetch roads
-    const roads = await fetchRoadsFromOSM(center.lat, center.lng, 400);
-
+    const roads = await fetchRoadsFromOSM(center.lat, center.lng, 400, osmCacheRef);
     if (!roads || roads.length === 0) {
-      const circle = L.circle([center.lat, center.lng], {
-        radius: 300,
-        color: color,
-        fillColor: color,
-        fillOpacity: 0.2,
-        weight: 2,
-      }).addTo(map);
-      layersRef.current.push(circle);
-      return;
+          // ✅ Only create fallback circle if roads genuinely failed (not just cached error)
+          // Don't create circle if OSM is timing out - this prevents piling up
+          if (roads === null) {
+            // OSM failed - just show marker without congestion visualization
+            console.log('⚠️ Skipping congestion lines due to OSM error');
+            return;
+          }
+          
+          // Only create circle if roads array is empty (no roads found, but request succeeded)
+         // ✅ Only show fallback if roads request succeeded but returned empty
+          // Don't show anything if OSM failed (null) - this prevents circles from piling up
+          if (!roads) {
+            // OSM failed or rate limited - just show marker without congestion
+            console.log(`⚠️ No congestion visualization for ${disruption.title} (OSM unavailable)`);
+            return;
+          }
+          
+          if (roads.length === 0) {
+            // OSM succeeded but no roads found - show generic circle
+            const circle = L.circle([center.lat, center.lng], {
+              radius: 300,
+              color: color,
+              fillColor: color,
+              fillOpacity: 0.2,
+              weight: 2,
+            }).addTo(map);
+            layersRef.current.push(circle);
+            return;
+          }
     }
 
     // ✅ Draw roads with CURRENT HOUR severity
@@ -798,25 +899,32 @@ export default function HomeMapWithSidebar() {
           opacity = 0.5;
         }
 
-        // Shadow
-        const shadow = L.polyline(
-          [[startCoord[0], startCoord[1]], [endCoord[0], endCoord[1]]],
-          { color: "#1f2937", weight: weight + 3, opacity: 0.12, lineCap: "round" }
-        ).addTo(map);
-        layersRef.current.push(shadow);
+       // ✅ Safety check before adding layers
+        if (!map || !map._loaded) continue;
 
-        // Segment
-        const segment = L.polyline(
-          [[startCoord[0], startCoord[1]], [endCoord[0], endCoord[1]]],
-          {
-            color: segmentColor,
-            weight: weight,
-            opacity: opacity,
-            lineCap: "round",
-            lineJoin: "round",
-          }
-        ).addTo(map);
-        layersRef.current.push(segment);
+        try {
+          // Shadow
+          const shadow = L.polyline(
+            [[startCoord[0], startCoord[1]], [endCoord[0], endCoord[1]]],
+            { color: "#1f2937", weight: weight + 3, opacity: 0.12, lineCap: "round" }
+          ).addTo(map);
+          layersRef.current.push(shadow);
+
+          // Segment
+          const segment = L.polyline(
+            [[startCoord[0], startCoord[1]], [endCoord[0], endCoord[1]]],
+            {
+              color: segmentColor,
+              weight: weight,
+              opacity: opacity,
+              lineCap: "round",
+              lineJoin: "round",
+            }
+          ).addTo(map);
+          layersRef.current.push(segment);
+        } catch (e) {
+          console.warn('Failed to add road segment:', e);
+        }
       }
     });
   };
@@ -844,57 +952,61 @@ export default function HomeMapWithSidebar() {
       layersRef.current.push(circle);
     }
 
-    // Draw marker (always visible when showReports is on)
+    // Draw marker for upcoming 
     const marker = L.marker([disruption.latitude, disruption.longitude], {
       icon: L.divIcon({
         className: "disruption-marker-upcoming",
         html: `
-          <div style="position: relative; width: ${
-            isSelected ? "40px" : "32px"
-          }; height: ${isSelected ? "40px" : "32px"};">
+          <div style="position: relative; width: 36px; height: 36px; pointer-events: none;">
             <div style="
               position: absolute;
               top: 50%;
               left: 50%;
               transform: translate(-50%, -50%);
-              width: ${isSelected ? "60px" : "45px"};
-              height: ${isSelected ? "60px" : "45px"};
+              width: 44px; height: 44px;
               border: 2px solid ${color};
               border-radius: 50%;
-              opacity: 0.4;
+              opacity: ${isSelected ? "0.5" : "0.4"};
               animation: pulse-upcoming 2s ease-out infinite;
+              pointer-events: none;
             "></div>
             <div style="
               background: white;
-              border: 2px solid ${color};
+              border: ${isSelected ? "3px" : "2px"} solid ${color};
               border-radius: 50%;
-              width: ${isSelected ? "40px" : "32px"};
-              height: ${isSelected ? "40px" : "32px"};
+              width: 36px; height: 36px;
               display: flex;
               align-items: center;
               justify-content: center;
-              font-size: ${isSelected ? "20px" : "16px"};
-              box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+              font-size: 18px;
+              box-shadow: ${isSelected ? "0 6px 20px rgba(59, 130, 246, 0.5)" : "0 4px 12px rgba(59, 130, 246, 0.3)"};
               cursor: pointer;
+              pointer-events: all;
               position: relative;
-              z-index: 1000;
+              z-index: 10;
             ">📅</div>
-            <style>
-              @keyframes pulse-upcoming {
-                0% { transform: translate(-50%, -50%) scale(1); opacity: 0.4; }
-                100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
-              }
-            </style>
           </div>
         `,
-        iconSize: [isSelected ? 40 : 32, isSelected ? 40 : 32],
-        iconAnchor: [isSelected ? 20 : 16, isSelected ? 20 : 16],
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
       }),
-      zIndexOffset: 1000,
+      zIndexOffset: isSelected ? 2000 : 1000,
     }).addTo(map);
 
-    marker.on("click", () => handleViewOnMap(disruption));
+    // ✅ Bind popup first
     marker.bindPopup(createUpcomingPopup(disruption));
+    
+    // ✅ Then add click handler
+    marker.on("click", (e) => {
+      L.DomEvent.stopPropagation(e);
+      setSelectedDisruption(disruption);
+      
+      // Close menu/bottom sheet
+      setMenuOpen(false);
+      setBottomSheetHeight("120px");
+      
+      // Popup opens automatically via Leaflet
+    });
 
     layersRef.current.push(marker);
   };
@@ -1084,15 +1196,38 @@ export default function HomeMapWithSidebar() {
 
     const map = mapInstanceRef.current;
     if (map) {
-      // Get current zoom level and maintain it (don't force zoom to 15)
+      const currentCenter = map.getCenter();
       const currentZoom = map.getZoom();
-      map.setView([disruption.latitude, disruption.longitude], currentZoom, {
+      const disruptionLatLng = L.latLng(disruption.latitude, disruption.longitude);
+      
+      // ✅ Only pan if disruption is not in view OR if zoom is too far out
+      const bounds = map.getBounds();
+      const isInView = bounds.contains(disruptionLatLng);
+      
+      // If already in view and zoomed in enough, don't move
+      if (isInView && currentZoom >= 14) {
+        // Just update selection, don't move map
+        return;
+      }
+      
+      // Otherwise, center on disruption
+      const targetZoom = currentZoom < 14 ? 15 : currentZoom;
+      map.setView([disruption.latitude, disruption.longitude], targetZoom, {
         animate: true,
-        duration: 1,
+        duration: 0.5,
       });
     }
 
     setMenuOpen(false);
+    setBottomSheetHeight("120px");
+  };
+
+  // ✅ ADD: Update marker appearance without full redraw
+  const updateMarkerSelection = (disruption) => {
+    if (!mapInstanceRef.current) return;
+    
+    // Just update the selected state - markers will update on next natural redraw
+    setSelectedDisruption(disruption);
   };
 
   const getSeverityColor = (severity) => {

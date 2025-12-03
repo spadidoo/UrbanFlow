@@ -171,3 +171,32 @@ body.map-page {
   overflow: hidden;
 }
 
+/* Pulse animation for disruption markers */
+/* Pulse animation for disruption markers */
+@keyframes pulse-active {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.3;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.4);
+    opacity: 0;
+  }
+}
+
+@keyframes pulse-upcoming {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.4;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.4);
+    opacity: 0;
+  }
+}
+
+.disruption-marker-active,
+.disruption-marker-upcoming {
+  background: transparent !important;
+  border: none !important;
+}
