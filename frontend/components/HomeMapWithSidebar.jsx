@@ -285,103 +285,130 @@ export default function HomeMapWithSidebar() {
   };
 
   const handleTouchStart = (e) => {
-    console.log('👆 Touch Start:', e.targetTouches[0].clientY);
-    setTouchStart(e.targetTouches[0].clientY);
-    setTouchEnd(e.targetTouches[0].clientY);
+    const y = e.targetTouches[0].clientY;
+    setTouchStart(y);
+    setTouchEnd(y);
   };
 
   const handleTouchMove = (e) => {
-    console.log('👉 Touch Move:', e.targetTouches[0].clientY);
     setTouchEnd(e.targetTouches[0].clientY);
+    
+    const swipeDistance = touchStart - e.targetTouches[0].clientY;
+    
+    // Prevent pull-to-refresh when swiping down on bottom sheet
+    if (swipeDistance < 0 && bottomSheetHeight !== "120px") {
+      e.preventDefault();
+    }
+    
+    // Always prevent when swiping up
+    if (swipeDistance > 0) {
+      e.preventDefault();
+    }
   };
 
   const handleTouchEnd = () => {
     const swipeDistance = touchStart - touchEnd;
-    const threshold =3;
+    const upThreshold = 1;   // Very sensitive for swiping UP
+    const downThreshold = 30;  // Less sensitive for swiping DOWN (prevent accidental close)
     
-    console.log('✋ Touch End - Distance:', swipeDistance, 'Current Height:', bottomSheetHeight);
+    const resetTouch = () => {
+      setTouchStart(0);
+      setTouchEnd(0);
+    };
 
-    if (Math.abs(swipeDistance) < threshold) {
-      console.log('⚠️ Swipe too small, ignoring');
-      return;
-    }
-
-    if (swipeDistance > threshold) {
-      // Swiped up
-      console.log('⬆️ Swiped UP');
-      if (bottomSheetHeight === "120px") {
+    if (swipeDistance > upThreshold) {
+      // Swiped UP (easy to trigger)
+      if (bottomSheetHeight === "120px" || bottomSheetHeight === "80px") {
         setBottomSheetHeight("50vh");
         setBottomSheetOpen(true);
       } else if (bottomSheetHeight === "50vh") {
         setBottomSheetHeight("85vh");
       }
+      resetTouch();
+      return;
     }
 
-    if (swipeDistance < -threshold) {
-      // Swiped down
-      console.log('⬇️ Swiped DOWN');
+    if (swipeDistance < -downThreshold) {
+      // Swiped DOWN (harder to trigger)
       if (bottomSheetHeight === "85vh") {
         setBottomSheetHeight("50vh");
-      } else if (bottomSheetHeight === "50vh" || bottomSheetHeight === "120px") {
+      } else if (bottomSheetHeight === "50vh") {
+        setBottomSheetHeight("120px");
+      } else {
         setBottomSheetHeight("120px");
         setBottomSheetOpen(false);
       }
+      resetTouch();
+      return;
     }
+    
+    resetTouch();
   };
 
-  // Mouse drag handlers (for desktop)
   const handleMouseDown = (e) => {
-    console.log('🖱️ Mouse Down:', e.clientY);
+    console.log('🖱️ MOUSE DOWN at Y:', e.clientY, 'Current height:', bottomSheetHeight);
+    e.preventDefault();
+    e.stopPropagation();
     setTouchStart(e.clientY);
     setTouchEnd(e.clientY);
   };
 
   const handleMouseMove = (e) => {
     if (touchStart !== 0) {
-      console.log('🖱️ Mouse Move:', e.clientY);
+      console.log('🖱️ MOUSE MOVE at Y:', e.clientY, 'Distance:', touchStart - e.clientY);
+      e.preventDefault();
+      e.stopPropagation();
       setTouchEnd(e.clientY);
     }
   };
 
   const handleMouseUp = () => {
-    if (touchStart === 0) return;
+    console.log('🖱️ MOUSE UP - Start:', touchStart, 'End:', touchEnd);
     
-    const swipeDistance = touchStart - touchEnd;
-    const threshold = 3;
-    
-    console.log('🖱️ Mouse Up - Distance:', swipeDistance, 'Current Height:', bottomSheetHeight);
-
-    if (Math.abs(swipeDistance) < threshold) {
-      console.log('⚠️ Drag too small, ignoring');
-      setTouchStart(0);
-      setTouchEnd(0);
+    if (touchStart === 0) {
+      console.log('❌ No touchStart, ignoring');
       return;
     }
+    
+    const swipeDistance = touchStart - touchEnd;
+    console.log('📏 Distance:', swipeDistance, 'Threshold: 20', 'Current height:', bottomSheetHeight);
+    
+    const upThreshold = 1;
+    const downThreshold = 30;
 
-    if (swipeDistance > threshold) {
-      // Dragged up
-      console.log('⬆️ Dragged UP');
-      if (bottomSheetHeight === "120px") {
+    const resetMouse = () => {
+      setTouchStart(0);
+      setTouchEnd(0);
+    };
+
+    if (swipeDistance > upThreshold) {
+      console.log('✅ DRAGGED UP - Opening!');
+      if (bottomSheetHeight === "120px" || bottomSheetHeight === "80px") {
         setBottomSheetHeight("50vh");
         setBottomSheetOpen(true);
       } else if (bottomSheetHeight === "50vh") {
         setBottomSheetHeight("85vh");
       }
+      resetMouse();
+      return;
     }
 
-    if (swipeDistance < -threshold) {
-      // Dragged down
-      console.log('⬇️ Dragged DOWN');
+    if (swipeDistance < -downThreshold) {
+      console.log('✅ DRAGGED DOWN - Closing!');
       if (bottomSheetHeight === "85vh") {
         setBottomSheetHeight("50vh");
-      } else if (bottomSheetHeight === "50vh" || bottomSheetHeight === "120px") {
+      } else if (bottomSheetHeight === "50vh") {
+        setBottomSheetHeight("120px");
+      } else {
         setBottomSheetHeight("120px");
         setBottomSheetOpen(false);
       }
+      resetMouse();
+      return;
     }
 
-    setTouchStart(0);
-    setTouchEnd(0);
+    console.log('⚠️ Distance too small, ignoring');
+    resetMouse();
   };
 
   // handler for menu
@@ -1844,30 +1871,32 @@ export default function HomeMapWithSidebar() {
         )}
 
       {/* ============ BOTTOM SHEET WITH IMPROVED DESIGN ============ */}
-      <div
+     <div
         className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-[999] transition-all duration-300"
         style={{
           height: menuOpen ? "120px" : bottomSheetHeight,
           maxHeight: "100vh",
           transform: menuOpen ? "translateY(100%)" : "translateY(0)",
           opacity: menuOpen ? 0 : 1,
+          overscrollBehavior: 'contain', // Prevent pull-to-refresh
+          touchAction: 'pan-y', // Allow vertical scrolling only
         }}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
       >
-        {/* Drag Handle */}
-        <div
-          onClick={toggleBottomSheet}
-          className="w-full py-4 cursor-grab active:cursor-grabbing flex justify-center select-none"
-          style={{ touchAction: 'none' }}
-        >
-          <div className="w-12 h-1.5 bg-gray-300 rounded-full hover:bg-gray-400 transition" />
-        </div>
+      {/* Drag Handle - Bigger touch area */}
+      <div
+        onClick={toggleBottomSheet}
+        className="w-full py-6 cursor-grab active:cursor-grabbing flex justify-center select-none"
+        style={{ touchAction: 'none' }}
+      >
+        <div className="w-16 h-2 bg-gray-400 rounded-full hover:bg-gray-500 transition-all" />
+      </div>
 
         {/* Content */}
         <div className="px-6 pb-6 h-full overflow-y-auto">
