@@ -297,7 +297,7 @@ export default function HomeMapWithSidebar() {
 
   const handleTouchEnd = () => {
     const swipeDistance = touchStart - touchEnd;
-    const threshold = 50;
+    const threshold =3;
     
     console.log('✋ Touch End - Distance:', swipeDistance, 'Current Height:', bottomSheetHeight);
 
