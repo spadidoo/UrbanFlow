@@ -46,6 +46,7 @@ import smtplib
 from flask import Blueprint, request, jsonify
 from flask_mail import Message
 import requests
+from routes.public_reports import public_reports_bp
 
 
 load_dotenv()
@@ -65,15 +66,23 @@ CORS(app, resources={
             "http://localhost:3000",
             "http://127.0.0.1:3000"
         ],
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
         "allow_headers": ["Content-Type", "Authorization"],
         "supports_credentials": True
+        
     }
 })
 
 
 # register blueprints after CORS
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
+app.register_blueprint(public_reports_bp)
+
+# After your blueprint registrations
+@app.route('/uploads/<filename>')
+def uploaded_file(filename):
+    upload_folder = '/home/claude/uploads'
+    return send_from_directory(upload_folder, filename)
 
 # ============================================================
 # File upload configuration

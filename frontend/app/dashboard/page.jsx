@@ -4,6 +4,7 @@ import PlannerNavbar from "@/components/PlannerNavBar";
 import SimulationPreviewModal from "@/components/SimulationPreviewModal";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
+import PublishReportModal from '@/components/PublishReportModal';
 import { useEffect, useRef, useState } from "react";
 import {
   CartesianGrid,
@@ -414,11 +415,19 @@ export default function DashboardPage() {
   const { user, loading: authLoading, isAuthenticated } = useAuth();
   const userId = user?.user_id || user?.id;
   const heatmapScrollRef = useRef(null);
+  const [activeTab, setActiveTab] = useState("overview");
 
   // Add these new state variables for the modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSimulation, setSelectedSimulation] = useState(null);
 
+  const [notifications, setNotifications] = useState([]);
+  const [publicReports, setPublicReports] = useState([]);
+  const [activePopup, setActivePopup] = useState(null);
+  const [viewedReports, setViewedReports] = useState(new Set());
+  const [publishingReport, setPublishingReport] = useState(null);
+  const [selectedReport, setSelectedReport] = useState(null);
+ 
   // State variables
   const [savedSimulations, setSavedSimulations] = useState([]);
   const [publishedSimulations, setPublishedSimulations] = useState([]);
@@ -763,6 +772,168 @@ export default function DashboardPage() {
     }));
   };
 
+  // Fetch public reports
+  const fetchPublicReports = async () => {
+    try {
+      console.log('Fetching reports from:', `https://backend.urbanflowph.com/api/public-reports`);
+      
+      const response = await fetch(`https://backend.urbanflowph.com/api/public-reports`);
+      console.log('Response status:', response.status);
+      
+      const data = await response.json();
+      console.log('Full response data:', data);
+      
+      if (data.success) {
+        console.log('Total reports from API:', data.data.length);
+        
+        // Filter to show pending, published, and resolved (exclude only dismissed)
+        const activeReports = data.data.filter(r => r.status !== 'dismissed');
+        console.log('Active reports after filtering:', activeReports.length);
+        console.log('Active reports:', activeReports);
+        
+        // Only check for new reports if we already have reports loaded
+        if (publicReports.length > 0) {
+          const oldReportIds = publicReports.map(r => r.id);
+          const trulyNewReports = activeReports.filter(r => 
+            r.status === 'pending' && 
+            !oldReportIds.includes(r.id) && 
+            !viewedReports.has(r.id)
+          );
+          
+          if (trulyNewReports.length > 0) {
+            trulyNewReports.forEach(report => {
+              showNotification(`New ${report.report_type} report: ${report.description.substring(0, 40)}...`);
+              setViewedReports(prev => new Set([...prev, report.id]));
+            });
+          }
+        }
+        
+        setPublicReports(activeReports);
+      }
+    } catch (error) {
+      console.error('Error fetching reports:', error);
+    }
+  };
+
+  // Handle report actions
+  const handlePublishReport = async (reportId, durationHours) => {
+    try {
+      console.log('Publishing report:', reportId, 'Duration:', durationHours);
+      
+      const response = await fetch(`https://backend.urbanflowph.com/api/public-reports/${reportId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          action: 'publish',
+          duration_hours: durationHours
+        })
+      });
+      
+      console.log('Response status:', response.status);
+      
+      const data = await response.json();
+      console.log('Response data:', data);
+
+      
+      if (response.ok && data.success) {
+        // Immediately update local state 
+        setPublicReports(prev => prev.map(r => 
+          r.id === reportId ? {...r, status: 'published', published_at: new Date().toISOString(), expires_at: new Date(Date.now() + durationHours * 60 * 60 * 1000).toISOString()} : r
+        ));
+        
+        // Fetch fresh data
+        setTimeout(() => fetchPublicReports(), 500);
+        
+        setActivePopup({ 
+          type: 'success', 
+          message: `✅ Report published! Will expire in ${durationHours} hour${durationHours > 1 ? 's' : ''}.` 
+        });
+        
+        setTimeout(() => {
+          setActivePopup(null);
+        }, 5000);
+      } else {
+        console.error('Publish failed:', data);
+        alert(`Failed to publish: ${data.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error publishing report:', error);
+      alert('Failed to publish report. Check console.');
+    }
+  };
+
+  const handleResolveReport = async (reportId) => {
+    try {
+      const response = await fetch(`https://backend.urbanflowph.com/api/public-reports/${reportId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'resolve' })
+      });
+      
+      if (response.ok) {
+        // Immediately update the local state to show change
+        setPublicReports(prev => prev.map(r => 
+          r.id === reportId ? {...r, status: 'resolved'} : r
+        ));
+        
+        // Then fetch to get fresh data
+        setTimeout(() => fetchPublicReports(), 500);
+        
+        setActivePopup({ type: 'success', message: 'Report marked as resolved ✓' });
+        setTimeout(() => setActivePopup(null), 3000);
+      } else {
+        alert('Failed to resolve report');
+      }
+    } catch (error) {
+      console.error('Error resolving report:', error);
+      alert('Failed to resolve report');
+    }
+  };
+
+  const handleDismissReport = async (reportId) => {
+    try {
+      const response = await fetch(`https://backend.urbanflowph.com/api/public-reports/${reportId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'dismiss' })
+      });
+      
+      if (response.ok) {
+        // Immediately remove from local state
+        setPublicReports(prev => prev.filter(r => r.id !== reportId));
+        
+        setActivePopup({ type: 'success', message: 'Report dismissed' });
+        setTimeout(() => setActivePopup(null), 3000);
+      } else {
+        alert('Failed to dismiss report');
+      }
+    } catch (error) {
+      console.error('Error dismissing report:', error);
+      alert('Failed to dismiss report');
+    }
+  };
+
+  // Show notification with sound
+  const showNotification = (message) => {
+    try {
+      const audio = new Audio('/notification.mp3');
+      audio.play().catch(e => {
+        console.log('Audio play failed - notification sound not found');
+        // Optionally use a browser beep instead
+        // navigator.vibrate && navigator.vibrate(200);
+      });
+    } catch (e) {
+      console.log('Notification sound failed');
+    }
+    
+    setActivePopup({ type: 'info', message });
+    
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+      setActivePopup(null);
+    }, 5000);
+  };
+
   // ============================================
   // FETCH DASHBOARD DATA
   // ============================================
@@ -849,6 +1020,14 @@ export default function DashboardPage() {
     setIsModalOpen(false);
     setSelectedSimulation(null);
   };
+
+  useEffect(() => {
+    fetchPublicReports();
+    
+    // Poll for new reports every 30 seconds
+    const interval = setInterval(fetchPublicReports, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   // ============================================
   // INITIAL LOAD & HOURLY REFRESH
@@ -1423,118 +1602,139 @@ export default function DashboardPage() {
 
           {/* Right Sidebar */}
           <div className="col-span-12 lg:col-span-4 space-y-6">
-            {/* System Status */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-lg font-bold text-gray-800 mb-4">
-                System Status
-              </h3>
-              <div className="space-y-3">
-                <div
-                  className={`flex items-center justify-between p-3 rounded-lg ${
-                    backendStatus.ml_model === "active"
-                      ? "bg-green-50"
-                      : "bg-red-50"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="text-2xl">🤖</div>
-                    <div>
-                      <p className="font-semibold text-gray-800">ML Model</p>
-                      <p className="text-xs text-gray-600">Random Forest</p>
-                    </div>
-                  </div>
-                  <span
-                    className={`px-2 py-1 text-white text-xs font-semibold rounded ${
-                      backendStatus.ml_model === "active"
-                        ? "bg-green-500"
-                        : "bg-red-500"
-                    }`}
-                  >
-                    {backendStatus.ml_model === "active" ? "Active" : "Offline"}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="text-2xl">📊</div>
-                    <div>
-                      <p className="font-semibold text-gray-800">
-                        Data Updated
-                      </p>
-                      <p className="text-xs text-gray-600">Last sync</p>
-                    </div>
-                  </div>
-                  <span className="text-sm font-semibold text-blue-600">
-                    {loading
-                      ? "..."
-                      : savedSimulations.length > 0
-                      ? getRelativeTime(savedSimulations[0].created_at)
-                      : "Never"}
-                  </span>
-                </div>
-
-                <div
-                  className={`flex items-center justify-between p-3 rounded-lg ${
-                    backendStatus.database === "active"
-                      ? "bg-green-50"
-                      : "bg-red-50"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="text-2xl">⚡</div>
-                    <div>
-                      <p className="font-semibold text-gray-800">
-                        Server Health
-                      </p>
-                      <p className="text-xs text-gray-600">Response time</p>
-                    </div>
-                  </div>
-                  <span
-                    className={`text-sm font-semibold ${
-                      backendStatus.database === "active"
-                        ? "text-green-600"
-                        : "text-red-600"
-                    }`}
-                  >
-                    {backendStatus.response_time}
-                  </span>
+           {/* Public Reports Preview */}
+            {/* Public Reports Preview */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-semibold">Public Reports</h2>
+                <div className="flex gap-2">
+                  {publicReports.filter(r => r.status === 'pending').length > 0 && (
+                    <span className="bg-red-100 text-red-600 text-xs px-2 py-1 rounded-full font-semibold">
+                      {publicReports.filter(r => r.status === 'pending').length} New
+                    </span>
+                  )}
+                  {publicReports.filter(r => r.status === 'published').length > 0 && (
+                    <span className="bg-green-100 text-green-600 text-xs px-2 py-1 rounded-full font-semibold">
+                      {publicReports.filter(r => r.status === 'published').length} Published
+                    </span>
+                  )}
                 </div>
               </div>
-            </div>
-
-            {/* Quick Links */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-lg font-bold text-gray-800 mb-4">
-                Quick Links
-              </h3>
-              <div className="space-y-2">
-                <button
-                  onClick={() => router.push("/data")}
-                  className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition text-left"
-                >
-                  <span className="text-xl">📊</span>
-                  <span className="font-medium text-gray-700">
-                    View All Data
-                  </span>
-                </button>
-                <button
-                  onClick={() => router.push("/reports")}
-                  className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition text-left"
-                >
-                  <span className="text-xl">📋</span>
-                  <span className="font-medium text-gray-700">
-                    Generate Report
-                  </span>
-                </button>
-                <button
-                  onClick={() => router.push("/settings")}
-                  className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition text-left"
-                >
-                  <span className="text-xl">⚙️</span>
-                  <span className="font-medium text-gray-700">Settings</span>
-                </button>
+              
+              <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                {publicReports.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-gray-500">No reports</p>
+                  </div>
+                ) : (
+                  publicReports.map((report) => (
+                    <div key={report.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3 hover:bg-gray-100 transition">
+                      <div className="flex items-start gap-3 mb-2">
+                        <span className="text-xl">
+                          {report.report_type === 'accident' ? '🚗' :
+                          report.report_type === 'flooding' ? '🌊' :
+                          report.report_type === 'roadwork' ? '🚧' : '⚠️'}
+                        </span>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className="text-sm font-semibold capitalize">{report.report_type}</span>
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                              report.severity === 'severe' ? 'bg-red-100 text-red-700' :
+                              report.severity === 'moderate' ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-blue-100 text-blue-700'
+                            }`}>
+                              {report.severity}
+                            </span>
+                            {report.status === 'published' && (
+                              <span className="px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-700">
+                                ✓ Published
+                              </span>
+                            )}
+                            {report.status === 'resolved' && (
+                              <span className="px-2 py-0.5 rounded text-xs font-bold bg-gray-100 text-gray-600">
+                                ✓ Resolved
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-600 line-clamp-2">{report.description}</p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {new Date(report.reported_at).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        {report.status === 'pending' && (
+                          <>
+                            <button
+                              onClick={() => {
+                                setSelectedReport(report);
+                                setViewedReports(prev => new Set([...prev, report.id]));
+                              }}
+                              className="flex-1 bg-orange-600 text-white text-xs py-2 rounded hover:bg-orange-700 transition font-semibold"
+                            >
+                              📋 Review
+                            </button>
+                            <button
+                              onClick={() => {
+                                handlePublishReport(report.id, 12);
+                                setViewedReports(prev => new Set([...prev, report.id]));
+                              }}
+                              className="flex-1 bg-purple-600 text-white text-xs py-2 rounded hover:bg-purple-700 transition font-semibold"
+                            >
+                              📤 Publish
+                            </button>
+                          </>
+                        )}
+                        {report.status === 'published' && (
+                          <button
+                            onClick={() => {
+                              setSelectedReport(report);
+                              setViewedReports(prev => new Set([...prev, report.id]));
+                            }}
+                            className="flex-1 bg-blue-600 text-white text-xs py-2 rounded hover:bg-blue-700 transition font-semibold"
+                          >
+                            👁️ View Details
+                          </button>
+                        )}
+                        {(report.status === 'pending' || report.status === 'published') && (
+                          <>
+                            <button
+                              onClick={() => {
+                                handleResolveReport(report.id);
+                                setViewedReports(prev => new Set([...prev, report.id]));
+                              }}
+                              className="bg-green-600 text-white text-xs px-3 py-2 rounded hover:bg-green-700 transition font-semibold"
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleDismissReport(report.id);
+                                setViewedReports(prev => new Set([...prev, report.id]));
+                              }}
+                              className="bg-gray-400 text-white text-xs px-3 py-2 rounded hover:bg-gray-500 transition font-semibold"
+                            >
+                              ✕
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
+            
+              
+              {publicReports.length > 3 && (
+                <button
+                  onClick={() => setShowReportsModal(true)}
+                  className="w-full mt-3 bg-gray-100 text-gray-700 text-sm py-2 rounded hover:bg-gray-200 transition font-semibold"
+                >
+                  View All {publicReports.length} Reports →
+                </button>
+              )}
             </div>
+           
 
             {/* Notifications */}
             <div className="bg-white rounded-lg shadow-md p-6">
@@ -1642,6 +1842,169 @@ export default function DashboardPage() {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
       />
+      
+       {/* Notification Popup */}
+        {activePopup && (
+          <div 
+            className="fixed top-4 right-4 bg-white rounded-lg shadow-2xl z-[10000] p-4 min-w-80"
+            style={{
+              animation: 'slideIn 0.3s ease-out'
+            }}
+          >
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">
+                {activePopup.type === 'info' ? '🔔' : '✅'}
+              </span>
+              <div className="flex-1">
+                <p className="font-semibold text-gray-800">
+                  {activePopup.type === 'info' ? 'New Public Report' : 'Success'}
+                </p>
+                <p className="text-sm text-gray-600 mt-1">{activePopup.message}</p>
+              </div>
+              <button
+                onClick={() => setActivePopup(null)}
+                className="text-gray-400 hover:text-gray-600 text-xl"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Report Detail Modal - Map First */}
+        {selectedReport && (
+          <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4">
+            {/* Blurred Backdrop */}
+            <div 
+              className="absolute inset-0 bg-white/30 backdrop-blur-md"
+              onClick={() => setSelectedReport(null)}
+            ></div>
+            
+            {/* Modal Content */}
+            <div className="relative bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+              {/* Header */}
+              <div className="bg-orange-600 text-white p-4 flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">
+                    {selectedReport.report_type === 'accident' ? '🚗' :
+                    selectedReport.report_type === 'flooding' ? '🌊' :
+                    selectedReport.report_type === 'roadwork' ? '🚧' : '⚠️'}
+                  </span>
+                  <div>
+                    <h3 className="text-xl font-bold capitalize">{selectedReport.report_type}</h3>
+                    <p className="text-sm opacity-90">
+                      Reported {new Date(selectedReport.reported_at).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedReport(null)}
+                  className="text-white hover:text-gray-200 text-3xl leading-none"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Content - Scrollable */}
+              <div className="flex-1 overflow-y-auto">
+                {/* Map Section - Smaller */}
+                <div className="bg-gray-50 p-4 border-b">
+                  <div className="bg-white p-3 rounded-lg mb-3 border">
+                    <p className="text-sm font-semibold text-gray-700 mb-1">📍 Report Location</p>
+                    <p className="font-mono font-bold text-gray-900">
+                      {selectedReport.latitude.toFixed(6)}, {selectedReport.longitude.toFixed(6)}
+                    </p>
+                  </div>
+                  <iframe
+                    width="100%"
+                    height="250"
+                    frameBorder="0"
+                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${selectedReport.longitude-0.005},${selectedReport.latitude-0.005},${selectedReport.longitude+0.005},${selectedReport.latitude+0.005}&layer=mapnik&marker=${selectedReport.latitude},${selectedReport.longitude}`}
+                    className="rounded-lg shadow-md border-2 border-gray-200"
+                  ></iframe>
+                </div>
+
+                {/* Details Section */}
+                <div className="p-6">
+                  <div className="mb-6">
+                    <div className="flex items-center gap-2 mb-3">
+                      <h4 className="text-lg font-bold text-gray-900">Report Details</h4>
+                      <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+                        selectedReport.severity === 'severe' ? 'bg-red-100 text-red-800' :
+                        selectedReport.severity === 'moderate' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-blue-100 text-blue-800'
+                      }`}>
+                        {selectedReport.severity.toUpperCase()} SEVERITY
+                      </span>
+                    </div>
+                    <p className="text-gray-800 text-base leading-relaxed font-medium">
+                      {selectedReport.description}
+                    </p>
+                  </div>
+
+                  {/* Image Section */}
+                  {selectedReport.image_url && (
+                    <div className="mb-6">
+                      <h4 className="text-lg font-bold text-gray-900 mb-3">📷 Attached Photo</h4>
+                      <img 
+                        src={`${process.env.NEXT_PUBLIC_API_URL}${selectedReport.image_url}`}
+                        alt="Report evidence"
+                        className="w-full h-80 object-cover rounded-lg shadow-lg border-2 border-gray-200"
+                      />
+                    </div>
+                  )}
+
+                  {/* Reporter Info */}
+                  <div className="bg-gray-50 p-4 rounded-lg mb-6 border">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-700 mb-1">Reported By</p>
+                        <p className="font-bold text-gray-900">{selectedReport.reporter_name || 'Anonymous'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-700 mb-1">Report Time</p>
+                        <p className="font-bold text-gray-900">
+                          {new Date(selectedReport.reported_at).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => {
+                        handlePublishReport(selectedReport.id, 12);
+                        setSelectedReport(null);
+                      }}
+                      className="flex-1 bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition font-bold shadow-lg"
+                    >
+                      📤 Publish to Public Map (12h)
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleResolveReport(selectedReport.id);
+                        setSelectedReport(null);
+                      }}
+                      className="flex-1 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition font-bold shadow-lg"
+                    >
+                      ✓ Mark as Resolved
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleDismissReport(selectedReport.id);
+                        setSelectedReport(null);
+                      }}
+                      className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition font-bold shadow-lg"
+                    >
+                      ✕ Dismiss
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
     </div>
   );
 }

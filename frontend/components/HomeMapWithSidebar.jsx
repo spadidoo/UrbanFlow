@@ -4,6 +4,7 @@ import L from "leaflet";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import ReportIssueForm from './ReportIssueForm';
 
 // Fix Leaflet icons
 if (typeof window !== "undefined") {
@@ -259,6 +260,14 @@ export default function HomeMapWithSidebar() {
   const [liveTraffic, setLiveTraffic] = useState([]);
   const [showLiveTraffic, setShowLiveTraffic] = useState(true);
   const [lastTrafficUpdate, setLastTrafficUpdate] = useState(null);
+
+  const reportMarkersRef = useRef([]); // ADD THIS LINE HERE
+  const [publishedReports, setPublishedReports] = useState([]);
+  const [showReportForm, setShowReportForm] = useState(false);
+  const [reportPosition, setReportPosition] = useState(null);
+  const [reportMode, setReportMode] = useState(false);
+  const reportModeRef = useRef(false);
+  const pendingReportMarkerRef = useRef(false);
   // ============ BOTTOM SHEET HANDLERS ============
 
   const toggleBottomSheet = () => {
@@ -433,6 +442,28 @@ export default function HomeMapWithSidebar() {
     return () => clearInterval(interval);
   }, []);
 
+  // Fetch published reports
+  useEffect(() => {
+    const fetchPublishedReports = async () => {
+      try {
+        console.log('Fetching published reports...');
+        const response = await fetch(`http://localhost:5000/api/public-reports/published`);
+        const data = await response.json();
+        console.log('Published reports response:', data);
+        if (data.success) {
+          console.log('Number of published reports:', data.data.length);
+          setPublishedReports(data.data);
+        }
+      } catch (error) {
+        console.error('Error fetching published reports:', error);
+      }
+    };
+
+    fetchPublishedReports();
+    const interval = setInterval(fetchPublishedReports, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
 
@@ -441,6 +472,7 @@ export default function HomeMapWithSidebar() {
       zoom: 13,
       zoomControl: false,
     });
+    
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "&copy; OpenStreetMap",
@@ -449,15 +481,176 @@ export default function HomeMapWithSidebar() {
 
     L.control.zoom({ position: "bottomleft" }).addTo(map);
 
+    // Enable right-click for reporting
+    map.on('contextmenu', function(e) {
+      e.originalEvent.preventDefault();
+      e.originalEvent.stopPropagation();
+      
+      console.log('Right-click detected, report mode:', reportModeRef.current); // Use ref instead
+      
+      if (!reportModeRef.current) { // Use ref instead of state
+        console.log('Not in report mode, ignoring');
+        return;
+      }
+      
+      // ... rest of the code stays the same
+      
+      console.log('Creating marker at:', e.latlng); // Debug log
+      
+      // Remove any existing pending marker
+      if (pendingReportMarkerRef.current) {
+        pendingReportMarkerRef.current.remove();
+      }
+      
+      // Create custom pin icon
+      const pinIcon = L.divIcon({
+        className: 'custom-pin-marker',
+        html: `
+          <div style="
+            position: relative;
+            width: 40px;
+            height: 50px;
+          ">
+            <div style="
+              background-color: #fb923c;
+              width: 40px;
+              height: 40px;
+              border-radius: 50% 50% 50% 0;
+              transform: rotate(-45deg);
+              border: 3px solid white;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            ">
+              <span style="
+                transform: rotate(45deg);
+                font-size: 20px;
+              ">📍</span>
+            </div>
+          </div>
+        `,
+        iconSize: [40, 50],
+        iconAnchor: [20, 50],
+        popupAnchor: [0, -50]
+      });
+      
+      // Create marker at clicked location
+      const marker = L.marker([e.latlng.lat, e.latlng.lng], {
+        icon: pinIcon
+      }).addTo(map);
+      
+      console.log('Marker created'); // Debug log
+      
+      // Open confirmation popup
+      const popupContent = `
+        <div style="min-width: 200px; text-align: center;">
+          <h3 style="font-weight: bold; margin-bottom: 12px; font-size: 16px;">
+            📍 Report Issue Here?
+          </h3>
+          <p style="font-size: 12px; color: #666; margin-bottom: 16px;">
+            Location: ${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}
+          </p>
+          <button 
+            id="confirm-report-btn"
+            style="
+              background-color: #fb923c;
+              color: white;
+              border: none;
+              padding: 10px 20px;
+              border-radius: 8px;
+              font-weight: bold;
+              cursor: pointer;
+              width: 100%;
+              font-size: 14px;
+            "
+          >
+            Yes, Report Here
+          </button>
+          <button 
+            id="cancel-report-btn"
+            style="
+              background-color: #e5e7eb;
+              color: #374151;
+              border: none;
+              padding: 8px 16px;
+              border-radius: 8px;
+              cursor: pointer;
+              width: 100%;
+              margin-top: 8px;
+              font-size: 13px;
+            "
+          >
+            Cancel
+          </button>
+        </div>
+      `;
+      
+      marker.bindPopup(popupContent, {
+        closeButton: false,
+        className: 'report-confirmation-popup'
+      }).openPopup();
+      
+      pendingReportMarkerRef.current = marker;
+      setReportPosition(e.latlng);
+      
+      // Wait for popup to be added to DOM, then attach event listeners
+      setTimeout(() => {
+        const confirmBtn = document.getElementById('confirm-report-btn');
+        const cancelBtn = document.getElementById('cancel-report-btn');
+        
+        if (confirmBtn) {
+          confirmBtn.onclick = () => {
+            console.log('Confirm clicked');
+            setShowReportForm(true);
+          };
+        }
+        
+        if (cancelBtn) {
+          cancelBtn.onclick = () => {
+            console.log('Cancel clicked');
+            marker.remove();
+            pendingReportMarkerRef.current = null;
+          };
+        }
+      }, 100);
+    });
+
     mapInstanceRef.current = map;
 
     return () => {
+      reportMarkersRef.current.forEach(marker => marker.remove());
+      reportMarkersRef.current = [];
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
       }
     };
   }, []);
+
+  useEffect(() => {
+    const fetchPublishedReports = async () => {
+      try {
+        const response = await fetch(`http://localhost:5000/api/public-reports/published`);
+        const data = await response.json();
+        if (data.success) {
+          setPublishedReports(data.data);
+        }
+      } catch (error) {
+        console.error('Error fetching published reports:', error);
+      }
+    };
+
+    fetchPublishedReports();
+    const interval = setInterval(fetchPublishedReports, 60000); // Refresh every minute
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    console.log('Published reports changed:', publishedReports.length);
+    if (!mapInstanceRef.current || publishedReports.length === 0) return;
+    drawReportMarkers();
+  }, [publishedReports]);
 
   useEffect(() => {
     if (!mapInstanceRef.current || disruptions.length === 0) return;
@@ -1450,6 +1643,119 @@ export default function HomeMapWithSidebar() {
     }
   };
 
+  const drawReportMarkers = () => {
+    if (!mapInstanceRef.current) return;
+
+    // Clear existing report markers
+    reportMarkersRef.current.forEach(marker => marker.remove());
+    reportMarkersRef.current = [];
+
+    // Add new report markers
+    publishedReports.forEach(report => {
+      // Custom icon based on severity
+      const colors = {
+        severe: '#dc2626',
+        moderate: '#ea580c', 
+        minor: '#3b82f6'
+      };
+      
+      const emoji = 
+        report.report_type === 'accident' ? '🚗' :
+        report.report_type === 'flooding' ? '🌊' :
+        report.report_type === 'roadwork' ? '🚧' : '⚠️';
+      
+      const reportIcon = L.divIcon({
+        className: 'custom-report-marker',
+        html: `
+          <div style="
+            background-color: ${colors[report.severity]};
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            cursor: pointer;
+          ">
+            ${emoji}
+          </div>
+        `,
+        iconSize: [35, 35],
+        iconAnchor: [17, 17],
+      });
+
+      const marker = L.marker([report.latitude, report.longitude], {
+        icon: reportIcon
+      }).addTo(mapInstanceRef.current);
+
+      // Calculate time remaining
+      const expiresAt = new Date(report.expires_at);
+      const now = new Date();
+      const hoursRemaining = Math.max(0, Math.round((expiresAt - now) / (1000 * 60 * 60)));
+      const minutesRemaining = Math.max(0, Math.round((expiresAt - now) / (1000 * 60)) % 60);
+
+      const popupContent = `
+        <div style="min-width: 250px; max-width: 350px;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+            <span style="font-size: 28px;">${emoji}</span>
+            <div>
+              <h3 style="font-weight: bold; text-transform: capitalize; margin: 0; font-size: 16px;">
+                ${report.report_type}
+              </h3>
+              <span style="
+                display: inline-block;
+                padding: 2px 8px;
+                border-radius: 12px;
+                font-size: 11px;
+                font-weight: bold;
+                margin-top: 4px;
+                ${report.severity === 'severe' ? 'background: #fee2e2; color: #991b1b;' :
+                  report.severity === 'moderate' ? 'background: #fef3c7; color: #92400e;' :
+                  'background: #dbeafe; color: #1e40af;'}
+              ">
+                ${report.severity.toUpperCase()}
+              </span>
+            </div>
+          </div>
+          
+          <p style="font-size: 14px; margin-bottom: 12px; color: #374151; line-height: 1.5;">
+            ${report.description}
+          </p>
+          
+          ${report.image_url ? `
+            <img 
+              src="${process.env.NEXT_PUBLIC_API_URL}${report.image_url}"
+              style="width: 100%; height: 150px; object-fit: cover; border-radius: 8px; margin-bottom: 12px;"
+              alt="Report evidence"
+            />
+          ` : ''}
+          
+          <div style="font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb; padding-top: 8px;">
+            <div style="margin-bottom: 4px;">
+              <strong>Reported by:</strong> ${report.reporter_name || 'Anonymous'}
+            </div>
+            <div style="margin-bottom: 4px;">
+              <strong>Reported:</strong> ${new Date(report.reported_at).toLocaleString()}
+            </div>
+            <div style="color: #dc2626; font-weight: bold;">
+              ⏱️ Expires in: ${hoursRemaining}h ${minutesRemaining}m
+            </div>
+          </div>
+        </div>
+      `;
+
+      marker.bindPopup(popupContent, {
+        maxWidth: 350,
+        className: 'custom-report-popup'
+      });
+
+      reportMarkersRef.current.push(marker);
+    });
+  };
+
   // NEW: Toggle expanded details for a disruption
   const toggleDisruptionDetails = (disruptionId, e) => {
     e.stopPropagation(); // Prevent triggering the card click
@@ -1869,7 +2175,47 @@ export default function HomeMapWithSidebar() {
             onClick={closeBottomSheet}
           />
         )}
+       {/* Report Issue Toggle Button */}
+        <button
+          onClick={() => {
+            const newMode = !reportMode;
+            setReportMode(newMode);
+            reportModeRef.current = newMode;
+            
+            if (!newMode) {
+              // Exiting report mode - clean up
+              if (pendingReportMarkerRef.current) {
+                pendingReportMarkerRef.current.remove();
+                pendingReportMarkerRef.current = null;
+              }
+              setShowReportForm(false);
+            }
+          }}
+          className={`fixed left-4 rounded-full shadow-lg transition-all z-[1002] ${
+            reportMode ? 'bg-red-400 hover:bg-red-500' : 'bg-orange-400 hover:bg-orange-500'
+          } flex items-center justify-center`}
+          style={{
+            width: '48px',
+            height: '48px',
+            top: '140px' 
+            
+          }}
+          title={reportMode ? "Cancel reporting" : "Report an issue"}
+        >
+          <span className="text-2xl">{reportMode ? '✕' : '📝'}</span>
+        </button>
 
+        {/* Report Mode Instruction Tooltip */}
+        {reportMode && !showReportForm && (
+          <div
+            className="fixed left-20 bg-orange-200 text-black px-4 py-2 rounded-lg shadow-lg z-[1002] text-sm font-medium whitespace-nowrap"
+            style={{
+              top: '148px'
+            }}
+          >
+            📍 Right-click on map to report
+          </div>
+        )}
       {/* ============ BOTTOM SHEET WITH IMPROVED DESIGN ============ */}
      <div
         className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-[999] transition-all duration-300"
@@ -2166,6 +2512,29 @@ export default function HomeMapWithSidebar() {
           )}
         </div>
       </div>
+    {showReportForm && reportPosition && (
+      <ReportIssueForm
+        position={reportPosition}
+        marker={pendingReportMarkerRef.current}
+        onClose={() => {
+          setShowReportForm(false);
+          setReportMode(false);
+          if (pendingReportMarkerRef.current) {
+            pendingReportMarkerRef.current.remove();
+            pendingReportMarkerRef.current = null;
+          }
+        }}
+        onSubmit={() => {
+          setShowReportForm(false);
+          setReportMode(false);
+          if (pendingReportMarkerRef.current) {
+            pendingReportMarkerRef.current.remove();
+            pendingReportMarkerRef.current = null;
+          }
+          alert('✅ Thank you! Your report has been submitted to city planners.');
+        }}
+      />
+    )}
     </div>
   );
 }
