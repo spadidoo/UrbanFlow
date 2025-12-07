@@ -152,24 +152,65 @@ export default function ReportIssueForm({ position, onClose, onSubmit, marker })
           />
         </div>
 
-        {/* Image Upload */}
+       {/* Image Upload/Camera */}
         <div>
-          <label className="block text-sm font-semibold mb-2 text-gray-700">
+        <label className="block text-sm font-semibold mb-2 text-gray-700">
             Add Photo (Optional)
-          </label>
-          <input 
+        </label>
+        
+        <div className="flex gap-2 mb-3">
+            <button
+            type="button"
+            onClick={() => document.getElementById('file-upload').click()}
+            className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition text-sm font-semibold"
+            >
+            📁 Choose from Gallery
+            </button>
+            <button
+            type="button"
+            onClick={() => document.getElementById('camera-capture').click()}
+            className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition text-sm font-semibold"
+            >
+            📷 Take Photo
+            </button>
+        </div>
+        
+        {/* Hidden file inputs */}
+        <input 
+            id="file-upload"
             type="file"
             accept="image/*"
             onChange={handleImageChange}
-            className="w-full border-2 border-gray-200 rounded-lg p-2 text-sm"
-          />
-          {imagePreview && (
+            className="hidden"
+        />
+        <input 
+            id="camera-capture"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleImageChange}
+            className="hidden"
+        />
+        
+        {imagePreview && (
+            <div className="relative">
             <img 
-              src={imagePreview} 
-              alt="Preview" 
-              className="mt-3 w-full h-40 object-cover rounded-lg"
+                src={imagePreview} 
+                alt="Preview" 
+                className="w-full h-48 object-cover rounded-lg border-2 border-gray-200"
             />
-          )}
+            <button
+                type="button"
+                onClick={() => {
+                setImagePreview(null);
+                setFormData({...formData, image: null});
+                }}
+                className="absolute top-2 right-2 bg-red-600 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-700 transition"
+            >
+                ✕
+            </button>
+            </div>
+        )}
         </div>
 
         {/* Name */}
