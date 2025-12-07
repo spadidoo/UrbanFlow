@@ -6,7 +6,7 @@ from werkzeug.utils import secure_filename
 
 public_reports_bp = Blueprint('public_reports', __name__)
 
-UPLOAD_FOLDER = '/home/claude/uploads'
+UPLOAD_FOLDER = '/home/urbanflow/uploads/public_reports'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
 # Initialize Supabase client
@@ -23,10 +23,16 @@ def allowed_file(filename):
 def create_report():
     """Create a new public report"""
     try:
+        print("Received report submission")
+        print("Files:", request.files)
+        print("Form data:", request.form)
+        
         # Check if request has file
         image_url = None
         if 'image' in request.files:
             file = request.files['image']
+            print(f"File received: {file.filename}")
+            
             if file and file.filename and allowed_file(file.filename):
                 filename = secure_filename(f"{datetime.now().timestamp()}_{file.filename}")
                 
@@ -36,6 +42,9 @@ def create_report():
                 filepath = os.path.join(UPLOAD_FOLDER, filename)
                 file.save(filepath)
                 image_url = f"/uploads/{filename}"
+                print(f"File saved to: {filepath}")
+            else:
+                print("File not allowed or empty")
         
         # Get form data
         latitude = float(request.form.get('latitude'))

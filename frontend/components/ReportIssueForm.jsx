@@ -10,6 +10,8 @@ export default function ReportIssueForm({ position, onClose, onSubmit, marker })
   });
   const [loading, setLoading] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
+  const [showCamera, setShowCamera] = useState(false);  // ADD THIS
+  const [stream, setStream] = useState(null);  // ADD THIS
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -28,6 +30,9 @@ export default function ReportIssueForm({ position, onClose, onSubmit, marker })
     setLoading(true);
 
     try {
+      const hasImage = formData.image ? 'Yes' : 'No';
+      console.log('Submitting with image:', hasImage);
+      
       const submitData = new FormData();
       submitData.append('latitude', position.lat);
       submitData.append('longitude', position.lng);
@@ -35,6 +40,7 @@ export default function ReportIssueForm({ position, onClose, onSubmit, marker })
       submitData.append('severity', formData.severity);
       submitData.append('description', formData.description);
       submitData.append('reporter_name', formData.reporter_name || 'Anonymous');
+      
       if (formData.image) {
         submitData.append('image', formData.image);
       }
@@ -45,16 +51,91 @@ export default function ReportIssueForm({ position, onClose, onSubmit, marker })
       });
 
       if (response.ok) {
+        const data = await response.json();
+        alert('✅ Report submitted successfully!' + (formData.image ? '\n📷 Image uploaded' : ''));
         onSubmit();
         if (marker) marker.remove();
       } else {
-        alert('Failed to submit report. Please try again.');
+        const errorData = await response.json();
+        const errorMsg = `❌ Failed to submit report\n\nStatus: ${response.status}\nError: ${errorData.error || 'Unknown error'}`;
+        alert(errorMsg);
+        console.error('Server error:', errorData);
       }
     } catch (error) {
-      console.error('Error submitting report:', error);
-      alert('Failed to submit report. Please try again.');
+      const errorMsg = `❌ Network Error\n\nError: ${error.message}\n\nPlease check your internet connection.`;
+      alert(errorMsg);
+      console.error('Submit error:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ADD THESE THREE CAMERA FUNCTIONS HERE:
+  const startCamera = async () => {
+    try {
+      let mediaStream;
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: 'environment' } 
+        });
+      } catch (e) {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ 
+          video: true 
+        });
+      }
+      
+      setStream(mediaStream);
+      setShowCamera(true);
+      
+      setTimeout(() => {
+        const video = document.getElementById('camera-video');
+        if (video) {
+          video.srcObject = mediaStream;
+        }
+      }, 100);
+    } catch (error) {
+      console.error('Camera access error:', error);
+      alert(`Could not access camera: ${error.message}\n\nPlease allow camera permissions in your browser.`);
+    }
+  };
+
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+    }
+    setShowCamera(false);
+  };
+
+  const capturePhoto = () => {
+    try {
+      const video = document.getElementById('camera-video');
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          alert('❌ Failed to capture photo. Please try again.');
+          return;
+        }
+        
+        const file = new File([blob], 'camera-photo.jpg', { type: 'image/jpeg' });
+        setFormData({...formData, image: file});
+        
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setImagePreview(reader.result);
+          alert('✅ Photo captured successfully!');
+        };
+        reader.readAsDataURL(file);
+        
+        stopCamera();
+      }, 'image/jpeg', 0.95);
+    } catch (error) {
+      alert(`❌ Error capturing photo: ${error.message}`);
+      console.error('Capture error:', error);
     }
   };
 
@@ -167,11 +248,11 @@ export default function ReportIssueForm({ position, onClose, onSubmit, marker })
             📁 Choose from Gallery
             </button>
             <button
-            type="button"
-            onClick={() => document.getElementById('camera-capture').click()}
-            className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition text-sm font-semibold"
+              type="button"
+              onClick={startCamera}
+              className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition text-sm font-semibold"
             >
-            📷 Take Photo
+              📷 Take Photo
             </button>
         </div>
         
@@ -180,14 +261,6 @@ export default function ReportIssueForm({ position, onClose, onSubmit, marker })
             id="file-upload"
             type="file"
             accept="image/*"
-            onChange={handleImageChange}
-            className="hidden"
-        />
-        <input 
-            id="camera-capture"
-            type="file"
-            accept="image/*"
-            capture="environment"
             onChange={handleImageChange}
             className="hidden"
         />
@@ -236,6 +309,35 @@ export default function ReportIssueForm({ position, onClose, onSubmit, marker })
         {loading ? 'Submitting...' : 'Submit Report'}
         </button>
       </form>
+       {/* Camera Modal - at the very end, before closing div */}
+        {showCamera && (
+          <div className="fixed inset-0 bg-black bg-opacity-90 z-[10001] flex flex-col">
+            <div className="flex-1 flex items-center justify-center p-4">
+              <video 
+                id="camera-video"
+                autoPlay 
+                playsInline
+                className="max-w-full max-h-full rounded-lg"
+              />
+            </div>
+            <div className="p-4 flex gap-3 justify-center">
+              <button
+                type="button"
+                onClick={capturePhoto}
+                className="bg-white text-gray-900 px-8 py-4 rounded-full hover:bg-gray-200 transition font-bold text-lg"
+              >
+                📸 Capture
+              </button>
+              <button
+                type="button"
+                onClick={stopCamera}
+                className="bg-red-600 text-white px-8 py-4 rounded-full hover:bg-red-700 transition font-bold text-lg"
+              >
+                ✕ Cancel
+              </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
