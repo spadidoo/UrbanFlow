@@ -447,7 +447,7 @@ export default function HomeMapWithSidebar() {
     const fetchPublishedReports = async () => {
       try {
         console.log('Fetching published reports...');
-        const response = await fetch(`http://localhost:5000/api/public-reports/published`);
+        const response = await fetch(`https://backend.urbanflowph.com/api/public-reports/published`);
         const data = await response.json();
         console.log('Published reports response:', data);
         if (data.success) {
@@ -482,20 +482,43 @@ export default function HomeMapWithSidebar() {
     L.control.zoom({ position: "bottomleft" }).addTo(map);
 
     // Enable right-click for reporting
-    map.on('contextmenu', function(e) {
-      e.originalEvent.preventDefault();
-      e.originalEvent.stopPropagation();
+    // Remove the old contextmenu handler and add this instead:
+
+    let lastTap = 0;
+    let tapTimeout = null;
+
+    // For desktop - double click
+    map.on('dblclick', function(e) {
+      L.DomEvent.stopPropagation(e);
+      L.DomEvent.preventDefault(e);
       
-      console.log('Right-click detected, report mode:', reportModeRef.current); // Use ref instead
+      if (!reportModeRef.current) return;
       
-      if (!reportModeRef.current) { // Use ref instead of state
-        console.log('Not in report mode, ignoring');
-        return;
+      createReportMarker(e);
+    });
+
+    // For mobile - double tap
+    map.on('click', function(e) {
+      if (!reportModeRef.current) return;
+      
+      const now = Date.now();
+      const timeSinceLastTap = now - lastTap;
+      
+      if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
+        // Double tap detected
+        L.DomEvent.stopPropagation(e);
+        L.DomEvent.preventDefault(e);
+        createReportMarker(e);
+        lastTap = 0;
+      } else {
+        // First tap
+        lastTap = now;
       }
-      
-      // ... rest of the code stays the same
-      
-      console.log('Creating marker at:', e.latlng); // Debug log
+    });
+
+    // Create a separate function for creating the marker
+    function createReportMarker(e) {
+      console.log('Creating marker at:', e.latlng);
       
       // Remove any existing pending marker
       if (pendingReportMarkerRef.current) {
@@ -538,9 +561,7 @@ export default function HomeMapWithSidebar() {
       // Create marker at clicked location
       const marker = L.marker([e.latlng.lat, e.latlng.lng], {
         icon: pinIcon
-      }).addTo(map);
-      
-      console.log('Marker created'); // Debug log
+      }).addTo(mapInstanceRef.current);
       
       // Open confirmation popup
       const popupContent = `
@@ -614,7 +635,7 @@ export default function HomeMapWithSidebar() {
           };
         }
       }, 100);
-    });
+    }
 
     mapInstanceRef.current = map;
 
@@ -631,7 +652,7 @@ export default function HomeMapWithSidebar() {
   useEffect(() => {
     const fetchPublishedReports = async () => {
       try {
-        const response = await fetch(`http://localhost:5000/api/public-reports/published`);
+        const response = await fetch(`https://backend.urbanflowph.com/api/public-reports/published`);
         const data = await response.json();
         if (data.success) {
           setPublishedReports(data.data);
@@ -2205,15 +2226,15 @@ export default function HomeMapWithSidebar() {
           <span className="text-2xl">{reportMode ? '✕' : '📝'}</span>
         </button>
 
-        {/* Report Mode Instruction Tooltip */}
+       {/* Report Mode Instruction Tooltip */}
         {reportMode && !showReportForm && (
           <div
-            className="fixed left-20 bg-orange-200 text-black px-4 py-2 rounded-lg shadow-lg z-[1002] text-sm font-medium whitespace-nowrap"
+            className="fixed left-20 bg-orange-400 text-white px-4 py-2 rounded-lg shadow-lg z-[1002] text-sm font-medium whitespace-nowrap"
             style={{
-              top: '148px'
+              top: '80px'
             }}
           >
-            📍 Right-click on map to report
+            📍 Double-tap/click on map to report
           </div>
         )}
       {/* ============ BOTTOM SHEET WITH IMPROVED DESIGN ============ */}
