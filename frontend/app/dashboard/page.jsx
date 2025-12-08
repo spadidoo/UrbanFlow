@@ -142,7 +142,7 @@ function MiniOngoingMap() {
     try {
       setLoading(true);
       const response = await fetch(
-        "https://backend.urbanflowph.com/api/published-disruptions"
+        `${process.env.NEXT_PUBLIC_API_URL}/api/published-disruptions`
       );
       const data = await response.json();
 
@@ -490,7 +490,7 @@ export default function DashboardPage() {
     const startTime = Date.now();
 
     try {
-      const response = await fetch("https://backend.urbanflowph.com/api/health");
+      const response = await fetch( `${process.env.NEXT_PUBLIC_API_URL}}/api/health`);
       const endTime = Date.now();
       const responseTime = endTime - startTime;
 
@@ -525,10 +525,10 @@ export default function DashboardPage() {
       // Example endpoints you might use:
       // - TomTom Traffic Flow: https://api.tomtom.com/traffic/services/4/flowSegmentData
       // - Waze for Cities: https://www.waze.com/ccp-api/
-      // - Your own backend endpoint: http://https://backend.urbanflowph.com/api/traffic-status
+      // - Your own backend endpoint: http://  `${process.env.next_public_api_url}/api/traffic-status
 
       const response = await fetch(
-        `https://backend.urbanflowph.com/api/traffic-status?road=${encodeURIComponent(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/traffic-status?road=${encodeURIComponent(
           roadName
         )}&hour=${hour}`
       );
@@ -607,7 +607,7 @@ export default function DashboardPage() {
             if (isCurrent || (isPast && currentHour - hour <= 3)) {
               try {
                 const response = await fetch(
-                  `https://backend.urbanflowph.com/api/traffic-status?area=${encodeURIComponent(
+                    `${process.env.NEXT_PUBLIC_API_URL}/api/traffic-status?area=${encodeURIComponent(
                     area.name
                   )}&hour=${hour}`
                 );
@@ -775,9 +775,9 @@ export default function DashboardPage() {
   // Fetch public reports
   const fetchPublicReports = async () => {
     try {
-      console.log('Fetching reports from:', `https://backend.urbanflowph.com/api/public-reports`);
+      console.log('Fetching reports from:', `${process.env.NEXT_PUBLIC_API_URL}/api/public-reports`);
       
-      const response = await fetch(`https://backend.urbanflowph.com/api/public-reports`);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/public-reports`);
       console.log('Response status:', response.status);
       
       const data = await response.json();
@@ -820,7 +820,7 @@ export default function DashboardPage() {
     try {
       console.log('Publishing report:', reportId, 'Duration:', durationHours);
       
-      const response = await fetch(`https://backend.urbanflowph.com/api/public-reports/${reportId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}}/api/public-reports/${reportId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -864,7 +864,7 @@ export default function DashboardPage() {
 
   const handleResolveReport = async (reportId) => {
     try {
-      const response = await fetch(`https://backend.urbanflowph.com/api/public-reports/${reportId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/public-reports/${reportId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'resolve' })
@@ -892,7 +892,7 @@ export default function DashboardPage() {
 
   const handleDismissReport = async (reportId) => {
     try {
-      const response = await fetch(`https://backend.urbanflowph.com/api/public-reports/${reportId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/public-reports/${reportId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'dismiss' })
@@ -943,7 +943,7 @@ export default function DashboardPage() {
 
     try {
       const savedResponse = await fetch(
-        `https://backend.urbanflowph.com/api/my-simulations?user_id=${userId}`
+        `${process.env.NEXT_PUBLIC_API_URL}/api/my-simulations?user_id=${userId}`
       );
       const savedData = await savedResponse.json();
 
@@ -995,7 +995,7 @@ export default function DashboardPage() {
       }
 
       const publishedResponse = await fetch(
-        "https://backend.urbanflowph.com/api/published-simulations"
+        `${process.env.NEXT_PUBLIC_API_URL}/api/published-simulations`
       );
       const publishedData = await publishedResponse.json();
 
