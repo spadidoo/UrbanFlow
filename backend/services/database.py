@@ -506,38 +506,44 @@ class DatabaseService:
     # ============================================================
     
     def _save_mitigation_recommendations(self, cursor, simulation_id: int, results_data: Dict, simulation_data: Dict):
-        """Save AI-generated mitigation recommendations"""
+        """Save AI-generated mitigation recommendations using Groq"""
         try:
+            # Import Groq service
+            from services.groq_service import GroqService
+            
+            groq = GroqService()
+            
+            # Generate recommendations using AI
+            print("  🤖 Generating AI recommendations with Groq...")
+            
+            # ✅ FIX: Ensure we have proper summary data
             summary = results_data.get('summary', {})
-            disruption_type = simulation_data.get('disruption_type', 'roadwork')
-            avg_severity = summary.get('avg_severity', 1.0)
-            heavy_percentage = summary.get('heavy_percentage', 0)
+            if not summary:
+                # Build basic summary from hourly predictions
+                hourly = results_data.get('hourly_predictions', [])
+                if hourly:
+                    avg_sev = sum(p.get('severity', 0) for p in hourly) / len(hourly)
+                    heavy_hrs = sum(1 for p in hourly if p.get('severity', 0) >= 2.0)
+                    summary = {
+                        'avg_severity': avg_sev,
+                        'heavy_percentage': (heavy_hrs / len(hourly)) * 100,
+                        'total_hours': len(hourly),
+                        'avg_delay_minutes': sum(p.get('delay_info', {}).get('additional_delay_min', 0) for p in hourly) / len(hourly)
+                    }
             
-            recommendations = []
+            recommendations = groq.generate_mitigation_recommendations(
+                simulation_data=simulation_data,
+                results_summary=summary
+            )
             
-            if avg_severity > 1.5:
-                recommendations.append({
-                    'type': 'scheduling',
-                    'text': 'Consider rescheduling to off-peak hours (9 PM - 5 AM) or weekends',
-                    'priority': 'high',
-                    'impact': 'Could reduce congestion by 40-60%'
-                })
+            if not recommendations:
+                print("  ⚠️ No recommendations generated - using fallback")
+                # Use fallback if Groq fails
+                recommendations = groq._fallback_recommendations(simulation_data, summary)
             
-            if heavy_percentage > 30:
-                recommendations.append({
-                    'type': 'traffic_management',
-                    'text': f'Deploy traffic enforcers - {heavy_percentage}% of hours will have heavy congestion',
-                    'priority': 'high',
-                    'impact': 'Improved flow at critical points'
-                })
-            
-            if disruption_type == 'roadwork':
-                recommendations.append({
-                    'type': 'communication',
-                    'text': 'Post advance notices 1-2 weeks before',
-                    'priority': 'medium',
-                    'impact': 'Allow route planning'
-                })
+            if not recommendations:
+                print("  ⚠️ No recommendations available")
+                return
             
             insert_query = """
                 INSERT INTO mitigation_recommendations (
@@ -545,23 +551,30 @@ class DatabaseService:
                     recommendation_type,
                     recommendation_text,
                     priority_level,
-                    estimated_impact
-                ) VALUES (%s, %s, %s, %s, %s)
+                    estimated_impact,
+                    cost_estimate,
+                    implementation_timeline
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
             """
             
             for rec in recommendations:
                 cursor.execute(insert_query, (
                     simulation_id,
-                    rec['type'],
-                    rec['text'],
-                    rec['priority'],
-                    rec['impact']
+                    rec.get('type', 'general'),
+                    rec.get('text', ''),
+                    rec.get('priority', 'medium'),
+                    rec.get('impact', ''),
+                    rec.get('cost', 'medium'),
+                    rec.get('timeline', 'short-term')
                 ))
             
-            print(f"  ✅ Saved {len(recommendations)} recommendations")
+            print(f"  ✅ Saved {len(recommendations)} AI-generated recommendations")
             
         except Exception as e:
             print(f"  ❌ Error saving recommendations: {e}")
+            import traceback
+            traceback.print_exc()
+            # Don't raise - allow simulation to save even if recommendations fail
     
     def _save_travel_time_advice(self, cursor, simulation_id: int, results_data: Dict):
         """Save travel time recommendations"""

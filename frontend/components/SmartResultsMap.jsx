@@ -1222,15 +1222,17 @@ export default function SmartResultsMap({
             renderer: canvasRenderer,
           }
         );
-        // ✅ Safety check before adding to layer group
-        if (!layerGroupsRef.current?.shadows) {
-          console.warn("⚠️ Shadow layer group missing, skipping segment");
-          continue; // ✅ Use 'continue' instead of 'return' since we're in a for loop
+       // ✅ ADD SAFETY CHECK - Ensure layer groups exist before adding
+        if (layerGroupsRef.current && layerGroupsRef.current.shadows) {
+          layerGroupsRef.current.shadows.addLayer(shadow);
+        } else {
+          console.warn('⚠️ Shadow layer group not initialized yet');
         }
 
-        layerGroupsRef.current.shadows.addLayer(shadow);
-        
-        layersRef.current.push(shadow);
+        // ✅ ADD SAFETY CHECK - Ensure layersRef exists
+        if (layersRef.current) {
+          layersRef.current.push(shadow);
+        }
 
         const segment = L.polyline(
           [

@@ -63,6 +63,9 @@ export default function SimulationPage() {
   const [simulating, setSimulating] = useState(false);
   const [error, setError] = useState(null);
 
+  const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
+  const [recommendationsError, setRecommendationsError] = useState(null);
+
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [savedSimulationId, setSavedSimulationId] = useState(null);
@@ -534,19 +537,82 @@ export default function SimulationPage() {
 
       if (data.success) {
         setResults(data);
+        
         document
           .getElementById("results-section")
           ?.scrollIntoView({ behavior: "smooth" });
       } else {
         throw new Error(data.error || "Simulation failed");
       }
-    } catch (err) {
-      console.error("Simulation error:", err);
-      setError(err.message || "Failed to run simulation");
-    } finally {
-      setSimulating(false);
+      } catch (err) {
+        console.error("Simulation error:", err);
+        setError(err.message || "Failed to run simulation");
+      } finally {
+        setSimulating(false);
+      }
+    };
+
+const fetchRecommendations = async (simulationId, simulationData) => {
+  setIsLoadingRecommendations(true);
+  setRecommendationsError(null);
+
+  // ✅ Convert string to integer if needed
+  const numericId = typeof simulationId === 'string' 
+    ? parseInt(simulationId.split('_').pop()) 
+    : simulationId;
+  
+  try {
+    const response = await fetch(
+      `http://localhost:5000/api/generate-recommendations`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          simulation_id: numericId,
+          simulation_data: {
+            disruption_type: formData.disruptionType,
+            disruption_location: `${roadInfo?.area} - ${roadInfo?.road_name}`,
+            start_datetime: `${formData.startDate}T${formData.startTime}:00`,
+            end_datetime: `${formData.endDate}T${formData.endTime}:00`,
+          },
+          results_summary: simulationData.summary
+        })
+      }
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      
+      if (data.success && data.recommendations) {
+        // Map database fields to frontend expectations
+        const mappedRecs = data.recommendations.map(rec => ({
+          type: rec.recommendation_type || rec.type,
+          text: rec.recommendation_text || rec.text,
+          priority: rec.priority_level || rec.priority,
+          impact: rec.estimated_impact || rec.impact,
+          cost: rec.cost_estimate || rec.cost,
+          timeline: rec.implementation_timeline || rec.timeline
+        }));
+        
+        setResults(prev => ({
+          ...prev,
+          recommendations: mappedRecs
+        }));
+        
+        console.log('✅ Loaded AI recommendations:', mappedRecs.length);
+      } else {
+        setRecommendationsError('No recommendations generated');
+      }
+    } else {
+      setRecommendationsError('Failed to generate recommendations');
     }
-  };
+  } catch (error) {
+    console.error('Error fetching recommendations:', error);
+    setRecommendationsError('Error loading recommendations');
+  } finally {
+    setIsLoadingRecommendations(false);
+  }
+};
 
   const handleSaveSimulation = async () => {
     setSaving(true);
@@ -647,6 +713,8 @@ export default function SimulationPage() {
       if (data.success) {
         setSaveSuccess(true);
         setSavedSimulationId(data.simulation_id);
+        
+        await fetchRecommendations(data.simulation_id, results);
         
         // ✅ Clear edit session after successful save
         if (isEditMode) {
@@ -1716,6 +1784,128 @@ export default function SimulationPage() {
                   </div>
                 </div>
               </details>
+            </div>
+         
+            {/* AI Mitigation Recommendations Section */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                <h3 className="text-xl font-semibold text-gray-800">
+                  AI-Powered Mitigation Recommendations
+                </h3>
+                {!isLoadingRecommendations && results?.recommendations && (
+                  <span className="ml-auto text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">
+                    Generated by AI
+                  </span>
+                )}
+              </div>
+
+              {/* Loading State */}
+              {isLoadingRecommendations && (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <span className="ml-3 text-gray-600">Generating AI recommendations...</span>
+                </div>
+              )}
+
+              {/* Error State */}
+              {recommendationsError && !isLoadingRecommendations && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                  <p className="text-sm text-yellow-800">{recommendationsError}</p>
+                </div>
+              )}
+
+              {/* Recommendations List */}
+              {!isLoadingRecommendations && results?.recommendations && results.recommendations.length > 0 && (
+                <>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Based on the simulation results, here are actionable strategies to reduce traffic impact:
+                  </p>
+                  
+                  <div className="space-y-3">
+                    {results.recommendations.map((rec, index) => {
+                      const priorityColors = {
+                        high: 'bg-red-50 border-red-200',
+                        medium: 'bg-yellow-50 border-yellow-200',
+                        low: 'bg-green-50 border-green-200'
+                      };
+                      
+                      const priorityBadgeColors = {
+                        high: 'bg-red-100 text-red-700',
+                        medium: 'bg-yellow-100 text-yellow-700',
+                        low: 'bg-green-100 text-green-700'
+                      };
+                      
+                      const typeIcons = {
+                        scheduling: '📅',
+                        traffic_management: '🚦',
+                        communication: '📢',
+                        infrastructure: '🏗️',
+                        alternative_routes: '🗺️',
+                        general: '💡'
+                      };
+                      
+                      return (
+                        <div 
+                          key={index}
+                          className={`border-l-4 p-4 rounded-r-lg ${priorityColors[rec.priority] || priorityColors.medium}`}
+                        >
+                          <div className="flex items-start justify-between gap-3 mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-2xl">{typeIcons[rec.type] || '💡'}</span>
+                              <span className="text-xs font-medium uppercase tracking-wide text-gray-600">
+                                {rec.type?.replace('_', ' ')}
+                              </span>
+                            </div>
+                            <div className="flex gap-2">
+                              <span className={`text-xs px-2 py-1 rounded-full font-medium ${priorityBadgeColors[rec.priority]}`}>
+                                {rec.priority?.toUpperCase()}
+                              </span>
+                              {rec.timeline && (
+                                <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-medium">
+                                  {rec.timeline}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <p className="text-sm text-gray-800 mb-2 leading-relaxed">
+                            {rec.text}
+                          </p>
+                          
+                          {rec.impact && (
+                            <div className="mt-2 pt-2 border-t border-gray-200">
+                              <p className="text-xs text-gray-600">
+                                <span className="font-semibold">Expected Impact:</span> {rec.impact}
+                              </p>
+                              {rec.cost && (
+                                <p className="text-xs text-gray-600 mt-1">
+                                  <span className="font-semibold">Cost:</span> {rec.cost}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  
+                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-xs text-blue-800">
+                      <strong>Note:</strong> These recommendations are AI-generated based on simulation results and should be reviewed by traffic management professionals before implementation.
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {/* No Recommendations State */}
+              {!isLoadingRecommendations && (!results?.recommendations || results.recommendations.length === 0) && !recommendationsError && (
+                <p className="text-gray-500 text-center py-4">
+                  No recommendations available. Run a simulation first.
+                </p>
+              )}
             </div>
 
             {/* Save and Publish Buttons */}

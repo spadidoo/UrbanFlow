@@ -2,6 +2,7 @@
 # Replace your entire app.py with this file
 import os
 from dotenv import load_dotenv
+from api.generate_recommendations import recommendations_bp
 
 # Load environment-specific .env file
 env = os.getenv('FLASK_ENV', 'development')
@@ -74,6 +75,7 @@ CORS(app, resources={
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(public_reports_bp)
 app.register_blueprint(reports_bp)
+app.register_blueprint(recommendations_bp)
 
 # After your blueprint registrations
 @app.route('/uploads/<filename>')
@@ -2869,6 +2871,7 @@ def simulate_disruption_realtime():
             'error': str(e),
             'traceback': traceback.format_exc() if app.debug else None
         }), 500
+    
 # ============================================================
 # ROUTE 1: Home Page
 # ============================================================
