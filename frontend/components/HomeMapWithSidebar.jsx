@@ -702,7 +702,7 @@ export default function HomeMapWithSidebar() {
   useEffect(() => {
     const fetchPublishedReports = async () => {
       try {
-        const response = await fetch(`https://backend.urbanflowph.com/api/public-reports/published`);
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/public-reports/published`);
         const data = await response.json();
         if (data.success) {
           setPublishedReports(data.data);
@@ -739,7 +739,7 @@ export default function HomeMapWithSidebar() {
       setError(null);
 
       const response = await fetch(
-        "https://backend.urbanflowph.com/api/published-disruptions"
+        `${process.env.NEXT_PUBLIC_API_URL}/api/published-disruptions`
       );
       const data = await response.json();
 
@@ -783,7 +783,7 @@ export default function HomeMapWithSidebar() {
       const boundsString = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
 
       const response = await fetch(
-        `https://backend.urbanflowph.com/api/traffic/live-flow?bounds=${boundsString}`
+        `${process.env.NEXT_PUBLIC_API_URL}/api/traffic/live-flow?bounds=${boundsString}`
       );
       const data = await response.json();
 
@@ -1114,7 +1114,7 @@ export default function HomeMapWithSidebar() {
   const fetchRealtimeForDisruption = async (disruption) => {
     try {
       const response = await fetch(
-        "https://backend.urbanflowph.com/api/realtime-traffic",
+          `${process.env.NEXT_PUBLIC_API_URL}/api/realtime-traffic`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

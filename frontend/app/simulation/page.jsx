@@ -325,7 +325,7 @@ export default function SimulationPage() {
 
       // Process road info through backend
       const response = await fetch(
-        "https://backend.urbanflowph.com/api/process-road-info",
+        `${process.env.NEXT_PUBLIC_API_URL}/api/process-road-info`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -383,7 +383,7 @@ export default function SimulationPage() {
 
         // Process road info through backend
         const response = await fetch(
-          "https://backend.urbanflowph.com/api/process-road-info",
+            `${process.env.NEXT_PUBLIC_API_URL}/api/process-road-info`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -520,7 +520,7 @@ export default function SimulationPage() {
       console.log("🚀 Sending simulation request:", simulationData);
 
       const response = await fetch(
-        "https://backend.urbanflowph.com/api/simulate-disruption-realtime",
+          `${process.env.NEXT_PUBLIC_API_URL}/api/simulate-disruption-realtime`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -632,7 +632,7 @@ export default function SimulationPage() {
       };
 
       const response = await fetch(
-        "https://backend.urbanflowph.com/api/save-simulation",
+          `${process.env.NEXT_PUBLIC_API_URL}/api/save-simulation`,
         {
           method: "POST",
           headers: {
@@ -716,7 +716,7 @@ export default function SimulationPage() {
       setOTPError(null);
 
       const response = await fetch(
-        "https://backend.urbanflowph.com/api/send-publish-otp",
+          `${process.env.NEXT_PUBLIC_API_URL}/api/send-publish-otp`,
         {
           method: "POST",
           headers: {
@@ -768,7 +768,7 @@ export default function SimulationPage() {
 
       // Verify OTP and publish
       const response = await fetch(
-        "https://backend.urbanflowph.com/api/verify-publish-otp",
+          `${process.env.NEXT_PUBLIC_API_URL}/api/verify-publish-otp`,
         {
           method: "POST",
           headers: {

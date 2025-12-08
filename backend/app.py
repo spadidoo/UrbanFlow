@@ -2453,6 +2453,7 @@ def simulate_disruption_realtime():
             hours_until_disruption <= 6 and 
             hours_until_disruption >= -24  # Allow up to 24h past start (ongoing disruption)
         )
+
         
         realtime_data = None
         realtime_speed_factor = None
@@ -2541,29 +2542,57 @@ def simulate_disruption_realtime():
             )
             
             # Calculate delay with optional real-time adjustment
+            # ✅ NEW (add AFTER Line ~1900):
+            # Calculate location-specific multiplier
+            location_multiplier = predictor.get_location_multiplier(
+                lat=coordinates['lat'],
+                lng=coordinates['lng'],
+                hour=int(current_datetime.hour),
+                day_of_week=int(current_datetime.weekday()),
+                is_friday=(current_datetime.weekday() == 4)
+            )
+
+            # Get dynamic impact zones
+            impact_zones = predictor.calculate_dynamic_impact_zones(
+                hour=int(current_datetime.hour),
+                day_of_week=int(current_datetime.weekday()),
+                disruption_type=str(disruption_type),
+                lanes=int(road_info['lanes']),
+                severity=float(prediction['severity'])
+            )
+
+            # Enhanced delay calculation
+            # âœ… UPDATED: Enhanced delay calculation with ALL dynamic factors
             delay_info = predictor.estimate_delay(
                 severity=float(prediction['severity']),
                 base_travel_time_minutes=float(road_info['free_flow_time_minutes']),
                 road_length_km=float(road_info['length_km']),
                 impact_factor=float(road_info['disruption_factors'].get(disruption_type, 0.6)),
-                realtime_speed_factor=realtime_speed_factor if apply_realtime_to_this_hour else None
+                realtime_speed_factor=realtime_speed_factor if apply_realtime_to_this_hour else None,
+                hour=int(current_datetime.hour),  # âœ… CRITICAL
+                lanes=int(road_info['lanes']),  # âœ… CRITICAL
+                disruption_type=str(disruption_type),  # âœ… CRITICAL
+                area=str(area)  # âœ… CRITICAL
             )
-            
+
+            # Store context for this hour
             hourly_predictions.append({
                 'datetime': current_datetime.strftime('%Y-%m-%d %H:%M'),
                 'date': current_datetime.strftime('%Y-%m-%d'),
-                'hour': int(current_datetime.hour),  # ✅ ENSURE INT
+                'hour': int(current_datetime.hour),
                 'day_of_week': current_datetime.strftime('%A'),
                 'severity': round(float(prediction['severity']), 2),
                 'severity_label': str(prediction['severity_label']),
                 'confidence': round(float(prediction['confidence']), 2),
                 'delay_info': delay_info,
+                'impact_zones': impact_zones,  # ✅ NEW
+                'location_multiplier': location_multiplier,  # ✅ NEW
                 'realtime_adjusted': bool(delay_info.get('realtime_adjusted', False)),
                 'probabilities': {
                     k: round(float(v), 2) for k, v in prediction['probabilities'].items()
                 }
             })
-            
+                        
             current_datetime += timedelta(hours=1)
         
         # ============================================================
@@ -2916,7 +2945,8 @@ def get_road_info():
 @app.route('/api/process-road-info', methods=['POST'])
 def process_road_info():
     """
-    NEW ENDPOINT - Process OSM road data and calculate capacities
+    ✅ ENHANCED: Process road info with INTERSECTION EXPANSION
+    Now fetches ALL roads within radius, not just one segment
     """
     try:
         data = request.get_json()
@@ -2928,7 +2958,24 @@ def process_road_info():
         max_speed = int(data.get('max_speed', 40))
         road_type = data.get('road_type', 'tertiary')
         
-        # Calculate road capacity (vehicles per hour)
+        # ✅ NEW: Get coordinates to fetch nearby roads
+        coords = data.get('coordinates', [])
+        
+        # ✅ NEW: Expand road network if at intersection
+        if coords and len(coords) > 0:
+            print(f"\n🔍 Expanding road network from {len(coords)} initial points")
+            expanded_coords = expand_road_network(coords, radius_meters=1000)
+            
+            # Replace original coords with expanded network
+            if expanded_coords and len(expanded_coords) > len(coords):
+                print(f"   ✅ Expanded to {len(expanded_coords)} points")
+                data['coordinates'] = expanded_coords
+                
+                # Recalculate length based on expanded network
+                length_km = calculate_path_length(expanded_coords)
+                print(f"   ✅ New length: {length_km:.2f} km")
+        
+        # Calculate road capacity (existing code continues)
         lane_capacity = calculate_lane_capacity(road_type, max_speed)
         total_capacity = lane_capacity * lanes
         
@@ -2952,7 +2999,7 @@ def process_road_info():
         return jsonify({
             'success': True,
             'road_info': {
-                **data,  # Include all original data from OSM
+                **data,  # Include all original + expanded coords
                 'lane_capacity': lane_capacity,
                 'total_capacity': total_capacity,
                 'free_flow_time_minutes': round(free_flow_time, 2),
@@ -2962,6 +3009,8 @@ def process_road_info():
         })
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': str(e)
@@ -3075,6 +3124,134 @@ def calculate_disruption_factors(lanes, length_km, road_type):
         for disruption, impact in base_impacts.items()
     }
 
+def expand_road_network(initial_coords, radius_meters=500):
+    """
+    ✅ NEW: Fetch ALL roads within radius of initial coordinates
+    This ensures intersections show severity in ALL directions
+    
+    Args:
+        initial_coords: List of [lat, lng] pairs from initial road
+        radius_meters: How far to search for connected roads (default 500m)
+    
+    Returns:
+        List of [lat, lng] coordinates covering expanded road network
+    """
+    try:
+        import requests
+        
+        if not initial_coords or len(initial_coords) == 0:
+            return initial_coords
+        
+        # Get center point of initial road
+        center_lat = sum(coord[0] for coord in initial_coords) / len(initial_coords)
+        center_lng = sum(coord[1] for coord in initial_coords) / len(initial_coords)
+        
+        print(f"🌐 Fetching roads around ({center_lat:.4f}, {center_lng:.4f}) within {radius_meters}m")
+        
+        # ✅ Overpass query to get ALL roads within radius
+        overpass_query = f"""
+        [out:json][timeout:25];
+        (
+          way(around:{radius_meters},{center_lat},{center_lng})
+            ["highway"~"^(motorway|trunk|primary|secondary|tertiary|residential)$"];
+        );
+        out geom;
+        """
+        
+        response = requests.post(
+            'https://overpass-api.de/api/interpreter',
+            data={'data': overpass_query},
+            timeout=30
+        )
+        
+        if response.status_code != 200:
+            print(f"   ⚠️ Overpass API failed: {response.status_code}")
+            return initial_coords
+        
+        osm_data = response.json()
+        elements = osm_data.get('elements', [])
+        
+        if not elements:
+            print(f"   ⚠️ No roads found in radius")
+            return initial_coords
+        
+        print(f"   ✅ Found {len(elements)} roads in area")
+        
+        # ✅ Collect ALL coordinates from ALL nearby roads
+        all_coords = []
+        road_count = 0
+        
+        for way in elements:
+            if way.get('type') == 'way' and 'geometry' in way:
+                road_coords = [[node['lat'], node['lon']] for node in way['geometry']]
+                
+                if len(road_coords) >= 2:
+                    all_coords.extend(road_coords)
+                    road_count += 1
+        
+        if not all_coords:
+            print(f"   ⚠️ No valid coordinates extracted")
+            return initial_coords
+        
+        # ✅ Remove duplicate points
+        unique_coords = []
+        seen = set()
+        
+        for coord in all_coords:
+            coord_key = (round(coord[0], 6), round(coord[1], 6))
+            if coord_key not in seen:
+                seen.add(coord_key)
+                unique_coords.append(coord)
+        
+        print(f"   ✅ Expanded network: {road_count} roads, {len(unique_coords)} unique points")
+        
+        return unique_coords
+        
+    except Exception as e:
+        print(f"   ❌ Road expansion failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return initial_coords
+
+
+def calculate_path_length(coordinates):
+    """
+    ✅ NEW: Calculate total length of a path in kilometers
+    Uses Haversine formula for accuracy
+    
+    Args:
+        coordinates: List of [lat, lng] pairs
+    
+    Returns:
+        float: Length in kilometers
+    """
+    from math import radians, sin, cos, sqrt, atan2
+    
+    if not coordinates or len(coordinates) < 2:
+        return 1.0  # Default fallback
+    
+    total_length_km = 0.0
+    
+    for i in range(len(coordinates) - 1):
+        lat1, lng1 = coordinates[i]
+        lat2, lng2 = coordinates[i + 1]
+        
+        # Haversine formula
+        R = 6371  # Earth's radius in km
+        
+        lat1_rad = radians(lat1)
+        lat2_rad = radians(lat2)
+        dlat = radians(lat2 - lat1)
+        dlng = radians(lng2 - lng1)
+        
+        a = sin(dlat/2)**2 + cos(lat1_rad) * cos(lat2_rad) * sin(dlng/2)**2
+        c = 2 * atan2(sqrt(a), sqrt(1-a))
+        
+        segment_length = R * c
+        total_length_km += segment_length
+    
+    return round(total_length_km, 3)
+
 # ============================================================
 # ROUTE 5: Single Prediction (Keep for testing)
 # ============================================================
@@ -3172,11 +3349,16 @@ def simulate_disruption():
             prediction = predictor.predict(hour_input)
             
             # IMPORTANT: Calculate delay with road-specific info
+         # âœ… UPDATED: Calculate delay with ALL dynamic factors
             delay_info = predictor.estimate_delay(
                 severity=prediction['severity'],
                 base_travel_time_minutes=free_flow_time,
                 road_length_km=length_km,
-                impact_factor=impact_factor
+                impact_factor=impact_factor,
+                hour=current_datetime.hour,  # âœ… Add this
+                lanes=lanes,  # âœ… Add this
+                disruption_type=disruption_type,  # âœ… Add this
+                area=area  # âœ… Add this
             )
             
             # Add to results
