@@ -731,7 +731,6 @@ export default function HomeMapWithSidebar() {
     showReports,
     showCongestion,
     currentHour,
-    selectedDisruption
   ]);
 
   const fetchDisruptions = async () => {
@@ -1145,7 +1144,6 @@ export default function HomeMapWithSidebar() {
     if (!mapInstanceRef.current || !mapInstanceRef.current._loaded) return;
 
     const map = mapInstanceRef.current;
-   // setLoadingRoads(true);
 
     // ✅ Clear old layers - with force clear
     const oldLayers = [...layersRef.current];
@@ -1171,7 +1169,6 @@ export default function HomeMapWithSidebar() {
       
       if (disruption.status === "active") {
         await drawActiveDisruption(disruption);
-        // ✅ Add delay between OSM API calls to prevent 429 errors
         if (i < disruptions.length - 1) {
           await sleep(3000); // 1s delay between each disruption
         }
@@ -1194,6 +1191,7 @@ export default function HomeMapWithSidebar() {
       } catch (e) {}
     }
   };
+
   // FIND drawActiveDisruption function (around line 160):
   const drawActiveDisruption = async (disruption) => {
     if (!disruption.latitude || !disruption.longitude) return;
@@ -1401,20 +1399,24 @@ export default function HomeMapWithSidebar() {
 
         let segmentColor, weight, opacity;
 
+        // ✅ Apply distance-based severity gradient (closer = more severe)
+        const distanceFactor = Math.max(0, 1 - (distToCenter / maxDist));
+        const adjustedSeverity = severity * (0.4 + distanceFactor * 0.6); // 40%-100% severity based on distance
+
         if (distToCenter < 80) {
-          segmentColor = severity >= 1.5 ? "#dc2626" : severity >= 1.0 ? "#ea580c" : "#f59e0b";
-          weight = 9;
-          opacity = 0.9;
+          segmentColor = getImpactColor(adjustedSeverity);
+          weight = isUsingRealTime ? 10 : 9; // Thicker if real-time
+          opacity = isUsingRealTime ? 0.95 : 0.9;
         } else if (distToCenter < 150) {
-          segmentColor = severity >= 1.5 ? "#ea580c" : severity >= 1.0 ? "#f59e0b" : "#eab308";
-          weight = 7;
-          opacity = 0.8;
+          segmentColor = getImpactColor(adjustedSeverity * 0.9);
+          weight = isUsingRealTime ? 8 : 7;
+          opacity = isUsingRealTime ? 0.85 : 0.8;
         } else if (distToCenter < 250) {
-          segmentColor = severity >= 1.5 ? "#f59e0b" : "#eab308";
+          segmentColor = getImpactColor(adjustedSeverity * 0.8);
           weight = 6;
           opacity = 0.7;
         } else {
-          segmentColor = "#84cc16";
+          segmentColor = getImpactColor(adjustedSeverity * 0.6);
           weight = 5;
           opacity = 0.5;
         }
@@ -1610,72 +1612,70 @@ export default function HomeMapWithSidebar() {
   };
 
   const createActivePopup = (disruption) => {
-    const realtimeTag = disruption.realtime
-      ? '<span style="background: #10B981; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600;">LIVE</span>'
-      : "";
+    // Check if using real-time data
+    const isUsingRealTime = disruption.realtime?.congestion_ratio;
+    const currentSeverity = isUsingRealTime 
+      ? disruption.realtime.congestion_ratio 
+      : disruption.hourly_predictions?.find(h => h.hour === currentHour)?.severity || disruption.avg_severity;
+    
+    const severityLabel = currentSeverity >= 1.5 ? 'Heavy' : currentSeverity >= 1.0 ? 'Moderate' : 'Light';
+    const severityColor = currentSeverity >= 1.5 ? '#dc2626' : currentSeverity >= 1.0 ? '#f59e0b' : '#22c55e';
+    
+    const realtimeTag = isUsingRealTime
+      ? '<span style="background: linear-gradient(135deg, #ef4444, #dc2626); color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; box-shadow: 0 2px 4px rgba(239,68,68,0.3); display: inline-flex; align-items: center; gap: 4px;"><span style="font-size: 8px;">🔴</span>LIVE</span>'
+      : '<span style="background: #3b82f6; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">PREDICTED</span>';
 
     return `
-      <div style="font-family: -apple-system, sans-serif; padding: 10px; min-width: 200px;">
-        <h3 style="margin: 0 0 8px 0; font-size: 15px; font-weight: 600;">
-          🚧 ${disruption.title} ${realtimeTag}
-        </h3>
+      <div style="font-family: -apple-system, sans-serif; padding: 10px; min-width: 220px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+          <h3 style="margin: 0; font-size: 15px; font-weight: 600;">
+            🚧 ${disruption.title}
+          </h3>
+          ${realtimeTag}
+        </div>
+        
         <p style="margin: 4px 0; font-size: 12px; color: #6b7280;">
           📍 ${disruption.location}
         </p>
+        
+        <div style="background: ${severityColor}15; border-left: 3px solid ${severityColor}; padding: 8px; border-radius: 6px; margin: 8px 0;">
+          <p style="margin: 0; font-weight: 600; color: ${severityColor}; font-size: 13px;">
+            ${severityLabel} Congestion
+          </p>
+          <p style="margin: 4px 0 0 0; font-size: 11px; color: #4b5563;">
+            ${isUsingRealTime ? 'Current' : `Hour ${currentHour}`} Severity: ${currentSeverity.toFixed(2)}
+          </p>
+        </div>
+        
         <div style="background: #f9fafb; padding: 6px; border-radius: 6px; margin-top: 6px;">
           <p style="margin: 2px 0; font-size: 11px;">
             <strong>Type:</strong> ${disruption.type}
           </p>
           <p style="margin: 2px 0; font-size: 11px;">
-            <strong>Delay:</strong> +${disruption.expected_delay} min
+            <strong>Est. Delay:</strong> +${isUsingRealTime 
+              ? (disruption.realtime.delay_minutes || disruption.expected_delay)
+              : (disruption.hourly_predictions?.find(h => h.hour === currentHour)?.delay_info?.additional_delay_min || disruption.expected_delay)
+            } min
           </p>
+          ${isUsingRealTime ? `
           <p style="margin: 2px 0; font-size: 11px;">
-            <strong>Level:</strong> ${disruption.congestion_level}
+            <strong>Current Speed:</strong> ${Math.round(disruption.realtime.current_speed)} km/h
           </p>
-          ${
-            disruption.start_date
-              ? `
-            <p style="margin: 2px 0; font-size: 11px;">
-              <strong>Started:</strong> ${new Date(
-                disruption.start_date
-              ).toLocaleString("en-US", {
-                month: "short",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </p>
-          `
-              : ""
-          }
-          ${
-            disruption.end_date
-              ? `
-            <p style="margin: 2px 0; font-size: 11px;">
-              <strong>Ends:</strong> ${new Date(
-                disruption.end_date
-              ).toLocaleString("en-US", {
-                month: "short",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </p>
-          `
-              : ""
-          }
-          ${
-            disruption.realtime
-              ? `
-            <p style="margin: 2px 0; font-size: 11px;">
-              <strong>Current Speed:</strong> ${Math.round(
-                disruption.realtime.current_speed
-              )} km/h
-            </p>
-          `
-              : ""
-          }
+          ` : ''}
+          ${disruption.start_date ? `
+          <p style="margin: 2px 0; font-size: 11px;">
+            <strong>Started:</strong> ${new Date(disruption.start_date).toLocaleString("en-US", {
+              month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+            })}
+          </p>
+          ` : ''}
         </div>
+        
+        ${!isUsingRealTime ? `
+        <p style="margin: 6px 0 0 0; font-size: 10px; color: #6b7280; font-style: italic;">
+          ℹ️ Showing predicted data for hour ${currentHour}
+        </p>
+        ` : ''}
       </div>
     `;
   };
@@ -2282,6 +2282,24 @@ export default function HomeMapWithSidebar() {
           className="w-full h-full object-cover"
         />
       </Link>
+
+      {/* Real-Time Data Indicator */}
+      {disruptions.some(d => d.status === 'active' && d.realtime?.congestion_ratio) && (
+        <div className="absolute bottom-24 right-4 bg-white rounded-lg shadow-lg px-4 py-3 z-[1001] border-2 border-red-400">
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+              <div className="absolute inset-0 w-3 h-3 bg-red-500 rounded-full animate-ping"></div>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-gray-800">Live Traffic Data</p>
+              <p className="text-[10px] text-gray-600">
+                {disruptions.filter(d => d.realtime?.congestion_ratio).length} location(s) updating
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/*----backdrop menu-----*/}
       {menuOpen && (

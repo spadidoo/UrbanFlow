@@ -1203,13 +1203,26 @@ export default function PlannerMapWithSidebar() {
     const center = { lat: disruption.latitude, lng: disruption.longitude };
 
     // ✅ Get severity for CURRENT HOUR (not average)
-    // ✅ Get severity for CURRENT HOUR (not average)
-    const hourPrediction = disruption.hourly_predictions?.find(
-      (h) => h.hour === currentHour
-    );
-    const severity = hourPrediction?.severity || disruption.avg_severity || 1.5;
-    const delayMin = hourPrediction?.delay_info?.additional_delay_min || disruption.expected_delay || 0;
-    const color = getImpactColor(severity);
+    let severity, delayMin, color, isUsingRealTime = false;
+
+    // 1. Try to get real-time data first (most accurate)
+    if (disruption.realtime?.congestion_ratio) {
+      severity = disruption.realtime.congestion_ratio;
+      delayMin = disruption.realtime.delay_minutes || disruption.expected_delay || 0;
+      isUsingRealTime = true;
+      console.log(`🔴 LIVE: ${disruption.title} - Severity: ${severity.toFixed(2)} (Real-time)`);
+    } 
+    // 2. Fall back to current hour prediction
+    else {
+      const hourPrediction = disruption.hourly_predictions?.find(
+        (h) => h.hour === currentHour
+      );
+      severity = hourPrediction?.severity || disruption.avg_severity || 1.5;
+      delayMin = hourPrediction?.delay_info?.additional_delay_min || disruption.expected_delay || 0;
+      console.log(`📊 PREDICTED: ${disruption.title} - Hour ${currentHour} Severity: ${severity.toFixed(2)}`);
+    }
+
+    color = getImpactColor(severity);
 
     // ✅ Log all 24 hours for comparison
     if (disruption.hourly_predictions) {
@@ -1223,35 +1236,61 @@ export default function PlannerMapWithSidebar() {
       );
     }
 
+
     // Draw marker
     const marker = L.marker([disruption.latitude, disruption.longitude], {
       icon: L.divIcon({
         className: "disruption-marker-active",
         html: `
-          <div style="position: relative; width: 40px; height: 40px; pointer-events: none;">
+            <div style="position: relative; width: 40px; height: 40px; pointer-events: none;">
+            ${isUsingRealTime ? `
             <div style="
-              position: absolute; top: 50%; left: 50%;
-              transform: translate(-50%, -50%);
-              width: 48px; height: 48px;
-              border: 2px solid ${color}; border-radius: 50%;
-              opacity: ${isSelected ? "0.5" : "0.3"};
-              animation: pulse-active 2s ease-out infinite;
-              pointer-events: none;
+                position: absolute;
+                top: -8px;
+                right: -8px;
+                width: 20px;
+                height: 20px;
+                background: linear-gradient(135deg, #ef4444, #dc2626);
+                border: 2px solid white;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 10px;
+                box-shadow: 0 2px 8px rgba(239, 68, 68, 0.5);
+                animation: live-pulse 1.5s ease-in-out infinite;
+                z-index: 20;
+            ">🔴</div>
+            <style>
+                @keyframes live-pulse {
+                0%, 100% { transform: scale(1); opacity: 1; }
+                50% { transform: scale(1.15); opacity: 0.8; }
+                }
+            </style>
+            ` : ''}
+            <div style="
+                position: absolute; top: 50%; left: 50%;
+                transform: translate(-50%, -50%);
+                width: 48px; height: 48px;
+                border: 2px solid ${color}; border-radius: 50%;
+                opacity: ${isSelected ? "0.5" : "0.3"};
+                animation: pulse-active 2s ease-out infinite;
+                pointer-events: none;
             "></div>
             <div style="
-              background: white;
-              border: ${isSelected ? "4px" : "3px"} solid ${color};
-              border-radius: 50%;
-              width: 40px; height: 40px;
-              display: flex; align-items: center; justify-content: center;
-              font-size: 20px;
-              box-shadow: ${isSelected ? "0 6px 20px rgba(0,0,0,0.5)" : "0 4px 12px rgba(0,0,0,0.3)"};
-              cursor: pointer;
-              pointer-events: all;
-              position: relative;
-              z-index: 10;
+                background: white;
+                border: ${isSelected ? "4px" : "3px"} solid ${color};
+                border-radius: 50%;
+                width: 40px; height: 40px;
+                display: flex; align-items: center; justify-content: center;
+                font-size: 20px;
+                box-shadow: ${isSelected ? "0 6px 20px rgba(0,0,0,0.5)" : "0 4px 12px rgba(0,0,0,0.3)"};
+                cursor: pointer;
+                pointer-events: all;
+                position: relative;
+                z-index: 10;
             ">🚧</div>
-          </div>
+            </div>
         `,
         iconSize: [40, 40],
         iconAnchor: [20, 20],
@@ -1273,7 +1312,7 @@ export default function PlannerMapWithSidebar() {
       
       // Popup opens automatically via Leaflet
     });
-    
+    marker._disruptionId = disruption.id;
     layersRef.current.push(marker);
 
 
@@ -1308,6 +1347,7 @@ export default function PlannerMapWithSidebar() {
               fillOpacity: 0.2,
               weight: 2,
             }).addTo(map);
+            circle._disruptionId = disruption.id;
             layersRef.current.push(circle);
             return;
           }
@@ -1343,20 +1383,24 @@ export default function PlannerMapWithSidebar() {
 
         let segmentColor, weight, opacity;
 
+        // ✅ Apply distance-based severity gradient (closer = more severe)
+        const distanceFactor = Math.max(0, 1 - (distToCenter / maxDist));
+        const adjustedSeverity = severity * (0.4 + distanceFactor * 0.6); // 40%-100% severity based on distance
+
         if (distToCenter < 80) {
-          segmentColor = severity >= 1.5 ? "#dc2626" : severity >= 1.0 ? "#ea580c" : "#f59e0b";
-          weight = 9;
-          opacity = 0.9;
+          segmentColor = getImpactColor(adjustedSeverity);
+          weight = isUsingRealTime ? 10 : 9; // Thicker if real-time
+          opacity = isUsingRealTime ? 0.95 : 0.9;
         } else if (distToCenter < 150) {
-          segmentColor = severity >= 1.5 ? "#ea580c" : severity >= 1.0 ? "#f59e0b" : "#eab308";
-          weight = 7;
-          opacity = 0.8;
+          segmentColor = getImpactColor(adjustedSeverity * 0.9);
+          weight = isUsingRealTime ? 8 : 7;
+          opacity = isUsingRealTime ? 0.85 : 0.8;
         } else if (distToCenter < 250) {
-          segmentColor = severity >= 1.5 ? "#f59e0b" : "#eab308";
+          segmentColor = getImpactColor(adjustedSeverity * 0.8);
           weight = 6;
           opacity = 0.7;
         } else {
-          segmentColor = "#84cc16";
+          segmentColor = getImpactColor(adjustedSeverity * 0.6);
           weight = 5;
           opacity = 0.5;
         }
@@ -1370,6 +1414,7 @@ export default function PlannerMapWithSidebar() {
             [[startCoord[0], startCoord[1]], [endCoord[0], endCoord[1]]],
             { color: "#1f2937", weight: weight + 3, opacity: 0.12, lineCap: "round" }
           ).addTo(map);
+          shadow._disruptionId = disruption.id;
           layersRef.current.push(shadow);
 
           // Segment
@@ -1383,6 +1428,7 @@ export default function PlannerMapWithSidebar() {
               lineJoin: "round",
             }
           ).addTo(map);
+          segment._disruptionId = disruption.id; 
           layersRef.current.push(segment);
         } catch (e) {
           console.warn('Failed to add road segment:', e);
@@ -1469,7 +1515,7 @@ export default function PlannerMapWithSidebar() {
       
       // Popup opens automatically via Leaflet
     });
-
+    marker._disruptionId = disruption.id;
     layersRef.current.push(marker);
   };
 
@@ -1550,9 +1596,18 @@ export default function PlannerMapWithSidebar() {
   };
 
   const createActivePopup = (disruption) => {
-    const realtimeTag = disruption.realtime
-      ? '<span style="background: #10B981; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600;">LIVE</span>'
-      : "";
+      // Check if using real-time data
+    const isUsingRealTime = disruption.realtime?.congestion_ratio;
+    const currentSeverity = isUsingRealTime 
+      ? disruption.realtime.congestion_ratio 
+      : disruption.hourly_predictions?.find(h => h.hour === currentHour)?.severity || disruption.avg_severity;
+    
+    const severityLabel = currentSeverity >= 1.5 ? 'Heavy' : currentSeverity >= 1.0 ? 'Moderate' : 'Light';
+    const severityColor = currentSeverity >= 1.5 ? '#dc2626' : currentSeverity >= 1.0 ? '#f59e0b' : '#22c55e';
+    
+    const realtimeTag = isUsingRealTime
+      ? '<span style="background: linear-gradient(135deg, #ef4444, #dc2626); color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; box-shadow: 0 2px 4px rgba(239,68,68,0.3); display: inline-flex; align-items: center; gap: 4px;"><span style="font-size: 8px;">🔴</span>LIVE</span>'
+      : '<span style="background: #3b82f6; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">PREDICTED</span>';
 
     return `
       <div style="font-family: -apple-system, sans-serif; padding: 10px; min-width: 200px;">
