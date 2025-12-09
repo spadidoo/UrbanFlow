@@ -2165,7 +2165,7 @@ export default function DashboardPage() {
                   <div>
                     <h4 className="text-sm font-semibold text-gray-700 mb-2">📷 Photo Evidence</h4>
                       Debug URL: {selectedReport.image_url}
-                      Full URL: https://backend.urbanflowph.com/{selectedReport.image_url}
+
                     <img 
                       src={`https://backend.urbanflowph.com${selectedReport.image_url}`}
                       alt="Report evidence"

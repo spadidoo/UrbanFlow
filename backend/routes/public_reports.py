@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_from_directory
 from supabase import create_client
 import os
 from datetime import datetime, timedelta
@@ -53,8 +53,9 @@ def create_report():
                 
                 filepath = os.path.join(UPLOAD_FOLDER, filename)
                 file.save(filepath)
-                image_url = f"/uploads/{filename}"
-                print(f"File saved to: {filepath}")
+                image_url = f"/uploads/public_reports/{filename}"  # ✅ Match the actual folder path
+                print(f"✅ File saved to: {filepath}")
+                print(f"✅ Image URL stored: {image_url}")
             else:
                 print("File not allowed or empty")
         
@@ -306,3 +307,12 @@ def cleanup_expired_reports():
     except Exception as e:
         print(f"Error cleaning up expired reports: {str(e)}")
         return jsonify({'error': str(e)}), 500
+    
+@public_reports_bp.route('/uploads/public_reports/<filename>')
+def serve_report_image(filename):
+    """Serve uploaded report images"""
+    try:
+        return send_from_directory(UPLOAD_FOLDER, filename)
+    except Exception as e:
+        print(f"❌ Error serving image {filename}: {str(e)}")
+        return jsonify({'error': 'Image not found'}), 404

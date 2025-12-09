@@ -78,9 +78,9 @@ app.register_blueprint(reports_bp)
 app.register_blueprint(recommendations_bp)
 
 # After your blueprint registrations
-@app.route('/uploads/<filename>')
+@app.route('/uploads/public_reports/<filename>')
 def uploaded_file(filename):
-    upload_folder = '/home/claude/uploads'
+    upload_folder = '/home/urbanflow/uploads/public_reports'
     return send_from_directory(upload_folder, filename)
 
 # ============================================================
@@ -2665,12 +2665,25 @@ def simulate_disruption_realtime():
         # ✅ SMART DECISION: Should we use real-time data?
         # ============================================================
         
-        now = datetime.now()
+       # ✅ Use PH timezone for accurate same-day detection
+        ph_tz = pytz.timezone('Asia/Manila')
+        now = datetime.now(ph_tz).replace(tzinfo=None)  # Remove timezone for comparison
         today = now.date()
         disruption_start_date = start_datetime.date()
-        
+
         # Calculate hours until disruption starts
         hours_until_disruption = (start_datetime - now).total_seconds() / 3600
+
+        # ✅ DEBUG: Log the values
+        print(f"\n🔍 REAL-TIME CHECK:")
+        print(f"   Server time (PH): {now.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"   Today: {today}")
+        print(f"   Disruption starts: {start_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"   Disruption date: {disruption_start_date}")
+        print(f"   Hours until disruption: {hours_until_disruption:.2f}")
+        print(f"   Same day? {disruption_start_date == today}")
+        print(f"   Within 6h? {hours_until_disruption <= 6}")
+        print(f"   After -24h? {hours_until_disruption >= -24}")
         
         # ✅ USE REAL-TIME ONLY IF:
         # 1. Disruption starts today
@@ -2680,7 +2693,7 @@ def simulate_disruption_realtime():
             hours_until_disruption <= 6 and 
             hours_until_disruption >= -24  # Allow up to 24h past start (ongoing disruption)
         )
-
+        print(f"   ✅ use_realtime = {use_realtime}\n")
         
         realtime_data = None
         realtime_speed_factor = None

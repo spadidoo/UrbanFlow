@@ -30,6 +30,8 @@ export default function SmartResultsMap({
   simulationResults,
   selectedLocation,
   roadInfo,
+  alternateRoutes,
+  selectedRoute
 }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -57,6 +59,9 @@ export default function SmartResultsMap({
   const [currentHourIndex, setCurrentHourIndex] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const [apiStatus, setApiStatus] = useState({ status: "idle", message: "" }); // ✅ API status tracking
+  // ✅ Extract real-time integration data from backend
+  const realtimeIntegration = simulationResults?.realtime_integration || null;
+  const useRealtimeData = realtimeIntegration?.enabled || false;
   const [useGoogleApi, setUseGoogleApi] = useState(true); // Toggle for Google API
   const [googleRoadsData, setGoogleRoadsData] = useState(null);
 
@@ -68,9 +73,16 @@ export default function SmartResultsMap({
     ) {
       return simulationResults?.summary?.avg_severity || 1.0;
     }
+    
     const hourData = simulationResults.hourly_predictions[currentHourIndex];
+    
+    // ✅ Check if this hour was adjusted with real-time data
+    if (hourData?.realtime_adjusted && useRealtimeData) {
+      console.log(`🔴 Hour ${currentHourIndex} using real-time adjusted severity: ${hourData.severity}`);
+    }
+    
     return hourData?.severity ?? simulationResults.summary.avg_severity;
-  }, [simulationResults, currentHourIndex]);
+  }, [simulationResults, currentHourIndex, useRealtimeData]);
 
   const getCurrentHourSeverity = () => currentHourSeverity;
 
@@ -180,49 +192,7 @@ export default function SmartResultsMap({
   // ========================================
   useEffect(() => {
     if (!selectedLocation || !simulationResults || !mapReady) return;
-
-    // ✅ NEW: Fetch roads using Google API
-    const fetchGoogleRoads = async () => {
-      if (!useGoogleApi || !isGoogleApiEnabled()) {
-        console.log("⚠️ Google API disabled, skipping...");
-        return null;
-      }
-
-      try {
-        setApiStatus({
-          status: "loading",
-          message: "Fetching roads from Google Maps...",
-        });
-
-        const center = selectedLocation.center;
-
-        // Get severity to determine radius
-        const avgSeverity = simulationResults?.summary?.avg_severity || 1.0;
-        const baseRadius =
-          avgSeverity >= 1.5 ? 1000 : avgSeverity >= 1.0 ? 700 : 500;
-
-        const googleRoads = await getConnectedRoads(
-          center.lat,
-          center.lng,
-          baseRadius
-        );
-
-        if (googleRoads && googleRoads.length > 0) {
-          console.log(
-            "✅ Google Roads loaded:",
-            googleRoads.map((r) => r.name)
-          );
-          setGoogleRoadsData(googleRoads);
-          return googleRoads;
-        }
-
-        return null;
-      } catch (error) {
-        console.error("❌ Google API failed:", error);
-        return null;
-      }
-    };
-
+    
     const fetchRoadNetworkWithRetry = async (retries = 3, delay = 1000) => {
       const cacheKey = `${selectedLocation.center.lat.toFixed(
         4
@@ -240,27 +210,6 @@ export default function SmartResultsMap({
       setLoading(true);
       setApiStatus({ status: "loading", message: "Fetching road network..." });
 
-      // ✅ TRY GOOGLE API FIRST (if enabled)
-      if (useGoogleApi && isGoogleApiEnabled()) {
-        const googleRoads = await fetchGoogleRoads();
-        if (googleRoads && googleRoads.length >= 2) {
-          // Process Google roads into our format
-          const processedNetwork = processGoogleRoads(
-            googleRoads,
-            selectedLocation.center,
-            roadInfo
-          );
-
-          roadNetworkCacheRef.current.set(cacheKey, processedNetwork);
-          setRoadNetwork(processedNetwork);
-          setApiStatus({ status: "success", message: "Google Maps data" });
-          setLoading(false);
-          return;
-        }
-        console.log(
-          "⚠️ Google API returned insufficient data, falling back to OSM..."
-        );
-      }
 
       for (let attempt = 0; attempt < retries; attempt++) {
         try {
@@ -2059,28 +2008,24 @@ export default function SmartResultsMap({
             <p className="text-xs text-gray-500 mt-1">
               ⌨️ Use arrow keys or spacebar
             </p>
-            {/* Google API Toggle */}
+          {/* Real-Time Integration Status */}
             <div className="mt-2 pt-2 border-t border-gray-200">
-              <label className="flex items-center gap-2 text-xs cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={useGoogleApi}
-                  onChange={(e) => {
-                    setUseGoogleApi(e.target.checked);
-                    // Clear cache to refetch
-                    roadNetworkCacheRef.current.clear();
-                  }}
-                  className="w-3 h-3"
-                />
-                <span
-                  className={useGoogleApi ? "text-green-600" : "text-gray-500"}
-                >
-                  {useGoogleApi ? "🟢 Google API" : "⚪ OSM Only"}
-                </span>
-              </label>
-              {roadNetwork.mainRoad?.isGoogleData && (
-                <p className="text-xs text-green-600 mt-1">
-                  ✓ Using Google Maps
+              {useRealtimeData && realtimeIntegration ? (
+                <div>
+                  <p className="text-xs text-blue-600 font-semibold flex items-center gap-1">
+                    <span className="inline-block w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+                    Live Traffic Active
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {realtimeIntegration.hours_adjusted} of {simulationResults.summary.total_hours} hours adjusted
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Speed: {realtimeIntegration.current_speed} km/h
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500">
+                  📊 Historical Patterns
                 </p>
               )}
             </div>
