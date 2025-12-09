@@ -266,7 +266,7 @@ export default function LoginPage() {
                     />
                   </div>
                   <h1 className="text-3xl font-bold text-gray-800 mb-2">
-                    Urban Planner Login
+                    Login
                   </h1>
                 </div>
 
@@ -303,7 +303,7 @@ export default function LoginPage() {
                       placeholder="Email"
                       required
                       disabled={loading}
-                      className="w-full px-2 py-1 border border-gray-300 text-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+                      className="w-full px-2 py-1 border border-gray-300 text-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F5820D] focus:border-transparent disabled:bg-gray-100"
                     />
                   </div>
 
@@ -317,7 +317,7 @@ export default function LoginPage() {
                       placeholder="Password"
                       required
                       disabled={loading}
-                      className="w-full px-2 py-1 pr-10 border border-gray-300 text-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+                      className="w-full px-2 py-1 pr-10 border border-gray-300 text-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F5820D] focus:border-transparent disabled:bg-gray-100"
                     />
                     <button
                       type="button"
@@ -382,10 +382,10 @@ export default function LoginPage() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className={`w-full bg-[#242424] text-[#FFA611] py-3 rounded-full font-semibold transition ${
+                    className={`w-full bg-[#242424] text-[#F5820D] py-3 rounded-full font-semibold transition ${
                       loading
                         ? "opacity-50 cursor-not-allowed"
-                        : "hover:bg-[#FFA611] hover:text-[#242424]"
+                        : "hover:bg-[#F5820D] hover:text-[#242424]"
                     }`}
                   >
                     {loading ? "Logging in..." : "Login"}
@@ -402,6 +402,10 @@ export default function LoginPage() {
                     >
                       View public map
                     </a>
+                  </p>
+
+                  <p className="text-sm pt-10 text-orange-500">
+                    ⓘ Only authorized users can access simulation tools
                   </p>
                 </div>
               </div>
@@ -664,15 +668,6 @@ export default function LoginPage() {
               </>
             )}
           </div>
-
-          {/* Info Box - only show in login mode */}
-          {mode === "login" && (
-            <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
-              <p className="text-sm text-blue-800">
-                🔒 Only authorized urban planners can access simulation tools
-              </p>
-            </div>
-          )}
         </div>
       </main>
     </div>

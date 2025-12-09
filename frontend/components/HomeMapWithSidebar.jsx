@@ -627,7 +627,7 @@ export default function HomeMapWithSidebar() {
       popupDiv.style.cssText = 'min-width: 200px; text-align: center;';
       popupDiv.innerHTML = `
         <h3 style="font-weight: bold; margin-bottom: 12px; font-size: 16px;">
-          📍 Report Issue Here?
+          Report Issue Here?
         </h3>
         <p style="font-size: 12px; color: #666; margin-bottom: 16px;">
           Location: ${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}
@@ -2678,13 +2678,13 @@ export default function HomeMapWithSidebar() {
               </div>
               <div className="flex-1">
                 <h3 className="font-bold text-sm text-gray-800 mb-1">Acknowledgment</h3>
-                <p className="text-xs text-gray-600 mb-2">Traffic data provided by DPWH Region IV-A</p>
+                <p className="text-xs text-gray-600 mb-2">Traffic data provided by DPWH Regional Office IV-A</p>
                 <div className="flex flex-col gap-1.5">
                   <a href="https://www.dpwh.gov.ph/dpwh/" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1">
-                    <span>🌐 Visit DPWH Website</span>
+                    <span>Visit DPWH Website</span>
                   </a>
                   <a href="https://dpwh.maps.arcgis.com/apps/webappviewer/index.html?id=e2cf12e43f1247b2a436c87033f8fbc9" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1">
-                    <span>🗺️ DPWH GIS Traffic Map</span>
+                    <span>DPWH GIS Traffic Map</span>
                   </a>
                 </div>
               </div>
@@ -2897,6 +2897,7 @@ export default function HomeMapWithSidebar() {
             onClick={closeBottomSheet}
           />
         )}
+
        {/* Report Issue Toggle Button */}
         <button
           onClick={() => {
@@ -2924,7 +2925,7 @@ export default function HomeMapWithSidebar() {
           }}
           title={reportMode ? "Cancel reporting" : "Report an issue"}
         >
-          <span className="text-2xl">{reportMode ? '✕' : '📝'}</span>
+          <span className="text-2xl">{reportMode ? '✕' : (<img src='comment-icon.svg' alt="note icon" className="w-10 h-8" />)}</span>
         </button>
 
        {/* Report Mode Instruction Tooltip */}
