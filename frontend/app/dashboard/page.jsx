@@ -410,6 +410,43 @@ function MiniOngoingMap() {
   );
 }
 
+// ✅ ADD THESE HELPER FUNCTIONS HERE (before "export default function DashboardPage()")
+
+  // Parse UTC timestamps (now they should have 'Z' from backend)
+  const parseUTCDate = (dateString) => {
+    if (!dateString) return new Date();
+    return new Date(dateString);
+  };
+
+  const formatManilaTime = (dateString) => {
+    const date = parseUTCDate(dateString);
+    return date.toLocaleString('en-PH', {
+      timeZone: 'Asia/Manila',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+  };
+
+  const getRelativeTimeFromUTC = (dateString) => {
+    const reportDate = parseUTCDate(dateString);
+    const now = new Date();
+    
+    const minutesOld = Math.floor((now - reportDate) / (1000 * 60));
+    const hoursOld = Math.floor(minutesOld / 60);
+    const daysOld = Math.floor(hoursOld / 24);
+    
+    if (minutesOld < 1) return '🔴 Just now';
+    if (minutesOld < 5) return `${minutesOld} min ago 🔴`;
+    if (minutesOld < 60) return `${minutesOld} min ago`;
+    if (hoursOld < 24) return `${hoursOld}h ago`;
+    return `${daysOld}d ago`;
+  };
+
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: authLoading, isAuthenticated } = useAuth();
@@ -783,14 +820,28 @@ export default function DashboardPage() {
       const data = await response.json();
       console.log('Full response data:', data);
       
-      if (data.success) {
-        console.log('Total reports from API:', data.data.length);
-        
-        // Filter to show pending, published, and resolved (exclude only dismissed)
-        const activeReports = data.data.filter(r => r.status !== 'dismissed');
-        console.log('Active reports after filtering:', activeReports.length);
-        console.log('Active reports:', activeReports);
-        
+     if (data.success) {
+      console.log('📡 Total reports from API:', data.data.length);
+      
+      // ✅ STEP 1: Filter by status (exclude dismissed and resolved)
+      let activeReports = data.data.filter(r => 
+        r.status !== 'dismissed' && r.status !== 'resolved'
+      );
+      
+      console.log(`📋 After status filter: ${activeReports.length} reports`);
+      
+      // ✅ STEP 2: Also filter out any reports we've marked as resolved locally
+      // (in case backend hasn't propagated yet)
+      activeReports = activeReports.filter(r => {
+        // If we've marked this report as resolved, exclude it
+        const wasResolved = viewedReports.has(`resolved_${r.id}`);
+        if (wasResolved) {
+          console.log(`🗑️ Filtering out locally-resolved report: ${r.id}`);
+        }
+        return !wasResolved;
+      });
+      
+      console.log(`✅ Final active reports: ${activeReports.length}`);
         // Only check for new reports if we already have reports loaded
         if (publicReports.length > 0) {
           const oldReportIds = publicReports.map(r => r.id);
@@ -820,7 +871,8 @@ export default function DashboardPage() {
     try {
       console.log('Publishing report:', reportId, 'Duration:', durationHours);
       
-      const response = await fetch(`https://backend.urbanflowph.com}/api/public-reports/${reportId}`, {
+      // ✅ FIX: Remove extra closing brace in URL
+      const response = await fetch(`https://backend.urbanflowph.com/api/public-reports/${reportId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -833,102 +885,155 @@ export default function DashboardPage() {
       
       const data = await response.json();
       console.log('Response data:', data);
-
       
       if (response.ok && data.success) {
-        // Immediately update local state 
+        // ✅ Immediately update local state with correct expiry time
+        const expiresAt = new Date(Date.now() + durationHours * 60 * 60 * 1000).toISOString();
+        
         setPublicReports(prev => prev.map(r => 
-          r.id === reportId ? {...r, status: 'published', published_at: new Date().toISOString(), expires_at: new Date(Date.now() + durationHours * 60 * 60 * 1000).toISOString()} : r
+          r.id === reportId 
+            ? {
+                ...r, 
+                status: 'published', 
+                published_at: new Date().toISOString(), 
+                expires_at: expiresAt
+              } 
+            : r
         ));
         
-        // Fetch fresh data
+        // ✅ Mark as viewed so it doesn't trigger notification again
+        setViewedReports(prev => new Set([...prev, reportId]));
+        
+        // ✅ Fetch fresh data after a brief delay
         setTimeout(() => fetchPublicReports(), 500);
         
+        // ✅ Show success notification
         setActivePopup({ 
           type: 'success', 
           message: `✅ Report published! Will expire in ${durationHours} hour${durationHours > 1 ? 's' : ''}.` 
         });
         
+        // ✅ Auto-hide popup after 5 seconds
         setTimeout(() => {
           setActivePopup(null);
         }, 5000);
+        
       } else {
         console.error('Publish failed:', data);
-        alert(`Failed to publish: ${data.error || 'Unknown error'}`);
+        
+        // ✅ Better error notification
+        setActivePopup({
+          type: 'error',
+          message: `❌ Failed to publish: ${data.error || 'Unknown error'}`
+        });
+        
+        setTimeout(() => {
+          setActivePopup(null);
+        }, 5000);
       }
+      
     } catch (error) {
       console.error('Error publishing report:', error);
-      alert('Failed to publish report. Check console.');
+      
+      // ✅ Better error notification instead of alert
+      setActivePopup({
+        type: 'error',
+        message: '❌ Network error - Failed to publish report'
+      });
+      
+      setTimeout(() => {
+        setActivePopup(null);
+      }, 5000);
     }
   };
 
   const handleResolveReport = async (reportId) => {
     try {
+      console.log(`🔧 Resolving report ${reportId}...`);
+      
       const response = await fetch(`https://backend.urbanflowph.com/api/public-reports/${reportId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'resolve' })
       });
       
-      if (response.ok) {
-        // Immediately update the local state to show change
-        setPublicReports(prev => prev.map(r => 
-          r.id === reportId ? {...r, status: 'resolved'} : r
-        ));
-        
-        // Then fetch to get fresh data
-        setTimeout(() => fetchPublicReports(), 500);
-        
-        setActivePopup({ type: 'success', message: 'Report marked as resolved ✓' });
-        setTimeout(() => setActivePopup(null), 3000);
-      } else {
-        alert('Failed to resolve report');
-      }
-    } catch (error) {
-      console.error('Error resolving report:', error);
-      alert('Failed to resolve report');
-    }
-  };
-
-  const handleDismissReport = async (reportId) => {
-    try {
-      const response = await fetch(`https://backend.urbanflowph.com/api/public-reports/${reportId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'dismiss' })
-      });
+      const data = await response.json();
+      console.log('Backend response:', data);
       
-      if (response.ok) {
-        // Immediately remove from local state
-        setPublicReports(prev => prev.filter(r => r.id !== reportId));
+      if (response.ok && data.success) {
+        console.log(`✅ Backend confirmed resolution of report ${reportId}`);
         
-        setActivePopup({ type: 'success', message: 'Report dismissed' });
+        // ✅ STEP 1: Immediately remove from local state
+        setPublicReports(prev => {
+          const filtered = prev.filter(r => r.id !== reportId);
+          console.log(`📊 Reports after filter: ${filtered.length} (removed ID ${reportId})`);
+          return filtered;
+        });
+        
+        // ✅ STEP 2: Mark as viewed so it doesn't reappear
+        setViewedReports(prev => {
+          const updated = new Set([...prev, reportId]);
+          console.log(`👁️ Marked report ${reportId} as viewed`);
+          return updated;
+        });
+        
+        // ✅ STEP 3: Wait 1 second, then re-fetch to confirm
+        setTimeout(async () => {
+          console.log('🔄 Re-fetching to verify removal...');
+          await fetchPublicReports();
+        }, 1000);
+        
+        // Show success message
+        setActivePopup({ 
+          type: 'success', 
+          message: '✅ Report resolved and removed' 
+        });
         setTimeout(() => setActivePopup(null), 3000);
+        
       } else {
-        alert('Failed to dismiss report');
+        console.error('❌ Backend failed to resolve:', data);
+        setActivePopup({ 
+          type: 'error', 
+          message: `Failed to resolve: ${data.error || 'Unknown error'}` 
+        });
+        setTimeout(() => setActivePopup(null), 3000);
       }
     } catch (error) {
-      console.error('Error dismissing report:', error);
-      alert('Failed to dismiss report');
+      console.error('❌ Error resolving report:', error);
+      setActivePopup({ 
+        type: 'error', 
+        message: 'Network error - Failed to resolve report' 
+      });
+      setTimeout(() => setActivePopup(null), 3000);
     }
   };
-
-  // Show notification with sound
+    
   const showNotification = (message) => {
+    console.log('🔔 Showing notification:', message);
+    
+    // ✅ Create and play audio BEFORE setting popup state
     try {
       const audio = new Audio('/notification.mp3');
-      audio.play().catch(e => {
-        console.log('Audio play failed - notification sound not found');
-        // Optionally use a browser beep instead
-        // navigator.vibrate && navigator.vibrate(200);
-      });
+      audio.volume = 0.5; // ✅ Set volume to 50%
+      
+      // ✅ Add user interaction check
+      audio.play()
+        .then(() => console.log('✅ Notification sound played'))
+        .catch(e => {
+          console.warn('⚠️ Audio play blocked by browser - requires user interaction first');
+          // ✅ Fallback: Browser beep (if supported)
+          if (navigator.vibrate) {
+            navigator.vibrate(200);
+          }
+        });
     } catch (e) {
-      console.log('Notification sound failed');
+      console.error('❌ Notification sound error:', e);
     }
     
+    // ✅ Show popup notification
     setActivePopup({ type: 'info', message });
     
-    // Auto-hide after 5 seconds
+    // ✅ Auto-hide after 5 seconds
     setTimeout(() => {
       setActivePopup(null);
     }, 5000);
@@ -1026,6 +1131,29 @@ export default function DashboardPage() {
     
     // Poll for new reports every 30 seconds
     const interval = setInterval(fetchPublicReports, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // ✅ Auto-cleanup expired reports (older than 2 days)
+  useEffect(() => {
+    const cleanupExpiredReports = () => {
+      const now = new Date();
+      const twoDaysAgo = new Date(now.getTime() - (2 * 24 * 60 * 60 * 1000));
+      
+      setPublicReports(prev => 
+        prev.filter(report => {
+          const reportDate = new Date(report.reported_at);
+          return reportDate > twoDaysAgo;
+        })
+      );
+    };
+    
+    // Run cleanup every hour
+    const interval = setInterval(cleanupExpiredReports, 60 * 60 * 1000);
+    
+    // Run once on mount
+    cleanupExpiredReports();
+    
     return () => clearInterval(interval);
   }, []);
 
@@ -1197,8 +1325,7 @@ export default function DashboardPage() {
                     Open ({stats.totalSaved})
                   </button>
                   <div className="mt-4 pt-4 border-t border-white/20">
-                    <p className="text-xs text-white/80 mb-1">Pending Review</p>
-                    <p className="text-2xl font-bold text-white">0</p>
+                   
                   </div>
                 </div>
 
@@ -1602,34 +1729,63 @@ export default function DashboardPage() {
 
           {/* Right Sidebar */}
           <div className="col-span-12 lg:col-span-4 space-y-6">
-           {/* Public Reports Preview */}
-            {/* Public Reports Preview */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold">Public Reports</h2>
-                <div className="flex gap-2">
-                  {publicReports.filter(r => r.status === 'pending').length > 0 && (
-                    <span className="bg-red-100 text-red-600 text-xs px-2 py-1 rounded-full font-semibold">
-                      {publicReports.filter(r => r.status === 'pending').length} New
-                    </span>
-                  )}
-                  {publicReports.filter(r => r.status === 'published').length > 0 && (
-                    <span className="bg-green-100 text-green-600 text-xs px-2 py-1 rounded-full font-semibold">
-                      {publicReports.filter(r => r.status === 'published').length} Published
-                    </span>
-                  )}
-                </div>
+            
+          {/* ============================================================ */}
+          {/* PUBLIC REPORTS PREVIEW - FIXED VERSION */}
+          {/* ============================================================ */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-800">Public Reports</h2>
+                <p className="text-xs text-gray-500 mt-1">
+                  📌 Reports auto-expire after 2 days
+                </p>
               </div>
-              
-              <div className="space-y-3 max-h-[500px] overflow-y-auto">
-                {publicReports.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-sm text-gray-500">No reports</p>
-                  </div>
-                ) : (
-                  publicReports.map((report) => (
-                    <div key={report.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3 hover:bg-gray-100 transition">
-                      <div className="flex items-start gap-3 mb-2">
+              <div className="flex gap-2">
+                {publicReports.filter(r => r.status === 'pending').length > 0 && (
+                  <span className="bg-red-100 text-red-600 text-xs px-2 py-1 rounded-full font-semibold">
+                    {publicReports.filter(r => r.status === 'pending').length} New
+                  </span>
+                )}
+                {publicReports.filter(r => r.status === 'published').length > 0 && (
+                  <span className="bg-green-100 text-green-600 text-xs px-2 py-1 rounded-full font-semibold">
+                    {publicReports.filter(r => r.status === 'published').length} Published
+                  </span>
+                )}
+              </div>
+            </div>
+            
+            <div className="space-y-3 max-h-[500px] overflow-y-auto">
+              {publicReports.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-sm text-gray-500">📭 No public reports</p>
+                  <p className="text-xs text-gray-400 mt-1">Reports will appear here when submitted</p>
+                </div>
+              ) : (
+                publicReports.map((report) => {
+                  // ✅ Calculate report age
+                  // ✅ Convert both dates to Manila time for accurate comparison
+                  const reportDate = new Date(report.reported_at);
+                  const now = new Date();
+
+                  // Calculate hours old using UTC timestamps (accurate regardless of timezone)
+                  const hoursOld = Math.floor((now.getTime() - reportDate.getTime()) / (1000 * 60 * 60));
+                  const daysOld = Math.floor(hoursOld / 24);
+
+                  // ✅ For "just now" detection, use minutes
+                  const minutesOld = Math.floor((now.getTime() - reportDate.getTime()) / (1000 * 60));
+                  
+                  // ✅ Hide if older than 2 days
+                  if (daysOld >= 2) return null;
+                  
+                  const timeRemaining = 48 - hoursOld; // Hours until expiry
+                  
+                  return (
+                    <div 
+                      key={report.id} 
+                      className="bg-gray-50 border border-gray-200 rounded-lg p-3 hover:bg-gray-100 transition"
+                    >
+                      <div className="flex items-start gap-3 mb-3 text-gray-700">
                         <span className="text-xl">
                           {report.report_type === 'accident' ? '🚗' :
                           report.report_type === 'flooding' ? '🌊' :
@@ -1637,7 +1793,9 @@ export default function DashboardPage() {
                         </span>
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            <span className="text-sm font-semibold capitalize">{report.report_type}</span>
+                            <span className="text-sm font-semibold capitalize">
+                              {report.report_type}
+                            </span>
                             <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                               report.severity === 'severe' ? 'bg-red-100 text-red-700' :
                               report.severity === 'moderate' ? 'bg-yellow-100 text-yellow-700' :
@@ -1656,13 +1814,39 @@ export default function DashboardPage() {
                               </span>
                             )}
                           </div>
-                          <p className="text-xs text-gray-600 line-clamp-2">{report.description}</p>
+                          <p className="text-xs text-gray-600 line-clamp-2">
+                            {report.description}
+                          </p>
                           <p className="text-xs text-gray-400 mt-1">
-                            {new Date(report.reported_at).toLocaleString()}
+                            {/* ✅ Show "Just now" if less than 5 minutes old */}
+                            {minutesOld < 5 ? (
+                              <span className="text-green-600 font-semibold">Just now 🔴</span>
+                            ) : minutesOld < 60 ? (
+                              <span>{minutesOld} min ago</span>
+                            ) : hoursOld < 24 ? (
+                              <span>{hoursOld}h ago</span>
+                            ) : (
+                              new Date(report.reported_at).toLocaleString('en-PH', {
+                                timeZone: 'Asia/Manila',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: true
+                              })
+                            )}
+                            {timeRemaining > 0 && timeRemaining <= 48 && (
+                              <span className="ml-2 text-orange-600 font-medium">
+                                • Expires in {timeRemaining}h
+                              </span>
+                            )}
                           </p>
                         </div>
                       </div>
+                      
+                     {/* ✅ SIMPLIFIED: Action Buttons - Resolve Only */}
                       <div className="flex gap-2">
+                        {/* Pending Status Buttons */}
                         {report.status === 'pending' && (
                           <>
                             <button
@@ -1670,7 +1854,7 @@ export default function DashboardPage() {
                                 setSelectedReport(report);
                                 setViewedReports(prev => new Set([...prev, report.id]));
                               }}
-                              className="flex-1 bg-orange-600 text-white text-xs py-2 rounded hover:bg-orange-700 transition font-semibold"
+                              className="flex-1 border border-gray-300 text-gray-700 text-xs py-2 rounded hover:bg-gray-50 transition font-medium"
                             >
                               📋 Review
                             </button>
@@ -1679,52 +1863,48 @@ export default function DashboardPage() {
                                 handlePublishReport(report.id, 12);
                                 setViewedReports(prev => new Set([...prev, report.id]));
                               }}
-                              className="flex-1 bg-purple-600 text-white text-xs py-2 rounded hover:bg-purple-700 transition font-semibold"
+                              className="flex-1 bg-orange-500 text-white text-xs py-2 rounded hover:bg-orange-700 transition font-medium"
                             >
                               📤 Publish
                             </button>
                           </>
                         )}
+                        
+                        {/* Published Status Button */}
                         {report.status === 'published' && (
                           <button
                             onClick={() => {
                               setSelectedReport(report);
                               setViewedReports(prev => new Set([...prev, report.id]));
                             }}
-                            className="flex-1 bg-blue-600 text-white text-xs py-2 rounded hover:bg-blue-700 transition font-semibold"
+                            className="flex-1 border border-blue-300 text-blue-700 text-xs py-2 rounded hover:bg-blue-50 transition font-medium"
                           >
                             👁️ View Details
                           </button>
                         )}
+                        
+                        {/* ✅ SINGLE RESOLVE BUTTON - Removes completely */}
                         {(report.status === 'pending' || report.status === 'published') && (
-                          <>
-                            <button
-                              onClick={() => {
+                          <button
+                            onClick={() => {
+                              if (confirm('Mark as resolved? This will remove the report from dashboard and map.')) {
                                 handleResolveReport(report.id);
                                 setViewedReports(prev => new Set([...prev, report.id]));
-                              }}
-                              className="bg-green-600 text-white text-xs px-3 py-2 rounded hover:bg-green-700 transition font-semibold"
-                            >
-                              ✓
-                            </button>
-                            <button
-                              onClick={() => {
-                                handleDismissReport(report.id);
-                                setViewedReports(prev => new Set([...prev, report.id]));
-                              }}
-                              className="bg-gray-400 text-white text-xs px-3 py-2 rounded hover:bg-gray-500 transition font-semibold"
-                            >
-                              ✕
-                            </button>
-                          </>
+                              }
+                            }}
+                            className="border border-green-300 text-green-700 text-xs px-4 py-2 rounded hover:bg-green-50 transition font-medium"
+                            title="Mark as resolved and remove"
+                          >
+                            ✓ Resolve
+                          </button>
                         )}
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
-            
-              
+                  );
+                })
+              )}
+            </div>
+               
               {publicReports.length > 3 && (
                 <button
                   onClick={() => setShowReportsModal(true)}
@@ -1747,65 +1927,102 @@ export default function DashboardPage() {
                   <div className="flex items-center justify-center p-4">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500"></div>
                   </div>
-                ) : savedSimulations.length === 0 ? (
-                  <div className="text-center p-4 text-gray-500 text-sm">
-                    No notifications yet
-                  </div>
                 ) : (
                   <>
-                    {savedSimulations.slice(0, 3).map((sim) => {
-                      const simDate = new Date(sim.created_at);
-                      const hoursSince =
-                        (new Date() - simDate) / (1000 * 60 * 60);
-
-                      let icon, bgColor, borderColor, title;
-
-                      if (sim.simulation_status === "published") {
-                        icon = "✅";
-                        bgColor = "bg-green-50";
-                        borderColor = "border-green-500";
-                        title = "Report generated";
-                      } else if (hoursSince < 1) {
-                        icon = "ℹ️";
-                        bgColor = "bg-blue-50";
-                        borderColor = "border-blue-500";
-                        title = "Simulation ready";
-                      } else {
-                        icon = "⚠️";
-                        bgColor = "bg-yellow-50";
-                        borderColor = "border-yellow-500";
-                        title = "Draft expiring";
-                      }
-
-                      return (
-                        <div
-                          key={sim.simulation_id}
-                          className={`flex gap-2 p-2 ${bgColor} border-l-4 ${borderColor} rounded text-sm cursor-pointer hover:shadow-md transition`}
-                          onClick={() => router.push("/data")}
-                        >
-                          <span>{icon}</span>
-                          <div className="flex-1">
-                            <p className="font-semibold text-gray-800">
-                              {title}
+                    {/* ✅ SHOW PUBLIC REPORTS FIRST (pending only) */}
+                    {publicReports
+                      .filter(r => r.status === 'pending')
+                      .slice(0, 2)
+                      .map((report) => {
+                        const reportDate = new Date(report.reported_at);
+                        const hoursSince = (new Date() - reportDate) / (1000 * 60 * 60);
+                        
+                        return (
+                          <div
+                            key={`report-${report.id}`}
+                            className="flex gap-2 p-2 bg-red-50 border-l-4 border-red-500 rounded text-sm cursor-pointer hover:shadow-md transition"
+                            onClick={() => setSelectedReport(report)}
+                          >
+                            <span>🚨</span>
+                            <div className="flex-1">
+                              <p className="font-semibold text-gray-800">
+                                New Public Report: {report.report_type}
+                              </p>
+                             <p className="text-xs text-gray-500">
+                              {(() => {
+                                const reportDate = new Date(report.reported_at);
+                                const now = new Date();
+                                const minutesOld = Math.floor((now - reportDate) / (1000 * 60));
+                                const hoursOld = Math.floor(minutesOld / 60);
+                                const daysOld = Math.floor(hoursOld / 24);
+                                
+                                if (minutesOld < 5) return '🔴 Just now';
+                                if (minutesOld < 60) return `${minutesOld} min ago`;
+                                if (hoursOld < 24) return `${hoursOld}h ago`;
+                                return `${daysOld}d ago`;
+                              })()}
                             </p>
-                            <p className="text-xs text-gray-500">
-                              {getRelativeTime(sim.created_at)}
-                            </p>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })
+                    }
+
+                    {/* ✅ THEN SHOW SIMULATION NOTIFICATIONS */}
+                    {savedSimulations.length === 0 && publicReports.filter(r => r.status === 'pending').length === 0 ? (
+                      <div className="text-center p-4 text-gray-500 text-sm">
+                        No notifications yet
+                      </div>
+                    ) : (
+                      <>
+                        {savedSimulations.slice(0, 3).map((sim) => {
+                          const simDate = new Date(sim.created_at);
+                          const hoursSince = (new Date() - simDate) / (1000 * 60 * 60);
+
+                          let icon, bgColor, borderColor, title;
+
+                          if (sim.simulation_status === "published") {
+                            icon = "✅";
+                            bgColor = "bg-green-50";
+                            borderColor = "border-green-500";
+                            title = "Report generated";
+                          } else if (hoursSince < 1) {
+                            icon = "ℹ️";
+                            bgColor = "bg-blue-50";
+                            borderColor = "border-blue-500";
+                            title = "Simulation ready";
+                          } else {
+                            icon = "⚠️";
+                            bgColor = "bg-yellow-50";
+                            borderColor = "border-yellow-500";
+                            title = "Draft expiring";
+                          }
+
+                          return (
+                            <div
+                              key={sim.simulation_id}
+                              className={`flex gap-2 p-2 ${bgColor} border-l-4 ${borderColor} rounded text-sm cursor-pointer hover:shadow-md transition`}
+                              onClick={() => router.push("/data")}
+                            >
+                              <span>{icon}</span>
+                              <div className="flex-1">
+                                <p className="font-semibold text-gray-800">
+                                  {title}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {getRelativeTime(sim.created_at)}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
                   </>
                 )}
-
-                <button
-                  onClick={() => router.push("/data")}
-                  className="w-full mt-3 text-orange-500 text-sm font-semibold hover:underline"
-                >
-                  View all →
-                </button>
               </div>
             </div>
+          
 
             {/* Ongoing Disruptions Map - BELOW NOTIFICATIONS */}
             <div className="bg-white rounded-lg shadow-md p-6">
@@ -1871,136 +2088,176 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Report Detail Modal - Map First */}
+       {/* ✅ MINIMAL PROFESSIONAL MODAL */}
         {selectedReport && (
           <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4">
-            {/* Blurred Backdrop */}
+            {/* Backdrop */}
             <div 
-              className="absolute inset-0 bg-white/30 backdrop-blur-md"
+              className="absolute inset-0 bg-black/20 backdrop-blur-sm"
               onClick={() => setSelectedReport(null)}
             ></div>
             
             {/* Modal Content */}
-            <div className="relative bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
-              {/* Header */}
-              <div className="bg-orange-600 text-white p-4 flex justify-between items-center">
+            <div className="relative bg-white rounded-lg w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col shadow-xl border border-gray-200">
+              
+              {/* ✅ Minimal Header */}
+              <div className="border-b border-gray-200 p-4 flex justify-between items-center">
                 <div className="flex items-center gap-3">
-                  <span className="text-3xl">
+                  <span className="text-2xl">
                     {selectedReport.report_type === 'accident' ? '🚗' :
                     selectedReport.report_type === 'flooding' ? '🌊' :
                     selectedReport.report_type === 'roadwork' ? '🚧' : '⚠️'}
                   </span>
                   <div>
-                    <h3 className="text-xl font-bold capitalize">{selectedReport.report_type}</h3>
-                    <p className="text-sm opacity-90">
-                      Reported {new Date(selectedReport.reported_at).toLocaleString()}
-                    </p>
+                    <h3 className="text-lg font-semibold text-gray-900 capitalize">
+                      {selectedReport.report_type}
+                    </h3>
+                  <p className="text-sm text-gray-500">
+                    {(() => {
+                      const reportDate = new Date(selectedReport.reported_at);
+                      const now = new Date();
+                      const minutesOld = Math.floor((now - reportDate) / (1000 * 60));
+                      
+                      if (minutesOld < 5) {
+                        return '🔴 Just reported';
+                      }
+                      
+                      return new Date(selectedReport.reported_at).toLocaleString('en-PH', {
+                        timeZone: 'Asia/Manila',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: true
+                      });
+                    })()}
+                  </p>
                   </div>
                 </div>
                 <button
                   onClick={() => setSelectedReport(null)}
-                  className="text-white hover:text-gray-200 text-3xl leading-none"
+                  className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
                 >
                   ✕
                 </button>
               </div>
 
-              {/* Content - Scrollable */}
-              <div className="flex-1 overflow-y-auto">
-                {/* Map Section - Smaller */}
-                <div className="bg-gray-50 p-4 border-b">
-                  <div className="bg-white p-3 rounded-lg mb-3 border">
-                    <p className="text-sm font-semibold text-gray-700 mb-1">📍 Report Location</p>
-                    <p className="font-mono font-bold text-gray-900">
+              {/* ✅ Content - Scrollable */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                
+                {/* Severity Badge */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-600">Severity:</span>
+                  <span className={`px-3 py-1 rounded text-sm font-medium ${
+                    selectedReport.severity === 'severe' ? 'bg-red-100 text-red-700' :
+                    selectedReport.severity === 'moderate' ? 'bg-yellow-100 text-yellow-700' :
+                    'bg-blue-100 text-blue-700'
+                  }`}>
+                    {selectedReport.severity}
+                  </span>
+                </div>
+
+                {/* Description */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-2">Description</h4>
+                  <p className="text-gray-800 leading-relaxed">
+                    {selectedReport.description}
+                  </p>
+                </div>
+
+                {/* Location */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-2">📍 Location</h4>
+                  <div className="bg-gray-50 rounded p-3 border border-gray-200">
+                    <p className="font-mono text-sm text-gray-700">
                       {selectedReport.latitude.toFixed(6)}, {selectedReport.longitude.toFixed(6)}
                     </p>
                   </div>
+                </div>
+
+                {/* ✅ Minimal Map */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-2">Map View</h4>
                   <iframe
                     width="100%"
-                    height="250"
+                    height="200"
                     frameBorder="0"
                     src={`https://www.openstreetmap.org/export/embed.html?bbox=${selectedReport.longitude-0.005},${selectedReport.latitude-0.005},${selectedReport.longitude+0.005},${selectedReport.latitude+0.005}&layer=mapnik&marker=${selectedReport.latitude},${selectedReport.longitude}`}
-                    className="rounded-lg shadow-md border-2 border-gray-200"
+                    className="rounded border border-gray-200"
                   ></iframe>
                 </div>
 
-                {/* Details Section */}
-                <div className="p-6">
-                  <div className="mb-6">
-                    <div className="flex items-center gap-2 mb-3">
-                      <h4 className="text-lg font-bold text-gray-900">Report Details</h4>
-                      <span className={`px-3 py-1 rounded-full text-sm font-bold ${
-                        selectedReport.severity === 'severe' ? 'bg-red-100 text-red-800' :
-                        selectedReport.severity === 'moderate' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-blue-100 text-blue-800'
-                      }`}>
-                        {selectedReport.severity.toUpperCase()} SEVERITY
-                      </span>
-                    </div>
-                    <p className="text-gray-800 text-base leading-relaxed font-medium">
-                      {selectedReport.description}
-                    </p>
+                {/* Image */}
+                {selectedReport.image_url && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 mb-2">📷 Photo Evidence</h4>
+                    <img 
+                      src={`https://backend.urbanflowph.com${selectedReport.image_url}`}
+                      alt="Report evidence"
+                      className="w-full h-64 object-cover rounded border border-gray-200"
+                    />
                   </div>
+                )}
 
-                  {/* Image Section */}
-                  {selectedReport.image_url && (
-                    <div className="mb-6">
-                      <h4 className="text-lg font-bold text-gray-900 mb-3">📷 Attached Photo</h4>
-                      <img 
-                        src={`https://backend.urbanflowph.com${selectedReport.image_url}`}
-                        alt="Report evidence"
-                        className="w-full h-80 object-cover rounded-lg shadow-lg border-2 border-gray-200"
-                      />
+                {/* Reporter Info */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-2">Reporter Information</h4>
+                  <div className="bg-gray-50 rounded p-3 border border-gray-200 grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Name</p>
+                      <p className="font-medium text-gray-900">
+                        {selectedReport.reporter_name || 'Anonymous'}
+                      </p>
                     </div>
-                  )}
-
-                  {/* Reporter Info */}
-                  <div className="bg-gray-50 p-4 rounded-lg mb-6 border">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-700 mb-1">Reported By</p>
-                        <p className="font-bold text-gray-900">{selectedReport.reporter_name || 'Anonymous'}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-700 mb-1">Report Time</p>
-                        <p className="font-bold text-gray-900">
-                          {new Date(selectedReport.reported_at).toLocaleString()}
-                        </p>
-                      </div>
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Reported At</p>
+                      <p className="font-medium text-gray-900 text-sm">
+                        {new Date(selectedReport.reported_at).toLocaleString('en-PH', {
+                          timeZone: 'Asia/Manila',
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true
+                        })}
+                      </p>
                     </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => {
-                        handlePublishReport(selectedReport.id, 12);
-                        setSelectedReport(null);
-                      }}
-                      className="flex-1 bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition font-bold shadow-lg"
-                    >
-                      📤 Publish to Public Map (12h)
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleResolveReport(selectedReport.id);
-                        setSelectedReport(null);
-                      }}
-                      className="flex-1 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition font-bold shadow-lg"
-                    >
-                      ✓ Mark as Resolved
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleDismissReport(selectedReport.id);
-                        setSelectedReport(null);
-                      }}
-                      className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition font-bold shadow-lg"
-                    >
-                      ✕ Dismiss
-                    </button>
                   </div>
                 </div>
+              </div>
+
+              {/* ✅ Minimal Footer Actions */}
+              <div className="border-t border-gray-200 p-4 flex gap-3">
+                {selectedReport.status === 'pending' && (
+                  <button
+                    onClick={() => {
+                      handlePublishReport(selectedReport.id, 12);
+                      setSelectedReport(null);
+                    }}
+                    className="flex-1 bg-blue-600 text-white px-4 py-2.5 rounded hover:bg-blue-700 transition font-medium"
+                  >
+                    📤 Publish (12h)
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    if (confirm('Mark as resolved? This will remove the report completely.')) {
+                      handleResolveReport(selectedReport.id);
+                      setSelectedReport(null);
+                    }
+                  }}
+                  className="flex-1 border border-green-300 text-green-700 px-4 py-2.5 rounded hover:bg-green-50 transition font-medium"
+                >
+                  ✓ Resolve
+                </button>
+                <button
+                  onClick={() => setSelectedReport(null)}
+                  className="border border-gray-300 text-gray-700 px-4 py-2.5 rounded hover:bg-gray-50 transition font-medium"
+                >
+                  Close
+                </button>
               </div>
             </div>
           </div>

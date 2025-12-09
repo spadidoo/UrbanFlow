@@ -730,7 +730,8 @@ export default function HomeMapWithSidebar() {
     disruptions,
     showReports,
     showCongestion,
-    currentHour
+    currentHour,
+    selectedDisruption
   ]);
 
   const fetchDisruptions = async () => {
@@ -1199,18 +1200,48 @@ export default function HomeMapWithSidebar() {
 
     const map = mapInstanceRef.current;
     if (!map || !map._loaded) return;
+
+    // Clear existing layers for THIS specific disruption before redrawing
+    layersRef.current = layersRef.current.filter((layer) => {
+      if (layer._disruptionId === disruption.id) {
+        try {
+          if (map.hasLayer(layer)) {
+            map.removeLayer(layer);
+          }
+        } catch (e) {
+          console.warn('Layer removal failed:', e);
+        }
+        return false; // Remove from array
+      }
+      return true; // Keep other disruptions
+    });
     
     const isSelected = selectedDisruption?.id === disruption.id;
     const center = { lat: disruption.latitude, lng: disruption.longitude };
 
     // ✅ Get severity for CURRENT HOUR (not average)
     // ✅ Get severity for CURRENT HOUR (not average)
-    const hourPrediction = disruption.hourly_predictions?.find(
-      (h) => h.hour === currentHour
-    );
-    const severity = hourPrediction?.severity || disruption.avg_severity || 1.5;
-    const delayMin = hourPrediction?.delay_info?.additional_delay_min || disruption.expected_delay || 0;
-    const color = getImpactColor(severity);
+   // ✅ BLEND REAL-TIME WITH PREDICTIONS
+    let severity, delayMin, color, isUsingRealTime = false;
+
+    // 1. Try to get real-time data first (most accurate)
+    if (disruption.realtime?.congestion_ratio) {
+      severity = disruption.realtime.congestion_ratio;
+      delayMin = disruption.realtime.delay_minutes || disruption.expected_delay || 0;
+      isUsingRealTime = true;
+      console.log(`🔴 LIVE: ${disruption.title} - Severity: ${severity.toFixed(2)} (Real-time)`);
+    } 
+    // 2. Fall back to current hour prediction
+    else {
+      const hourPrediction = disruption.hourly_predictions?.find(
+        (h) => h.hour === currentHour
+      );
+      severity = hourPrediction?.severity || disruption.avg_severity || 1.5;
+      delayMin = hourPrediction?.delay_info?.additional_delay_min || disruption.expected_delay || 0;
+      console.log(`📊 PREDICTED: ${disruption.title} - Hour ${currentHour} Severity: ${severity.toFixed(2)}`);
+    }
+
+    color = getImpactColor(severity);
 
     // ✅ Log all 24 hours for comparison
     if (disruption.hourly_predictions) {
@@ -1228,32 +1259,57 @@ export default function HomeMapWithSidebar() {
     const marker = L.marker([disruption.latitude, disruption.longitude], {
       icon: L.divIcon({
         className: "disruption-marker-active",
-        html: `
-          <div style="position: relative; width: 40px; height: 40px; pointer-events: none;">
-            <div style="
-              position: absolute; top: 50%; left: 50%;
-              transform: translate(-50%, -50%);
-              width: 48px; height: 48px;
-              border: 2px solid ${color}; border-radius: 50%;
-              opacity: ${isSelected ? "0.5" : "0.3"};
-              animation: pulse-active 2s ease-out infinite;
-              pointer-events: none;
-            "></div>
-            <div style="
-              background: white;
-              border: ${isSelected ? "4px" : "3px"} solid ${color};
-              border-radius: 50%;
-              width: 40px; height: 40px;
-              display: flex; align-items: center; justify-content: center;
-              font-size: 20px;
-              box-shadow: ${isSelected ? "0 6px 20px rgba(0,0,0,0.5)" : "0 4px 12px rgba(0,0,0,0.3)"};
-              cursor: pointer;
-              pointer-events: all;
-              position: relative;
-              z-index: 10;
-            ">🚧</div>
-          </div>
-        `,
+       html: `
+        <div style="position: relative; width: 40px; height: 40px; pointer-events: none;">
+          ${isUsingRealTime ? `
+          <div style="
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 20px;
+            height: 20px;
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            border: 2px solid white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.5);
+            animation: live-pulse 1.5s ease-in-out infinite;
+            z-index: 20;
+          ">🔴</div>
+          <style>
+            @keyframes live-pulse {
+              0%, 100% { transform: scale(1); opacity: 1; }
+              50% { transform: scale(1.15); opacity: 0.8; }
+            }
+          </style>
+          ` : ''}
+          <div style="
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 48px; height: 48px;
+            border: 2px solid ${color}; border-radius: 50%;
+            opacity: ${isSelected ? "0.5" : "0.3"};
+            animation: pulse-active 2s ease-out infinite;
+            pointer-events: none;
+          "></div>
+          <div style="
+            background: white;
+            border: ${isSelected ? "4px" : "3px"} solid ${color};
+            border-radius: 50%;
+            width: 40px; height: 40px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px;
+            box-shadow: ${isSelected ? "0 6px 20px rgba(0,0,0,0.5)" : "0 4px 12px rgba(0,0,0,0.3)"};
+            cursor: pointer;
+            pointer-events: all;
+            position: relative;
+            z-index: 10;
+          ">🚧</div>
+        </div>
+      `,
         iconSize: [40, 40],
         iconAnchor: [20, 20],
       }),
@@ -1274,7 +1330,7 @@ export default function HomeMapWithSidebar() {
       
       // Popup opens automatically via Leaflet
     });
-    
+    marker._disruptionId = disruption.id;
     layersRef.current.push(marker);
 
 
@@ -1309,6 +1365,7 @@ export default function HomeMapWithSidebar() {
               fillOpacity: 0.2,
               weight: 2,
             }).addTo(map);
+            circle._disruptionId = disruption.id;
             layersRef.current.push(circle);
             return;
           }
@@ -1371,6 +1428,7 @@ export default function HomeMapWithSidebar() {
             [[startCoord[0], startCoord[1]], [endCoord[0], endCoord[1]]],
             { color: "#1f2937", weight: weight + 3, opacity: 0.12, lineCap: "round" }
           ).addTo(map);
+          shadow._disruptionId = disruption.id;
           layersRef.current.push(shadow);
 
           // Segment
@@ -1384,6 +1442,7 @@ export default function HomeMapWithSidebar() {
               lineJoin: "round",
             }
           ).addTo(map);
+          segment._disruptionId = disruption.id; 
           layersRef.current.push(segment);
         } catch (e) {
           console.warn('Failed to add road segment:', e);
@@ -1470,7 +1529,7 @@ export default function HomeMapWithSidebar() {
       
       // Popup opens automatically via Leaflet
     });
-
+    marker._disruptionId = disruption.id;
     layersRef.current.push(marker);
   };
 

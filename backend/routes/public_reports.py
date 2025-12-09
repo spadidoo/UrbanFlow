@@ -1,8 +1,10 @@
 from flask import Blueprint, request, jsonify
 from supabase import create_client
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
+
+
 
 public_reports_bp = Blueprint('public_reports', __name__)
 
@@ -14,6 +16,16 @@ supabase = create_client(
     os.getenv('SUPABASE_URL'),
     os.getenv('SUPABASE_KEY')
 )
+
+def ensure_utc_timestamp(dt):
+    """Ensure datetime is in UTC and formatted with Z suffix"""
+    if dt is None:
+        return None
+    if isinstance(dt, str):
+        if not dt.endswith('Z') and not dt.endswith('+00:00'):
+            return dt.replace('+00:00', 'Z') if '+00:00' in dt else dt + 'Z'
+        return dt.replace('+00:00', 'Z')
+    return dt.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -84,27 +96,61 @@ def create_report():
         return jsonify({'error': str(e)}), 500
 
 
+def ensure_utc_timestamp(dt):
+    """Ensure datetime is in UTC and formatted with Z suffix"""
+    if dt is None:
+        return None
+    if isinstance(dt, str):
+        if not dt.endswith('Z') and not dt.endswith('+00:00'):
+            return dt.replace('+00:00', 'Z') if '+00:00' in dt else dt + 'Z'
+        return dt.replace('+00:00', 'Z')
+    return dt.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+
+
 @public_reports_bp.route('/api/public-reports', methods=['GET'])
 def get_reports():
-    """Get all active public reports"""
+    """Get all active public reports (excludes dismissed AND resolved)"""
     try:
-       # status = request.args.get('status', 'active')
-        
-        result = supabase.table('public_reports')\
+        # ✅ Fetch ALL reports first to see what we have
+        all_reports = supabase.table('public_reports')\
             .select('*')\
-            .neq('status', "dismissed")\
             .order('reported_at', desc=True)\
             .execute()
         
+        print(f"\n📊 TOTAL REPORTS IN DATABASE: {len(all_reports.data)}")
+        
+        # ✅ Log status breakdown
+        status_counts = {}
+        for r in all_reports.data:
+            status = r.get('status', 'unknown')
+            status_counts[status] = status_counts.get(status, 0) + 1
+            if status in ['resolved', 'dismissed']:
+                print(f"   ❌ Filtering out: ID={r['id']}, Status={status}, Type={r.get('report_type')}")
+        
+        print(f"📋 Status breakdown: {status_counts}")
+        
+        # ✅ Filter out dismissed AND resolved on Python side (double safety)
+        active_reports = [
+            r for r in all_reports.data 
+            if r.get('status') not in ['dismissed', 'resolved']
+        ]
+        
+        print(f"✅ ACTIVE REPORTS TO RETURN: {len(active_reports)}")
+        
+        # ✅ Ensure all timestamps have 'Z' suffix
+        for report in active_reports:
+            report['reported_at'] = ensure_utc_timestamp(report.get('reported_at'))
+            report['published_at'] = ensure_utc_timestamp(report.get('published_at'))
+            report['expires_at'] = ensure_utc_timestamp(report.get('expires_at'))
+        
         return jsonify({
             'success': True,
-            'data': result.data
+            'data': active_reports
         }), 200
         
     except Exception as e:
+        print(f"❌ Error fetching reports: {str(e)}")
         return jsonify({'error': str(e)}), 500
-    
-    
 
 
 @public_reports_bp.route('/api/public-reports/<report_id>', methods=['GET', 'PATCH', 'DELETE', 'OPTIONS'])
@@ -137,44 +183,41 @@ def update_report_status(report_id):
             data = request.json
             action = data.get('action')
             
+            # Check if report exists first
+            check = supabase.table('public_reports').select('*').eq('id', report_id).execute()
+            print(f"Report exists check: {len(check.data)} records found")
+            
+            if not check.data:
+                return jsonify({'error': 'Report not found'}), 404
+            
             update_data = {}
             
             if action == 'publish':
                 duration_hours = data.get('duration_hours', 12)
                 if duration_hours > 12:
                     duration_hours = 12
-                    
-                from datetime import datetime, timedelta
                 
-                now = datetime.utcnow()  # Use UTC
+                now = datetime.utcnow()
                 expires = now + timedelta(hours=duration_hours)
                 
+                # ✅ FIX: Add 'Z' suffix to mark as UTC
                 update_data = {
                     'status': 'published',
-                    'published_at': now.isoformat(),
-                    'expires_at': expires.isoformat()
+                    'published_at': now.strftime('%Y-%m-%dT%H:%M:%S') + 'Z',
+                    'expires_at': expires.strftime('%Y-%m-%dT%H:%M:%S') + 'Z'
                 }
                 
-                print(f"Publishing report {report_id} with data: {update_data}")
-
-                # In the PATCH method, right after getting the action
-                print(f"Attempting to update report: {report_id}")
-
-                # Check if report exists first
-                check = supabase.table('public_reports').select('*').eq('id', report_id).execute()
-                print(f"Report exists check: {len(check.data)} records found")
-                print(f"Report data: {check.data}")
-
-                if not check.data:
-                    return jsonify({'error': 'Report not found'}), 404
+                print(f"✅ Publishing report {report_id} - expires in {duration_hours}h")
+                print(f"   Published at: {update_data['published_at']}")
+                print(f"   Expires at: {update_data['expires_at']}")
                 
             elif action == 'resolve':
                 update_data = {'status': 'resolved'}
-                print(f"Resolving report {report_id}")
+                print(f"✅ Resolving report {report_id}")
                 
             elif action == 'dismiss':
                 update_data = {'status': 'dismissed'}
-                print(f"Dismissing report {report_id}")
+                print(f"✅ Dismissing report {report_id}")
                 
             else:
                 return jsonify({'error': 'Invalid action'}), 400
@@ -185,18 +228,23 @@ def update_report_status(report_id):
                 .eq('id', report_id)\
                 .execute()
             
-            print(f"Update result: {result.data}")
-            
-            return jsonify({
-                'success': True,
-                'data': result.data[0] if result.data else None
-            }), 200
+            if result.data:
+                print(f"✅ Successfully updated report {report_id} to status: {update_data.get('status')}")
+                return jsonify({
+                    'success': True,
+                    'data': result.data[0]
+                }), 200
+            else:
+                print(f"⚠️ Update returned no data for report {report_id}")
+                return jsonify({
+                    'success': False,
+                    'error': 'Update failed - no data returned'
+                }), 500
             
         except Exception as e:
-            print(f"Error updating report: {str(e)}")
+            print(f"❌ Error updating report: {str(e)}")
             return jsonify({'error': str(e)}), 500
     
-    # If DELETE method is needed later
     if request.method == 'DELETE':
         try:
             result = supabase.table('public_reports')\
@@ -204,23 +252,26 @@ def update_report_status(report_id):
                 .eq('id', report_id)\
                 .execute()
             
+            print(f"🗑️ Deleted report {report_id}")
             return jsonify({'success': True}), 200
         except Exception as e:
             return jsonify({'error': str(e)}), 500
-    
-        
+
+
 @public_reports_bp.route('/api/public-reports/published', methods=['GET'])
 def get_published_reports():
     """Get all published reports that haven't expired (for public map)"""
     try:
-        from datetime import datetime
+        now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S') + 'Z'
         
         result = supabase.table('public_reports')\
             .select('*')\
             .eq('status', 'published')\
-            .gte('expires_at', datetime.now().isoformat())\
+            .gte('expires_at', now)\
             .order('published_at', desc=True)\
             .execute()
+        
+        print(f"📍 Found {len(result.data)} active published reports")
         
         return jsonify({
             'success': True,
@@ -228,25 +279,30 @@ def get_published_reports():
         }), 200
         
     except Exception as e:
+        print(f"Error fetching published reports: {str(e)}")
         return jsonify({'error': str(e)}), 500
-    
-    
+
+
 @public_reports_bp.route('/api/public-reports/cleanup-expired', methods=['POST'])
 def cleanup_expired_reports():
     """Mark expired published reports as resolved"""
     try:
-        from datetime import datetime
+        now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S') + 'Z'
         
         result = supabase.table('public_reports')\
             .update({'status': 'resolved'})\
             .eq('status', 'published')\
-            .lt('expires_at', datetime.now().isoformat())\
+            .lt('expires_at', now)\
             .execute()
+        
+        cleaned_count = len(result.data) if result.data else 0
+        print(f"🧹 Cleaned up {cleaned_count} expired reports")
         
         return jsonify({
             'success': True,
-            'cleaned': len(result.data)
+            'cleaned': cleaned_count
         }), 200
         
     except Exception as e:
+        print(f"Error cleaning up expired reports: {str(e)}")
         return jsonify({'error': str(e)}), 500

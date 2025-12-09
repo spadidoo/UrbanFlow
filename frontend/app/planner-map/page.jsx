@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic"
 import PlannerNavbar from "@/components/PlannerNavBar"
 
-const RawMap = dynamic(() => import("@/components/RawMap"), { 
+const PlannerMapWithSidebar = dynamic(() => import("@/components/PlannerMapWithSidebar"), { 
     ssr: false,
     loading: () => <div className="h-screen w-full bg-gray-200 flex items-center justify-center">Loading map...</div>
 })
@@ -16,7 +16,7 @@ export default function MapPage() {
                 <PlannerNavbar />
             </div>
             <div className="h-full w-full">
-                <RawMap />
+                <PlannerMapWithSidebar />
             </div>
         </div>
     )

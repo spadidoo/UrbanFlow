@@ -563,7 +563,7 @@ const fetchRecommendations = async (simulationId, simulationData) => {
   
   try {
     const response = await fetch(
-      `http://localhost:5000/api/generate-recommendations`,
+      `https://backend.urbanflowph.com/api/generate-recommendations`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -713,7 +713,7 @@ const fetchRecommendations = async (simulationId, simulationData) => {
       if (data.success) {
         setSaveSuccess(true);
         setSavedSimulationId(data.simulation_id);
-        
+
         await fetchRecommendations(data.simulation_id, results);
         
         // ✅ Clear edit session after successful save
@@ -1903,7 +1903,7 @@ const fetchRecommendations = async (simulationId, simulationData) => {
               {/* No Recommendations State */}
               {!isLoadingRecommendations && (!results?.recommendations || results.recommendations.length === 0) && !recommendationsError && (
                 <p className="text-gray-500 text-center py-4">
-                  No recommendations available. Run a simulation first.
+                  Save Simulation to generate AI Recommendations.
                 </p>
               )}
             </div>
