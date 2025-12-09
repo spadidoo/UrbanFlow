@@ -2058,34 +2058,7 @@ export default function DashboardPage() {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
       />
-      
-       {/* Notification Popup */}
-        {activePopup && (
-          <div 
-            className="fixed top-4 right-4 bg-white rounded-lg shadow-2xl z-[10000] p-4 min-w-80"
-            style={{
-              animation: 'slideIn 0.3s ease-out'
-            }}
-          >
-            <div className="flex items-start gap-3">
-              <span className="text-2xl">
-                {activePopup.type === 'info' ? '🔔' : '✅'}
-              </span>
-              <div className="flex-1">
-                <p className="font-semibold text-gray-800">
-                  {activePopup.type === 'info' ? 'New Public Report' : 'Success'}
-                </p>
-                <p className="text-sm text-gray-600 mt-1">{activePopup.message}</p>
-              </div>
-              <button
-                onClick={() => setActivePopup(null)}
-                className="text-gray-400 hover:text-gray-600 text-xl"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        )}
+
 
        {/* ✅ MINIMAL PROFESSIONAL MODAL */}
         {selectedReport && (
@@ -2103,9 +2076,9 @@ export default function DashboardPage() {
               <div className="border-b border-gray-200 p-4 flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <span className="text-2xl">
-                    {report.report_type === 'accident' ? '⛐' :
-                          report.report_type === 'flooding' ? '⛈' :
-                          report.report_type === 'roadwork' ? '🛠' : '⚠︎'}
+                    {selectedReport.report_type === 'accident' ? '⛐' :
+                        selectedReport.report_type === 'flooding' ? '⛈' :
+                        selectedReport.report_type === 'roadwork' ? '🛠' : '⚠︎'}
                   </span>
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900 capitalize">
@@ -2191,6 +2164,8 @@ export default function DashboardPage() {
                 {selectedReport.image_url && (
                   <div>
                     <h4 className="text-sm font-semibold text-gray-700 mb-2">📷 Photo Evidence</h4>
+                      Debug URL: {selectedReport.image_url}
+                      Full URL: https://backend.urbanflowph.com/{selectedReport.image_url}
                     <img 
                       src={`https://backend.urbanflowph.com${selectedReport.image_url}`}
                       alt="Report evidence"

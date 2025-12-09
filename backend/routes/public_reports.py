@@ -9,7 +9,7 @@ from werkzeug.utils import secure_filename
 public_reports_bp = Blueprint('public_reports', __name__)
 
 UPLOAD_FOLDER = '/home/urbanflow/uploads/public_reports'
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'heic', 'heif'}
 
 # Initialize Supabase client
 supabase = create_client(
