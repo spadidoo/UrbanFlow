@@ -195,6 +195,12 @@ export default function ContactPage() {
                   <h3 className="text-lg font-semibold text-gray-800 mb-3">LinkedIn</h3>
                   <div className="space-y-3">
                     <LinkedInPerson
+                      name="Nazreen Villanueva"
+                      href="https://www.linkedin.com/in/nzrnvllnv/"
+                      imgSrc="/naz.jpg"
+                      initials="NV"
+                    />
+                    <LinkedInPerson
                       name="Edzon Deveras"
                       href="https://www.linkedin.com/in/edzon-deveras-6b8a7b392"
                       imgSrc="/Edzon2.png"
@@ -206,13 +212,6 @@ export default function ContactPage() {
                       href="https://www.linkedin.com/in/fate-almario-239a23350"
                       imgSrc="/fate.jpg"
                       initials="FA"
-                    />
-
-                    <LinkedInPerson
-                      name="Nazreen Villanueva"
-                      href="https://www.linkedin.com/in/nzrnvllnv/"
-                      imgSrc="/naz.jpg"
-                      initials="NV"
                     />
                   </div>
                 </div>
@@ -328,7 +327,7 @@ export default function ContactPage() {
                   className={`w-full py-3 rounded-lg font-semibold transition-all duration-300 flex items-center justify-center gap-2 border-2 ${
                     status === "loading"
                       ? "bg-orange-400 text-white border-orange-400 cursor-not-allowed"
-                      : "border-orange-300 text-orange-500 hover:bg-orange-300 hover:text-white"
+                      : "border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white"
                   }`}
                 >
                   {status === "loading" ? (
@@ -410,10 +409,10 @@ export default function ContactPage() {
         </div>
       </main>
 
-      <footer className="bg-gray-800 text-white py-8 mt-16">
+      <footer className="bg-[#303030] text-white py-8 mt-16 rounded-t-3xl">
         <div className="container mx-auto px-4 text-center">
-          <p>&copy; 2025 UrbanFlow - Calamba City Traffic Prediction System</p>
-          <p className="text-sm text-gray-400 mt-2">CS1 Thesis Project</p>
+          <p>&copy; 2025 UrbanFlow - Calamba City Traffic Prediction and Simulation System</p>
+          <p className="text-sm text-gray-400 mt-2">CS 1</p>
         </div>
       </footer>
     </div>

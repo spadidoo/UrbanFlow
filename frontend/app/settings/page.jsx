@@ -29,6 +29,15 @@ export default function SettingsPage() {
   const [avatarPreview, setAvatarPreview] = useState("/urban_planner_icon.png");
   const [avatarFile, setAvatarFile] = useState(null);
 
+  // Controls password section visibility + OTP flow
+  const [showPasswordSection, setShowPasswordSection] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
+
+
+
   // Load user data when available
   useEffect(() => {
     if (user) {
@@ -134,6 +143,78 @@ export default function SettingsPage() {
     }
   };
 
+  const handleSendOtp = async () => {
+  try {
+    setOtpLoading(true);
+    setMessage({ type: "", text: "" });
+
+    const response = await fetch("/api/auth/forgot-password", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email: user.email }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || "Failed to send OTP");
+    }
+
+    setOtpSent(true);
+    setMessage({
+      type: "success",
+      text: "We sent a one-time code to your email.",
+    });
+  } catch (error) {
+    setMessage({
+      type: "error",
+      text: error.message || "Failed to send OTP",
+    });
+  } finally {
+    setOtpLoading(false);
+  }
+};
+
+const handleVerifyOtp = async () => {
+  try {
+    setOtpLoading(true);
+    setMessage({ type: "", text: "" });
+
+    // ⬇️ Change this URL to your actual OTP-verify route if different
+    const response = await fetch("/api/auth/forgot-password/verify", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email: user.email, otp }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || "Invalid or expired OTP");
+    }
+
+    setOtpVerified(true);
+    setShowPasswordSection(true); // unlock the change password section
+
+    setMessage({
+      type: "success",
+      text: "Email verified. You can now change your password.",
+    });
+  } catch (error) {
+    setMessage({
+      type: "error",
+      text: error.message || "Failed to verify OTP",
+    });
+  } finally {
+    setOtpLoading(false);
+  }
+};
+
+
   const handleChangePassword = async () => {
     try {
       if (passwordData.newPassword !== passwordData.confirmPassword) {
@@ -204,11 +285,8 @@ export default function SettingsPage() {
             <div className="flex justify-between items-start">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 mb-1">
-                  Account Settings
+                  Profile
                 </h1>
-                <p className="text-sm text-gray-600">
-                  Change your profile information and password.
-                </p>
               </div>
               {!isEditing && (
                 <button
@@ -307,7 +385,7 @@ export default function SettingsPage() {
                         name="firstName"
                         value={profileData.firstName}
                         onChange={handleProfileChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg "
                       />
                     ) : (
                       <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900">
@@ -327,7 +405,7 @@ export default function SettingsPage() {
                         name="lastName"
                         value={profileData.lastName}
                         onChange={handleProfileChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg "
                       />
                     ) : (
                       <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900">
@@ -348,7 +426,7 @@ export default function SettingsPage() {
                       name="email"
                       value={profileData.email}
                       onChange={handleProfileChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg "
                     />
                   ) : (
                     <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900">
@@ -364,13 +442,13 @@ export default function SettingsPage() {
                   </h3>
                   <div className="space-y-1.5 text-sm text-gray-700">
                     <div>
-                      <span className="font-medium">User ID:</span> {user.id}
+                      {/*<span className="font-medium">User ID:</span> {user.id}*/}
                     </div>
                     <div>
                       <span className="font-medium">Username:</span> {user.username}
                     </div>
                     <div>
-                      <span className="font-medium">Role:</span> {user.role}
+                      {/*<span className="font-medium">Role:</span> {user.role}*/}
                     </div>
                     <div>
                       <span className="font-medium">Full Name:</span> {user.name}
@@ -403,7 +481,7 @@ export default function SettingsPage() {
                       disabled={loading}
                       className="px-6 py-2 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition"
                     >
-                      Cancel
+                      Cancel  
                     </button>
                   </div>
                 )}
@@ -411,69 +489,80 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Password Section */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              Change Password
-            </h2>
+          <button
+            onClick={() => setShowPasswordSection(!showPasswordSection)}
+            className="text-orange-600 hover:underline text-sm mb-4"
+          >
+            {showPasswordSection ? "Hide Password Section" : "Forgot Password?"}
+          </button>
 
-            <div className="space-y-4 max-w-md">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Current Password
-                </label>
-                <input
-                  type="password"
-                  name="currentPassword"
-                  value={passwordData.currentPassword}
-                  onChange={handlePasswordChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                  placeholder="Enter current password"
-                />
+
+          {/* Password Section (Appears Only When Toggled) */}
+          {showPasswordSection && (
+            <div className="bg-white text-gray-700 rounded-lg shadow-sm p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                Change Password
+              </h2>
+
+              <div className="space-y-4 max-w-md">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Current Password
+                  </label>
+                  <input
+                    type="password"
+                    name="currentPassword"
+                    value={passwordData.currentPassword}
+                    onChange={handlePasswordChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    placeholder="Enter current password"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    name="newPassword"
+                    value={passwordData.newPassword}
+                    onChange={handlePasswordChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    placeholder="Enter new password"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Confirm New Password
+                  </label>
+                  <input
+                    type="password"
+                    name="confirmPassword"
+                    value={passwordData.confirmPassword}
+                    onChange={handlePasswordChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    placeholder="Confirm new password"
+                  />
+                </div>
+
+                <button
+                  onClick={handleChangePassword}
+                  disabled={
+                    loading ||
+                    !passwordData.currentPassword ||
+                    !passwordData.newPassword ||
+                    !passwordData.confirmPassword
+                  }
+                  className="px-6 py-2 bg-orange-500 text-white font-medium rounded-lg hover:bg-orange-600 disabled:opacity-50"
+                >
+                  {loading ? "Changing..." : "Change Password"}
+                </button>
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  New Password
-                </label>
-                <input
-                  type="password"
-                  name="newPassword"
-                  value={passwordData.newPassword}
-                  onChange={handlePasswordChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                  placeholder="Enter new password"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Confirm New Password
-                </label>
-                <input
-                  type="password"
-                  name="confirmPassword"
-                  value={passwordData.confirmPassword}
-                  onChange={handlePasswordChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                  placeholder="Confirm new password"
-                />
-              </div>
-
-              <button
-                onClick={handleChangePassword}
-                disabled={
-                  loading ||
-                  !passwordData.currentPassword ||
-                  !passwordData.newPassword ||
-                  !passwordData.confirmPassword
-                }
-                className="px-6 py-2 bg-orange-500 text-white font-medium rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
-              >
-                {loading ? "Changing..." : "Change Password"}
-              </button>
             </div>
-          </div>
+          )}
+
         </div>
       </div>
     </div>

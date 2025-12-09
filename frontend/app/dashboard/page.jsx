@@ -186,19 +186,19 @@ function MiniOngoingMap() {
     const end = new Date(disruption.end_date);
 
     if (now >= start && now <= end) {
-      console.log("✅ Active disruption:", disruption.title);
+      console.log("Active disruption:", disruption.title);
       return "active";
     }
     if (start > now && start <= weekFromNow) {
-      console.log("📅 Upcoming disruption:", disruption.title);
+      console.log("Upcoming disruption:", disruption.title);
       return "upcoming";
     }
     if (end < now) {
-      console.log("⏹️ Past disruption:", disruption.title);
+      console.log("Past disruption:", disruption.title);
       return "past";
     }
 
-    console.log("🔮 Future disruption:", disruption.title);
+    console.log("Future disruption:", disruption.title);
     return "future";
   };
 
@@ -216,7 +216,7 @@ function MiniOngoingMap() {
     layersRef.current = [];
 
     // 🔍 DEBUG: Log what we're about to draw
-    console.log("📍 Drawing disruptions:", disruptions.length);
+    console.log("Drawing disruptions:", disruptions.length);
     console.log(
       "Active:",
       disruptions.filter((d) => d.status === "active").length
@@ -230,14 +230,14 @@ function MiniOngoingMap() {
     disruptions.forEach((disruption) => {
       if (!disruption.latitude || !disruption.longitude) {
         console.warn(
-          "⚠️ Mini Map - Disruption missing coordinates:",
+          "Mini Map - Disruption missing coordinates:",
           disruption.title
         );
         return;
       }
 
       console.log(
-        "🎯 Mini Map - Drawing:",
+        "Mini Map - Drawing:",
         disruption.title,
         "Status:",
         disruption.status
@@ -603,7 +603,7 @@ export default function DashboardPage() {
     ];
 
     console.log(
-      "📍 Fixed top 3 areas:",
+      "Fixed top 3 areas:",
       topAreas.map((a) => a.name).join(", ")
     );
 
@@ -821,14 +821,14 @@ export default function DashboardPage() {
       console.log('Full response data:', data);
       
      if (data.success) {
-      console.log('📡 Total reports from API:', data.data.length);
+      console.log('Total reports from API:', data.data.length);
       
       // ✅ STEP 1: Filter by status (exclude dismissed and resolved)
       let activeReports = data.data.filter(r => 
         r.status !== 'dismissed' && r.status !== 'resolved'
       );
       
-      console.log(`📋 After status filter: ${activeReports.length} reports`);
+      console.log(`After status filter: ${activeReports.length} reports`);
       
       // ✅ STEP 2: Also filter out any reports we've marked as resolved locally
       // (in case backend hasn't propagated yet)
@@ -836,7 +836,7 @@ export default function DashboardPage() {
         // If we've marked this report as resolved, exclude it
         const wasResolved = viewedReports.has(`resolved_${r.id}`);
         if (wasResolved) {
-          console.log(`🗑️ Filtering out locally-resolved report: ${r.id}`);
+          console.log(`Filtering out locally-resolved report: ${r.id}`);
         }
         return !wasResolved;
       });
@@ -910,7 +910,7 @@ export default function DashboardPage() {
         // ✅ Show success notification
         setActivePopup({ 
           type: 'success', 
-          message: `✅ Report published! Will expire in ${durationHours} hour${durationHours > 1 ? 's' : ''}.` 
+          message: `Report published! Will expire in ${durationHours} hour${durationHours > 1 ? 's' : ''}.` 
         });
         
         // ✅ Auto-hide popup after 5 seconds
@@ -924,7 +924,7 @@ export default function DashboardPage() {
         // ✅ Better error notification
         setActivePopup({
           type: 'error',
-          message: `❌ Failed to publish: ${data.error || 'Unknown error'}`
+          message: `Failed to publish: ${data.error || 'Unknown error'}`
         });
         
         setTimeout(() => {
@@ -938,7 +938,7 @@ export default function DashboardPage() {
       // ✅ Better error notification instead of alert
       setActivePopup({
         type: 'error',
-        message: '❌ Network error - Failed to publish report'
+        message: 'Network error - Failed to publish report'
       });
       
       setTimeout(() => {
@@ -961,37 +961,37 @@ export default function DashboardPage() {
       console.log('Backend response:', data);
       
       if (response.ok && data.success) {
-        console.log(`✅ Backend confirmed resolution of report ${reportId}`);
+        console.log(`Backend confirmed resolution of report ${reportId}`);
         
         // ✅ STEP 1: Immediately remove from local state
         setPublicReports(prev => {
           const filtered = prev.filter(r => r.id !== reportId);
-          console.log(`📊 Reports after filter: ${filtered.length} (removed ID ${reportId})`);
+          console.log(`Reports after filter: ${filtered.length} (removed ID ${reportId})`);
           return filtered;
         });
         
         // ✅ STEP 2: Mark as viewed so it doesn't reappear
         setViewedReports(prev => {
           const updated = new Set([...prev, reportId]);
-          console.log(`👁️ Marked report ${reportId} as viewed`);
+          console.log(`Marked report ${reportId} as viewed`);
           return updated;
         });
         
         // ✅ STEP 3: Wait 1 second, then re-fetch to confirm
         setTimeout(async () => {
-          console.log('🔄 Re-fetching to verify removal...');
+          console.log('Re-fetching to verify removal...');
           await fetchPublicReports();
         }, 1000);
         
         // Show success message
         setActivePopup({ 
           type: 'success', 
-          message: '✅ Report resolved and removed' 
+          message: 'Report resolved and removed' 
         });
         setTimeout(() => setActivePopup(null), 3000);
         
       } else {
-        console.error('❌ Backend failed to resolve:', data);
+        console.error('Backend failed to resolve:', data);
         setActivePopup({ 
           type: 'error', 
           message: `Failed to resolve: ${data.error || 'Unknown error'}` 
@@ -999,7 +999,7 @@ export default function DashboardPage() {
         setTimeout(() => setActivePopup(null), 3000);
       }
     } catch (error) {
-      console.error('❌ Error resolving report:', error);
+      console.error('Error resolving report:', error);
       setActivePopup({ 
         type: 'error', 
         message: 'Network error - Failed to resolve report' 
@@ -1009,7 +1009,7 @@ export default function DashboardPage() {
   };
     
   const showNotification = (message) => {
-    console.log('🔔 Showing notification:', message);
+    console.log('Showing notification:', message);
     
     // ✅ Create and play audio BEFORE setting popup state
     try {
@@ -1020,14 +1020,14 @@ export default function DashboardPage() {
       audio.play()
         .then(() => console.log('✅ Notification sound played'))
         .catch(e => {
-          console.warn('⚠️ Audio play blocked by browser - requires user interaction first');
+          console.warn('Audio play blocked by browser - requires user interaction first');
           // ✅ Fallback: Browser beep (if supported)
           if (navigator.vibrate) {
             navigator.vibrate(200);
           }
         });
     } catch (e) {
-      console.error('❌ Notification sound error:', e);
+      console.error('Notification sound error:', e);
     }
     
     // ✅ Show popup notification
@@ -1093,9 +1093,9 @@ export default function DashboardPage() {
         const weeklyData = calculateWeeklyTrend(savedData.simulations);
         setWeeklyTrend(weeklyData);
 
-        console.log("📊 Weekly trend data:", weeklyData);
+        console.log("Weekly trend data:", weeklyData);
 
-        console.log("🔄 Calculating 24-hour heatmap...");
+        console.log("Calculating 24-hour heatmap...");
         await calculateHeatmap(savedData.simulations);
       }
 
@@ -1246,7 +1246,7 @@ export default function DashboardPage() {
               </h1>
               <p className="text-gray-600 mt-1">
                 {" "}
-                Welcome back to your dashboard!
+                Welcome back to your dashboard.
               </p>
             </div>
 
@@ -1431,7 +1431,6 @@ export default function DashboardPage() {
                 <div className="text-center p-4 text-red-600">{error}</div>
               ) : savedSimulations.length === 0 ? (
                 <div className="text-center p-8 text-gray-500">
-                  <p className="text-lg mb-2">📭</p>
                   <p>No simulations yet. Create your first one!</p>
                 </div>
               ) : (
@@ -1738,7 +1737,7 @@ export default function DashboardPage() {
               <div>
                 <h2 className="text-lg font-semibold text-gray-800">Public Reports</h2>
                 <p className="text-xs text-gray-500 mt-1">
-                  📌 Reports auto-expire after 2 days
+                  Reports auto-expire after 2 days
                 </p>
               </div>
               <div className="flex gap-2">
@@ -1758,7 +1757,7 @@ export default function DashboardPage() {
             <div className="space-y-3 max-h-[500px] overflow-y-auto">
               {publicReports.length === 0 ? (
                 <div className="text-center py-8">
-                  <p className="text-sm text-gray-500">📭 No public reports</p>
+                  <p className="text-sm text-gray-500">No public reports</p>
                   <p className="text-xs text-gray-400 mt-1">Reports will appear here when submitted</p>
                 </div>
               ) : (
@@ -1787,9 +1786,9 @@ export default function DashboardPage() {
                     >
                       <div className="flex items-start gap-3 mb-3 text-gray-700">
                         <span className="text-xl">
-                          {report.report_type === 'accident' ? '🚗' :
-                          report.report_type === 'flooding' ? '🌊' :
-                          report.report_type === 'roadwork' ? '🚧' : '⚠️'}
+                          {report.report_type === 'accident' ? '⛐' :
+                          report.report_type === 'flooding' ? '⛈' :
+                          report.report_type === 'roadwork' ? '🛠' : '⚠︎'}
                         </span>
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -1854,9 +1853,9 @@ export default function DashboardPage() {
                                 setSelectedReport(report);
                                 setViewedReports(prev => new Set([...prev, report.id]));
                               }}
-                              className="flex-1 border border-gray-300 text-gray-700 text-xs py-2 rounded hover:bg-gray-50 transition font-medium"
+                              className="flex-1 border border-gray-300 text-gray-700 hover:bg-gray-300 text-xs py-2 rounded hover:bg-gray-50 transition font-medium"
                             >
-                              📋 Review
+                              Review
                             </button>
                             <button
                               onClick={() => {
@@ -1865,7 +1864,7 @@ export default function DashboardPage() {
                               }}
                               className="flex-1 bg-orange-500 text-white text-xs py-2 rounded hover:bg-orange-700 transition font-medium"
                             >
-                              📤 Publish
+                              Publish
                             </button>
                           </>
                         )}
@@ -1877,9 +1876,9 @@ export default function DashboardPage() {
                               setSelectedReport(report);
                               setViewedReports(prev => new Set([...prev, report.id]));
                             }}
-                            className="flex-1 border border-blue-300 text-blue-700 text-xs py-2 rounded hover:bg-blue-50 transition font-medium"
+                            className="flex-1 border border-gray-300 text-gray-700 hover:bg-gray-300 text-xs py-2 rounded transition font-medium"
                           >
-                            👁️ View Details
+                            View Details
                           </button>
                         )}
                         
@@ -1892,7 +1891,7 @@ export default function DashboardPage() {
                                 setViewedReports(prev => new Set([...prev, report.id]));
                               }
                             }}
-                            className="border border-green-300 text-green-700 text-xs px-4 py-2 rounded hover:bg-green-50 transition font-medium"
+                            className="border border-[#4285F4] text-gray-700 hover:bg-[#4285F4] hover:text-[#ffffff] text-xs px-4 py-2 rounded transition font-medium"
                             title="Mark as resolved and remove"
                           >
                             ✓ Resolve
@@ -2104,9 +2103,9 @@ export default function DashboardPage() {
               <div className="border-b border-gray-200 p-4 flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <span className="text-2xl">
-                    {selectedReport.report_type === 'accident' ? '🚗' :
-                    selectedReport.report_type === 'flooding' ? '🌊' :
-                    selectedReport.report_type === 'roadwork' ? '🚧' : '⚠️'}
+                    {report.report_type === 'accident' ? '⛐' :
+                          report.report_type === 'flooding' ? '⛈' :
+                          report.report_type === 'roadwork' ? '🛠' : '⚠︎'}
                   </span>
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900 capitalize">

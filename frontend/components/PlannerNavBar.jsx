@@ -20,10 +20,10 @@ export default function PlannerNavbar() {
   return (
     <nav
       style={{
-        backgroundColor: "rgba(251, 146, 60, 0.95)",
+        backgroundColor: "rgba(0,0,0,0)",
         backdropFilter: "blur(8px)",
       }}
-      className="text-white shadow-lg"
+      className="text-[#474747] shadow-lg"
     >
       <div className="container mx-auto px-2">
         <div className="flex justify-between items-center h-18">
@@ -41,40 +41,40 @@ export default function PlannerNavbar() {
           <div className="flex items-center space-x-8">
             <Link
               href="/dashboard"
-              className={`hover:text-orange-200 transition ${
-                isActive("/dashboard") ? "border-b-2 border-white pb-1" : ""
+              className={`hover:text-[#EC9706] transition ${
+                isActive("/dashboard") ? "border-b-2 border-[#474747] pb-1" : ""
               }`}
             >
               Home
             </Link>
             <Link
               href="/planner-map"
-              className={`hover:text-orange-200 transition ${
-                isActive("/planner-map") ? "border-b-2 border-white pb-1" : ""
+              className={`hover:text-[#EC9706] transition ${
+                isActive("/planner-map") ? "border-b-2 border-[#474747] pb-1" : ""
               }`}
             >
               Map
             </Link>
             <Link
               href="/data"
-              className={`hhover:text-orange-200 transition ${
-                isActive("/data") ? "border-b-2 border-white pb-1" : ""
+              className={`hover:text-[#EC9706] transition ${
+                isActive("/data") ? "border-b-2 border-[#474747] pb-1" : ""
               }`}
             >
               Data
             </Link>
             <Link
               href="/reports"
-              className={`hover:text-orange-200 transition ${
-                isActive("/reports") ? "border-b-2 border-white pb-1" : ""
+              className={`hover:text-[#EC9706] transition ${
+                isActive("/reports") ? "border-b-2 border-[#474747] pb-1" : ""
               }`}
             >
               Report
             </Link>
             <Link
               href="/simulation"
-              className={`hhover:text-orange-200 transition ${
-                isActive("/simulation") ? "border-b-2 border-white pb-1" : ""
+              className={`hover:text-[#EC9706] transition ${
+                isActive("/simulation") ? "border-b-2 border-[#474747] pb-1" : ""
               }`}
             >
               Simulate
