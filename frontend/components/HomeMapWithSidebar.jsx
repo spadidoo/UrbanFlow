@@ -911,7 +911,7 @@ export default function HomeMapWithSidebar() {
       const boundsString = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
 
       const response = await fetch(
-        `http://localhost:5000/api/traffic/live-flow?bounds=${boundsString}`
+        `https://backend.urbanflow.ph/api/traffic/live-flow?bounds=${boundsString}`
       );
       const data = await response.json();
 
@@ -1242,7 +1242,7 @@ export default function HomeMapWithSidebar() {
   const fetchRealtimeForDisruption = async (disruption) => {
     try {
       const response = await fetch(
-          `http://localhost:5000/api/realtime-traffic`,
+          `https://backend.urbanflowph.com/api/realtime-traffic`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1832,7 +1832,7 @@ export default function HomeMapWithSidebar() {
       // Fetch routes for each scenario
       const routePromises = routeScenarios.map(async (scenario, index) => {
         try {
-          const response = await fetch('http://localhost:5000/api/calculate-alternate-routes', {
+          const response = await fetch('https://backend.urbanflowph.com/api/calculate-alternate-routes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
