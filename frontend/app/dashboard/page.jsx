@@ -186,19 +186,19 @@ function MiniOngoingMap() {
     const end = new Date(disruption.end_date);
 
     if (now >= start && now <= end) {
-      console.log("✅ Active disruption:", disruption.title);
+      console.log("Active disruption:", disruption.title);
       return "active";
     }
     if (start > now && start <= weekFromNow) {
-      console.log("📅 Upcoming disruption:", disruption.title);
+      console.log("Upcoming disruption:", disruption.title);
       return "upcoming";
     }
     if (end < now) {
-      console.log("⏹️ Past disruption:", disruption.title);
+      console.log("Past disruption:", disruption.title);
       return "past";
     }
 
-    console.log("🔮 Future disruption:", disruption.title);
+    console.log("Future disruption:", disruption.title);
     return "future";
   };
 
@@ -216,7 +216,7 @@ function MiniOngoingMap() {
     layersRef.current = [];
 
     // 🔍 DEBUG: Log what we're about to draw
-    console.log("📍 Drawing disruptions:", disruptions.length);
+    console.log("Drawing disruptions:", disruptions.length);
     console.log(
       "Active:",
       disruptions.filter((d) => d.status === "active").length
@@ -230,14 +230,14 @@ function MiniOngoingMap() {
     disruptions.forEach((disruption) => {
       if (!disruption.latitude || !disruption.longitude) {
         console.warn(
-          "⚠️ Mini Map - Disruption missing coordinates:",
+          "Mini Map - Disruption missing coordinates:",
           disruption.title
         );
         return;
       }
 
       console.log(
-        "🎯 Mini Map - Drawing:",
+        "Mini Map - Drawing:",
         disruption.title,
         "Status:",
         disruption.status
@@ -1246,7 +1246,7 @@ export default function DashboardPage() {
               </h1>
               <p className="text-gray-600 mt-1">
                 {" "}
-                Welcome back to your dashboard!
+                Welcome back to your dashboard.
               </p>
             </div>
 
@@ -1856,7 +1856,7 @@ export default function DashboardPage() {
                               }}
                               className="flex-1 border border-gray-300 text-gray-700 text-xs py-2 rounded hover:bg-gray-50 transition font-medium"
                             >
-                              📋 Review
+                              Review
                             </button>
                             <button
                               onClick={() => {
@@ -1865,7 +1865,7 @@ export default function DashboardPage() {
                               }}
                               className="flex-1 bg-orange-500 text-white text-xs py-2 rounded hover:bg-orange-700 transition font-medium"
                             >
-                              📤 Publish
+                              Publish
                             </button>
                           </>
                         )}
@@ -1879,7 +1879,7 @@ export default function DashboardPage() {
                             }}
                             className="flex-1 border border-blue-300 text-blue-700 text-xs py-2 rounded hover:bg-blue-50 transition font-medium"
                           >
-                            👁️ View Details
+                            View Details
                           </button>
                         )}
                         

@@ -57,12 +57,12 @@ export default function ReportIssueForm({ position, onClose, onSubmit, marker })
         if (marker) marker.remove();
       } else {
         const errorData = await response.json();
-        const errorMsg = `❌ Failed to submit report\n\nStatus: ${response.status}\nError: ${errorData.error || 'Unknown error'}`;
+        const errorMsg = `Failed to submit report\n\nStatus: ${response.status}\nError: ${errorData.error || 'Unknown error'}`;
         alert(errorMsg);
         console.error('Server error:', errorData);
       }
     } catch (error) {
-      const errorMsg = `❌ Network Error\n\nError: ${error.message}\n\nPlease check your internet connection.`;
+      const errorMsg = `Network Error\n\nError: ${error.message}\n\nPlease check your internet connection.`;
       alert(errorMsg);
       console.error('Submit error:', error);
     } finally {
@@ -117,7 +117,7 @@ export default function ReportIssueForm({ position, onClose, onSubmit, marker })
       
       canvas.toBlob((blob) => {
         if (!blob) {
-          alert('❌ Failed to capture photo. Please try again.');
+          alert('Failed to capture photo. Please try again.');
           return;
         }
         
@@ -127,14 +127,14 @@ export default function ReportIssueForm({ position, onClose, onSubmit, marker })
         const reader = new FileReader();
         reader.onloadend = () => {
           setImagePreview(reader.result);
-          alert('✅ Photo captured successfully!');
+          alert('Photo captured successfully!');
         };
         reader.readAsDataURL(file);
         
         stopCamera();
       }, 'image/jpeg', 0.95);
     } catch (error) {
-      alert(`❌ Error capturing photo: ${error.message}`);
+      alert(`Error capturing photo: ${error.message}`);
       console.error('Capture error:', error);
     }
   };
@@ -156,7 +156,7 @@ export default function ReportIssueForm({ position, onClose, onSubmit, marker })
           </button>
         </div>
         <p className="text-sm mt-2 opacity-90">
-          📍 {position.lat.toFixed(5)}, {position.lng.toFixed(5)}
+          Lat:{position.lat.toFixed(5)}, Long:{position.lng.toFixed(5)}
         </p>
       </div>
 
@@ -169,10 +169,10 @@ export default function ReportIssueForm({ position, onClose, onSubmit, marker })
           </label>
           <div className="grid grid-cols-2 gap-2 text-gray-600">
             {[
-              { value: 'accident', label: 'Accident', emoji: '🚗' },
-              { value: 'flooding', label: 'Flooding', emoji: '🌊' },
-              { value: 'roadwork', label: 'Road Work', emoji: '🚧' },
-              { value: 'other', label: 'Other', emoji: '⚠️' }
+              { value: 'accident', label: 'Accident', emoji: '⛐' },
+              { value: 'flooding', label: 'Flooding', emoji: '⛈' },
+              { value: 'roadwork', label: 'Road Work', emoji: '🛠' },
+              { value: 'other', label: 'Other', emoji: '⚠' }
             ].map(type => (
               <button
                 key={type.value}
@@ -243,9 +243,9 @@ export default function ReportIssueForm({ position, onClose, onSubmit, marker })
             <button
               type="button"
               onClick={() => document.getElementById('file-upload').click()}
-              className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition text-sm font-semibold"
+              className="flex-1 border-2 border-[#757575] text-[#757575] py-2 px-2 rounded-lg hover:bg-gray-300 transition text-sm font-semibold"
             >
-              📁 Choose from Gallery
+              Choose from Gallery
             </button>
             <button
               type="button"
@@ -260,9 +260,9 @@ export default function ReportIssueForm({ position, onClose, onSubmit, marker })
                   startCamera();
                 }
               }}
-              className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition text-sm font-semibold"
+              className="flex-1 border-2 border-[#757575] text-[#757575] py-2 px-2 rounded-lg hover:bg-gray-300 transition text-sm font-semibold"
             >
-              📷 Take Photo
+              Take Photo
             </button>
           </div>
           
@@ -298,7 +298,7 @@ export default function ReportIssueForm({ position, onClose, onSubmit, marker })
                 }}
                 className="absolute top-2 right-2 bg-red-600 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-700 transition font-bold"
               >
-                ✕
+                ↩
               </button>
             </div>
           )}
@@ -344,14 +344,14 @@ export default function ReportIssueForm({ position, onClose, onSubmit, marker })
                 onClick={capturePhoto}
                 className="bg-white text-gray-900 px-8 py-4 rounded-full hover:bg-gray-200 transition font-bold text-lg"
               >
-                📸 Capture
+                ◉
               </button>
               <button
                 type="button"
                 onClick={stopCamera}
                 className="bg-red-600 text-white px-8 py-4 rounded-full hover:bg-red-700 transition font-bold text-lg"
               >
-                ✕ Cancel
+                ↩
               </button>
           </div>
         </div>

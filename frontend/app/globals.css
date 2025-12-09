@@ -215,3 +215,26 @@ body.map-page {
     opacity: 1;
   }
 }
+
+/*-------------------smooth sliding icons in about-------------------*/
+
+/* hide horizontal scrollbar */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE/Edge */
+  scrollbar-width: none;     /* Firefox */
+}
+
+/*--------hide default browser password visibility toggle----------*/
+
+/* Hide built-in password reveal button (Chrome, Edge, Safari) */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
+input[type="password"]::-webkit-textfield-decoration-container {
+  display: none;
+}
