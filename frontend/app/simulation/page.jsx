@@ -10,6 +10,49 @@ import {
 import dynamic from "next/dynamic";
 import { use, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { 
+  FaRoute, 
+  FaTimes, 
+  FaSpinner, 
+  FaMobileAlt, 
+  FaEnvelope, 
+  FaLink,
+  FaRoad,
+  FaClock,
+  FaExclamationTriangle,
+  FaMap
+} from 'react-icons/fa';
+
+// Add polyline decoder
+function decodePolyline(encoded) {
+  if (!encoded || typeof encoded !== "string") return [];
+  let index = 0, lat = 0, lng = 0, coordinates = [];
+
+  while (index < encoded.length) {
+    let b, shift = 0, result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const deltaLat = result & 1 ? ~(result >> 1) : result >> 1;
+    lat += deltaLat;
+
+    shift = 0;
+    result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const deltaLng = result & 1 ? ~(result >> 1) : result >> 1;
+    lng += deltaLng;
+
+    coordinates.push([lat / 1e5, lng / 1e5]);
+  }
+
+  return coordinates;
+}
 
 const SmartResultsMap = dynamic(() => import("@/components/SmartResultsMap"), {
   ssr: false,
@@ -38,6 +81,74 @@ const AggregatedResultsMaps = dynamic(
   }
 );
 
+const RouteCard = ({ route, onSelect, isSelected }) => {
+  return (
+    <div
+      className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
+        isSelected
+          ? 'border-blue-500 bg-blue-50 shadow-md'
+          : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
+      }`}
+      onClick={onSelect}
+    >
+      {/* Route Badge */}
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center space-x-2">
+          <div
+            className="w-5 h-5 rounded-full border-2 border-white shadow"
+            style={{ backgroundColor: route.color }}
+          />
+          <h4 className="font-bold text-gray-900">{route.name}</h4>
+        </div>
+        
+        {!route.passes_through_disruption && (
+          <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">
+            ✓ Clear
+          </span>
+        )}
+      </div>
+      
+      {/* Stats Grid */}
+      <div className="space-y-2 text-sm mb-3">
+        <div className="flex items-center justify-between">
+          <span className="text-gray-600 flex items-center">
+            <FaRoad className="mr-1" /> Distance
+          </span>
+          <span className="font-semibold">{route.distance_text}</span>
+        </div>
+        
+        <div className="flex items-center justify-between">
+          <span className="text-gray-600 flex items-center">
+            <FaClock className="mr-1" /> Time
+          </span>
+          <span className="font-semibold">{route.duration_text}</span>
+        </div>
+        
+        {route.passes_through_disruption && (
+          <div className="flex items-center justify-between text-orange-600">
+            <span className="flex items-center">
+              <FaExclamationTriangle className="mr-1" /> Delay
+            </span>
+            <span className="font-semibold">+{route.estimated_delay_minutes} min</span>
+          </div>
+        )}
+      </div>
+      
+      {/* Description */}
+      <p className="text-xs text-gray-500 leading-relaxed">
+        {route.description}
+      </p>
+      
+      {/* Action Button */}
+      {isSelected && (
+        <button className="mt-3 w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition">
+          Showing on Map ✓
+        </button>
+      )}
+    </div>
+  );
+};
+
 export default function SimulationPage() {
   const { user } = useAuth();
   const userId = user?.user_id || user?.id;
@@ -58,6 +169,11 @@ export default function SimulationPage() {
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [roadInfo, setRoadInfo] = useState(null);
   const [loadingRoadInfo, setLoadingRoadInfo] = useState(false);
+
+  const [alternateRoutes, setAlternateRoutes] = useState([]);
+  const [loadingRoutes, setLoadingRoutes] = useState(false);
+  const [selectedRoute, setSelectedRoute] = useState(null);
+  const [simulationResults, setSimulationResults] = useState(null);
 
   const [results, setResults] = useState(null);
   const [simulating, setSimulating] = useState(false);
@@ -537,6 +653,8 @@ export default function SimulationPage() {
 
       if (data.success) {
         setResults(data);
+        // After successful simulation response:
+        setSimulationResults(data);
         
         document
           .getElementById("results-section")
@@ -551,6 +669,141 @@ export default function SimulationPage() {
         setSimulating(false);
       }
     };
+
+  const calculateAlternateRoutes = async () => {
+    if (!simulationResults || !selectedLocation?.center) {
+      alert('⚠️ Please complete simulation and select a location first');
+      return;
+    }
+    
+    setLoadingRoutes(true);
+    
+    try {
+      const disruption_center = selectedLocation.center;
+      
+      // Calculate origin/destination based on road corridor direction
+      const roadName = roadInfo?.road_name?.toLowerCase() || '';
+      // Calculate better origin/destination points for cleaner routes
+      // Use larger distances to show proper alternate routes
+      let origin, destination;
+      
+      // Calculate 4 potential route endpoints (N, S, E, W) at 2km distance
+      const distance_km = 0.02; // ~2km for better route visibility
+      
+      // Determine main road orientation from disruption location
+      const isHighway = roadInfo?.road_name?.toLowerCase().includes('highway') || 
+                       roadInfo?.road_name?.toLowerCase().includes('national');
+      const isEastWest = roadInfo?.road_name?.toLowerCase().includes('rizal') ||
+                        roadInfo?.road_name?.toLowerCase().includes('cuervo');
+      
+      if (isHighway) {
+        // North-South main road (like National Highway)
+        // Create routes that go around east or west
+        origin = {
+          lat: disruption_center.lat - distance_km, // 2km south
+          lng: disruption_center.lng
+        };
+        destination = {
+          lat: disruption_center.lat + distance_km, // 2km north
+          lng: disruption_center.lng
+        };
+      } else if (isEastWest) {
+        // East-West road
+        // Create routes that go around north or south  
+        origin = {
+          lat: disruption_center.lat,
+          lng: disruption_center.lng - distance_km // 2km west
+        };
+        destination = {
+          lat: disruption_center.lat,
+          lng: disruption_center.lng + distance_km // 2km east
+        };
+      } else {
+        // Default: diagonal
+        origin = {
+          lat: disruption_center.lat - distance_km * 0.7,
+          lng: disruption_center.lng - distance_km * 0.7
+        };
+        destination = {
+          lat: disruption_center.lat + distance_km * 0.7,
+          lng: disruption_center.lng + distance_km * 0.7
+        };
+      }
+      
+      console.log('🗺️ Calculating routes with:', {
+        roadType: isHighway ? 'Highway' : isEastWest ? 'East-West' : 'Default',
+        origin,
+        destination,
+        disruption_center
+      });
+      
+      const data = await response.json();
+      
+      if (data.success && data.routes) {
+        setAlternateRoutes(data.routes);
+        console.log(`✅ Found ${data.routes.length} alternate routes`);
+      } else {
+        console.error('Failed to fetch routes:', data.error);
+        alert('Unable to calculate routes. The disruption area may be in a complex location.');
+      }
+      
+    } catch (error) {
+      console.error('❌ Route calculation error:', error);
+      alert('Error calculating alternate routes. Please check your connection.');
+    } finally {
+      setLoadingRoutes(false);
+    }
+  };
+
+  const drawRouteOnSmartMap = (route) => {
+    if (!route.polyline) {
+      console.error('No polyline data for route');
+      return;
+    }
+    
+    // Decode polyline
+    const coordinates = decodePolyline(route.polyline);
+    
+    if (coordinates.length === 0) {
+      console.error('Failed to decode polyline');
+      return;
+    }
+    
+    console.log(`🗺️ Drawing route: ${route.name}`, {
+      pointCount: coordinates.length,
+      color: route.color
+    });
+    
+    // Store route data for SmartResultsMap to pick up
+    setSelectedRoute({
+      ...route,
+      decodedCoordinates: coordinates
+    });
+    
+    // Scroll to map
+    document.getElementById('results-section')?.scrollIntoView({ 
+      behavior: 'smooth',
+      block: 'start'
+    });
+  };
+
+  const showRouteOnMap = (route) => {
+    // ✅ For simulation page - you'll need to pass this to SmartResultsMap
+    console.log('📍 Route selected:', route.name);
+    
+    // Store in state to pass to map component
+  // ✅ FIXED: Pass complete route with decoded polyline
+    setSelectedRoute({
+      ...route,
+      polyline: route.polyline, // Keep original polyline
+      color: route.color,
+      name: route.name
+    });
+    drawRouteOnSmartMap(route);
+    
+    // Scroll to map
+    document.getElementById('aggregated_view')?.scrollIntoView({ behavior: 'smooth' });
+  };
 
 const fetchRecommendations = async (simulationId, simulationData) => {
   setIsLoadingRecommendations(true);
@@ -1394,7 +1647,22 @@ const fetchRecommendations = async (simulationId, simulationData) => {
                 )}
               </div>
 
-              {results.aggregated_view ? (
+                {/* DEBUG */}
+              {console.log('🗺️ Map rendering decision:', {
+                hasAggregatedView: !!results.aggregated_view,
+                willRender: results.aggregated_view ? 'AggregatedResultsMaps' : 'SmartResultsMap',
+                alternateRoutesCount: alternateRoutes.length
+              })}
+
+              {alternateRoutes.length > 0 ? (
+                <SmartResultsMap
+                  simulationResults={results}
+                  selectedLocation={selectedLocation}
+                  roadInfo={roadInfo}
+                  alternateRoutes={alternateRoutes} 
+                  selectedRoute={selectedRoute}
+                />
+              ) : results.aggregated_view ? (
                 <AggregatedResultsMaps
                   aggregatedView={results.aggregated_view}
                   selectedLocation={selectedLocation}
@@ -1406,6 +1674,8 @@ const fetchRecommendations = async (simulationId, simulationData) => {
                   simulationResults={results}
                   selectedLocation={selectedLocation}
                   roadInfo={roadInfo}
+                  alternateRoutes={alternateRoutes} 
+                  selectedRoute={selectedRoute}
                 />
               )}
             </div>
@@ -1785,7 +2055,7 @@ const fetchRecommendations = async (simulationId, simulationData) => {
                 </div>
               </details>
             </div>
-         
+
             {/* AI Mitigation Recommendations Section */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
               <div className="flex items-center gap-2 mb-4">

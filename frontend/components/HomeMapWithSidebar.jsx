@@ -5,6 +5,18 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import ReportIssueForm from './ReportIssueForm';
+import { 
+  FaRoute, 
+  FaTimes, 
+  FaSpinner, 
+  FaMobileAlt, 
+  FaEnvelope, 
+  FaLink,
+  FaRoad,
+  FaClock,
+  FaExclamationTriangle,
+  FaMap
+} from 'react-icons/fa';
 
 // Fix Leaflet icons
 if (typeof window !== "undefined") {
@@ -15,43 +27,6 @@ if (typeof window !== "undefined") {
     iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
     shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
   });
-}
-
-// Utility: decode an encoded polyline (Google/OSM polyline algorithm)
-// Returns array of [lat, lng]
-function decodePolyline(encoded) {
-  if (!encoded || typeof encoded !== "string") return [];
-  let index = 0,
-    lat = 0,
-    lng = 0,
-    coordinates = [];
-
-  while (index < encoded.length) {
-    let b,
-      shift = 0,
-      result = 0;
-    do {
-      b = encoded.charCodeAt(index++) - 63;
-      result |= (b & 0x1f) << shift;
-      shift += 5;
-    } while (b >= 0x20);
-    const deltaLat = result & 1 ? ~(result >> 1) : result >> 1;
-    lat += deltaLat;
-
-    shift = 0;
-    result = 0;
-    do {
-      b = encoded.charCodeAt(index++) - 63;
-      result |= (b & 0x1f) << shift;
-      shift += 5;
-    } while (b >= 0x20);
-    const deltaLng = result & 1 ? ~(result >> 1) : result >> 1;
-    lng += deltaLng;
-
-    coordinates.push([lat / 1e5, lng / 1e5]);
-  }
-
-  return coordinates;
 }
 
 // Helper: Calculate distance between two points in meters
@@ -90,19 +65,17 @@ async function fetchRoadsFromOSM(lat, lng, radius = 350, cacheRef) {
   }
 
   const query = `
-    [out:json][timeout:10];
+    [out:json][timeout:30];
     (
-      way["highway"~"trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary"]["name"](around:${radius},${lat},${lng});
+      way["highway"~"^(primary|secondary|tertiary|trunk)$"](around:${radius},${lat},${lng});
     );
-    out body;
-    >;
-    out skel qt;
+    out geom;
   `;
 
   try {
     console.log(`🌐 Fetching OSM data for ${cacheKey}...`);
     
-    const response = await fetch("https://overpass-api.de/api/interpreter", {
+    const response = await fetch("https://overpass.kumi.systems/api/interpreter", {
       method: "POST",
       body: `data=${encodeURIComponent(query)}`,
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -118,22 +91,17 @@ async function fetchRoadsFromOSM(lat, lng, radius = 350, cacheRef) {
     }
 
     const data = await response.json();
-    const nodes = data.elements.filter((el) => el.type === "node");
-    const nodeMap = new Map(nodes.map((n) => [n.id, n]));
 
     const roads = data.elements
-      .filter((el) => el.type === "way" && el.tags?.highway)
+      .filter((el) => el.type === "way" && el.tags?.highway && el.geometry)
       .map((way) => {
-        const coords = way.nodes
-          .map((nodeId) => nodeMap.get(nodeId))
-          .filter((n) => n)
-          .map((n) => [n.lat, n.lon]);
+        const coords = way.geometry.map((point) => [point.lat, point.lon]);
 
         if (coords.length < 2) return null;
 
         return {
           id: way.id,
-          name: way.tags.name || way.tags.highway,
+          name: way.tags.name || way.tags.highway || "Road",
           type: way.tags.highway,
           coordinates: coords,
         };
@@ -183,6 +151,37 @@ function getImpactColor(severity) {
   if (severity < 1.5) return "#f59e0b"; // Orange
   if (severity < 2.0) return "#ea580c"; // Dark orange
   return "#dc2626"; // Red
+}
+
+// Add this helper at the top with other utilities
+function decodePolyline(encoded) {
+  if (!encoded || typeof encoded !== "string") return [];
+  let index = 0, lat = 0, lng = 0, coordinates = [];
+
+  while (index < encoded.length) {
+    let b, shift = 0, result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const deltaLat = result & 1 ? ~(result >> 1) : result >> 1;
+    lat += deltaLat;
+
+    shift = 0;
+    result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const deltaLng = result & 1 ? ~(result >> 1) : result >> 1;
+    lng += deltaLng;
+
+    coordinates.push([lat / 1e5, lng / 1e5]);
+  }
+
+  return coordinates;
 }
 
 // Filter roads by importance (only major roads)
@@ -268,6 +267,11 @@ export default function HomeMapWithSidebar() {
   const [reportMode, setReportMode] = useState(false);
   const reportModeRef = useRef(false);
   const pendingReportMarkerRef = useRef(false);
+
+  const [showRoutesModal, setShowRoutesModal] = useState(false);
+  const [alternateRoutes, setAlternateRoutes] = useState([]);
+  const [loadingRoutes, setLoadingRoutes] = useState(false);
+  const [selectedRoute, setSelectedRoute] = useState(null);
   // ============ BOTTOM SHEET HANDLERS ============
 
   const toggleBottomSheet = () => {
@@ -419,6 +423,102 @@ export default function HomeMapWithSidebar() {
     console.log('⚠️ Distance too small, ignoring');
     resetMouse();
   };
+
+  const RouteCard = ({ route, onSelect, isSelected }) => {
+    return (
+      <div
+        className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
+          isSelected
+            ? 'border-blue-500 bg-blue-50 shadow-md'
+            : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
+        }`}
+        onClick={onSelect}
+      >
+        {/* Route Badge */}
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center space-x-2">
+            <div
+              className="w-5 h-5 rounded-full border-2 border-white shadow"
+              style={{ backgroundColor: route.color }}
+            />
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-lg">{route.direction_indicator}</span>
+                <h4 className="font-bold text-gray-900">{route.scenario_name || route.name}</h4>
+              </div>
+              {route.scenario_description && (
+                <p className="text-xs text-gray-500 italic">{route.scenario_description}</p>
+              )}
+            </div>
+          </div>
+          
+          {!route.passes_through_disruption && (
+            <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">
+              ✓ Clear
+            </span>
+          )}
+        </div>
+        
+        {/* Stats Grid */}
+        <div className="space-y-2 text-sm mb-3">
+          <div className="flex items-center justify-between">
+            <span className="text-gray-600 flex items-center">
+              <FaRoad className="mr-1" /> Distance
+            </span>
+            <span className="font-semibold">{route.distance_text}</span>
+          </div>
+          
+          <div className="flex items-center justify-between">
+            <span className="text-gray-600 flex items-center">
+              <FaClock className="mr-1" /> Time
+            </span>
+            <span className="font-semibold">{route.duration_text}</span>
+          </div>
+          
+          {route.passes_through_disruption && (
+            <div className="flex items-center justify-between text-orange-600">
+              <span className="flex items-center">
+                <FaExclamationTriangle className="mr-1" /> Delay
+              </span>
+              <span className="font-semibold">+{route.estimated_delay_minutes} min</span>
+            </div>
+          )}
+        </div>
+        
+        {/* Description */}
+        <p className="text-xs text-gray-500 leading-relaxed">
+          {route.description}
+        </p>
+        
+        {/* Action Button */}
+        {isSelected && (
+          <button className="mt-3 w-full btn btn-primary text-sm py-2">
+            View Turn-by-Turn Directions →
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  // ============================================================
+  // Global handler for "Show Alternate Routes" button in popup
+  // ============================================================
+  useEffect(() => {
+    // Make function globally accessible so popup button can call it
+    window.showAlternateRoutes = (disruptionId) => {
+      const disruption = disruptions.find(d => d.id === disruptionId);
+      if (disruption) {
+        setSelectedDisruption(disruption);
+        setShowRoutesModal(true);
+        fetchAlternateRoutes(disruption);
+      }
+    };
+    
+    // Cleanup
+    return () => {
+      delete window.showAlternateRoutes;
+    };
+  }, [disruptions]); // Re-run when disruptions change
 
   // handler for menu
   const toggleMenu = () => {
@@ -757,15 +857,43 @@ export default function HomeMapWithSidebar() {
           ...d,
           status: getDisruptionStatus(d, now, weekFromNow),
         }));
-
+                // First set disruptions WITHOUT real-time data
         setDisruptions(categorized);
 
-        // Fetch real-time data for active disruptions
-        categorized.forEach((d) => {
-          if (d.status === "active" && d.latitude && d.longitude) {
-            fetchRealtimeForDisruption(d);
-          }
-        });
+        // Then fetch real-time data for active disruptions (WAIT for completion)
+        const activeDisruptions = categorized.filter(
+          (d) => d.status === "active" && d.latitude && d.longitude
+        );
+
+        if (activeDisruptions.length > 0) {
+          console.log(`🔄 Fetching real-time data for ${activeDisruptions.length} active disruption(s)...`);
+          
+          // Fetch all real-time data in parallel
+          const realtimePromises = activeDisruptions.map(async (d) => {
+            const success = await fetchRealtimeForDisruption(d);
+            return { id: d.id, title: d.title, success };
+          });
+
+          // Wait for ALL to complete
+          const results = await Promise.allSettled(realtimePromises);
+          
+          // Log results
+          results.forEach((result, i) => {
+            if (result.status === 'fulfilled' && result.value.success) {
+              console.log(`✅ Real-time loaded: ${result.value.title}`);
+            } else {
+              console.log(`⚠️ Real-time failed: ${activeDisruptions[i].title}`);
+            }
+          });
+          
+          console.log("✅ Real-time data fetch completed!");
+          
+          // CRITICAL: Wait for React state to update
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Now update disruptions state with the real-time data that was fetched
+          setDisruptions(prev => [...prev]); // Force re-render
+        }
       }
     } catch (err) {
       setError("Failed to load disruptions");
@@ -783,7 +911,7 @@ export default function HomeMapWithSidebar() {
       const boundsString = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
 
       const response = await fetch(
-        `https://backend.urbanflowph.com/api/traffic/live-flow?bounds=${boundsString}`
+        `http://localhost:5000/api/traffic/live-flow?bounds=${boundsString}`
       );
       const data = await response.json();
 
@@ -1114,7 +1242,7 @@ export default function HomeMapWithSidebar() {
   const fetchRealtimeForDisruption = async (disruption) => {
     try {
       const response = await fetch(
-          `https://backend.urbanflowph.com/api/realtime-traffic`,
+          `http://localhost:5000/api/realtime-traffic`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1127,16 +1255,31 @@ export default function HomeMapWithSidebar() {
 
       const data = await response.json();
 
-      if (data.success) {
+      if (data.success && response.ok) {
+        console.log(`🔴 Real-time data for "${disruption.title}":`, {
+          congestion_ratio: data.congestion_ratio,
+          delay_minutes: data.delay_minutes,
+          current_speed: data.current_speed,
+          free_flow_speed: data.free_flow_speed
+        });
+        
         // Update disruption with real-time data
-        setDisruptions((prev) =>
-          prev.map((d) =>
-            d.id === disruption.id ? { ...d, realtime: data } : d
-          )
-        );
+        return new Promise((resolve) => {
+          setDisruptions((prev) => {
+            const updated = prev.map((d) =>
+              d.id === disruption.id ? { ...d, realtime: data } : d
+            );
+            resolve(true);
+            return updated;
+          });
+        });
+      } else {
+        console.warn(`❌ No real-time data for "${disruption.title}"`);
+        return false;
       }
     } catch (err) {
-      console.warn(`Failed to fetch real-time data for ${disruption.title}`);
+      console.warn(`❌ Failed to fetch real-time data for "${disruption.title}":`, err.message);
+      return false;
     }
   };
 
@@ -1222,12 +1365,17 @@ export default function HomeMapWithSidebar() {
    // ✅ BLEND REAL-TIME WITH PREDICTIONS
     let severity, delayMin, color, isUsingRealTime = false;
 
+    // Get current hour in Philippines timezone (UTC+8)
+    const now = new Date();
+    const currentHour = (now.getUTCHours() + 8) % 24;
+
     // 1. Try to get real-time data first (most accurate)
-    if (disruption.realtime?.congestion_ratio) {
+      // 1. Try to get real-time data first (most accurate)
+    if (disruption.realtime && typeof disruption.realtime.congestion_ratio === 'number') {
       severity = disruption.realtime.congestion_ratio;
       delayMin = disruption.realtime.delay_minutes || disruption.expected_delay || 0;
       isUsingRealTime = true;
-      console.log(`🔴 LIVE: ${disruption.title} - Severity: ${severity.toFixed(2)} (Real-time)`);
+      console.log(`🔴 LIVE: ${disruption.title} - Severity: ${severity.toFixed(2)} (Real-time)`, disruption.realtime);
     } 
     // 2. Fall back to current hour prediction
     else {
@@ -1334,8 +1482,14 @@ export default function HomeMapWithSidebar() {
 
     if (!showCongestion) return;
 
-    // Fetch roads
-    const roads = await fetchRoadsFromOSM(center.lat, center.lng, 400, osmCacheRef);
+    // ✅ CRITICAL: Verify coordinates
+    console.log(`📍 Fetching roads for disruption at: ${center.lat}, ${center.lng}`);
+
+    // Clear ALL cache to prevent stale data
+    osmCacheRef.current.clear();
+
+    const roads = await fetchRoadsFromOSM(center.lat, center.lng, 200, osmCacheRef);
+    console.log(`🗺️ Fetched ${roads?.length || 0} roads near disruption`);
     if (!roads || roads.length === 0) {
           // ✅ Only create fallback circle if roads genuinely failed (not just cached error)
           // Don't create circle if OSM is timing out - this prevents piling up
@@ -1370,20 +1524,43 @@ export default function HomeMapWithSidebar() {
     }
 
     // ✅ Draw roads with CURRENT HOUR severity
-    // ✅ Draw roads with CURRENT HOUR severity (filtered)
-    roads.forEach((road) => {
-      const coords = road.coordinates;
-      if (coords.length < 2) return;
+    console.log(`✓ Drawing congestion lines for ${disruption.title} on ${roads.length} roads`);
 
-      // Calculate min distance to disruption center
-      const minDistToCenter = Math.min(
-        ...coords.map(c => getDistanceMeters(center.lat, center.lng, c[0], c[1]))
-      );
+  // ✅ VALIDATE: Check if roads are actually near the disruption
+  const nearbyRoads = roads.filter((road) => {
+    const coords = road.coordinates;
+    if (coords.length < 2) return false;
+    
+    // Calculate min distance to disruption center
+    const minDistToCenter = Math.min(
+      ...coords.map(c => getDistanceMeters(center.lat, center.lng, c[0], c[1]))
+    );
+    
+    // Only include roads within 500m of disruption
+    return minDistToCenter <= 500;
+  });
 
-      // ✅ FILTER: Skip unimportant roads
-      if (!shouldIncludeRoad(road, minDistToCenter)) {
-        return; // Skip this road
-      }
+  console.log(`✓ Found ${nearbyRoads.length} roads near disruption (filtered from ${roads.length})`);
+
+  if (nearbyRoads.length === 0) {
+    console.warn(`⚠️ No roads found near disruption at ${center.lat}, ${center.lng}`);
+    return;
+  }
+
+  // ✅ Draw roads with CURRENT HOUR severity (filtered)
+  nearbyRoads.forEach((road) => {
+    const coords = road.coordinates;
+    if (coords.length < 2) return;
+
+    // Calculate min distance to disruption center
+    const minDistToCenter = Math.min(
+      ...coords.map(c => getDistanceMeters(center.lat, center.lng, c[0], c[1]))
+    );
+
+    // ✅ FILTER: Skip unimportant roads
+    if (!shouldIncludeRoad(road, minDistToCenter)) {
+      return; // Skip this road
+    }
 
       for (let i = 0; i < coords.length - 1; i++) {
         const startCoord = coords[i];
@@ -1535,6 +1712,376 @@ export default function HomeMapWithSidebar() {
     layersRef.current.push(marker);
   };
 
+  // ============================================================
+  // ALTERNATE ROUTES FUNCTIONS
+  // ============================================================
+
+  const fetchAlternateRoutes = async (disruption) => {
+    setLoadingRoutes(true);
+    setAlternateRoutes([]);
+    
+    try {
+      const disruption_center = {
+        lat: disruption.latitude,
+        lng: disruption.longitude
+      };
+      
+      // ✅ Get ALL active disruptions to avoid them all
+      const allDisruptionCenters = disruptions
+        .filter(d => d.status === 'active')
+        .map(d => ({
+          lat: d.latitude,
+          lng: d.longitude,
+          radius: 500 // 500m avoidance radius
+        }));
+      
+      console.log(`🚫 Avoiding ${allDisruptionCenters.length} active disruptions`);
+      
+      // ✅ Helper function to check if a route avoids all disruptions
+      const routeAvoidsAllDisruptions = (route) => {
+        const routeCoords = decodePolyline(route.polyline);
+        
+        // Check if route passes through ANY active disruption
+        const passesAnyDisruption = allDisruptionCenters.some(disruptionPoint => {
+          return routeCoords.some(coord => {
+            const distance = getDistanceMeters(
+              coord[0], coord[1], 
+              disruptionPoint.lat, disruptionPoint.lng
+            );
+            return distance < disruptionPoint.radius;
+          });
+        });
+        
+        return !passesAnyDisruption;
+      };
+      
+      // ✅ Determine main road orientation by analyzing road name
+      const roadName = disruption.title?.toLowerCase() || '';
+      const isNorthSouthRoad = roadName.includes('highway') || 
+                               roadName.includes('national') ||
+                               roadName.includes('maharlika');
+      const isEastWestRoad = roadName.includes('rizal') || 
+                             roadName.includes('cuervo') ||
+                             roadName.includes('real');
+      
+      // ✅ Generate only 2-3 practical route scenarios based on road type
+      let routeScenarios = [];
+      
+      if (isNorthSouthRoad) {
+        // For North-South highways, provide:
+        // 1. Route going through parallel eastern roads
+        // 2. Route going through parallel western roads
+        routeScenarios = [
+          {
+            name: 'Eastern Bypass',
+            description: 'Via eastern parallel roads (e.g., Real St, Chipeco)',
+            origin: { lat: disruption.latitude + 0.025, lng: disruption.longitude + 0.008 },     // NE
+            destination: { lat: disruption.latitude - 0.025, lng: disruption.longitude + 0.008 }, // SE
+            color: '#3B82F6' // Blue
+          },
+          {
+            name: 'Western Bypass',
+            description: 'Via western parallel roads (e.g., Turbina, Bucal)',
+            origin: { lat: disruption.latitude + 0.025, lng: disruption.longitude - 0.008 },     // NW
+            destination: { lat: disruption.latitude - 0.025, lng: disruption.longitude - 0.008 }, // SW
+            color: '#10B981' // Green
+          }
+        ];
+      } else if (isEastWestRoad) {
+        // For East-West roads, provide:
+        // 1. Route via northern parallel roads
+        // 2. Route via southern parallel roads
+        routeScenarios = [
+          {
+            name: 'Northern Detour',
+            description: 'Via northern roads',
+            origin: { lat: disruption.latitude + 0.008, lng: disruption.longitude - 0.025 },     // NW
+            destination: { lat: disruption.latitude + 0.008, lng: disruption.longitude + 0.025 }, // NE
+            color: '#3B82F6' // Blue
+          },
+          {
+            name: 'Southern Detour',
+            description: 'Via southern roads',
+            origin: { lat: disruption.latitude - 0.008, lng: disruption.longitude - 0.025 },     // SW
+            destination: { lat: disruption.latitude - 0.008, lng: disruption.longitude + 0.025 }, // SE
+            color: '#10B981' // Green
+          }
+        ];
+      } else {
+        // For other roads, provide 2 diagonal routes
+        routeScenarios = [
+          {
+            name: 'Route Option 1',
+            description: 'Primary alternate route',
+            origin: { lat: disruption.latitude + 0.02, lng: disruption.longitude - 0.015 },
+            destination: { lat: disruption.latitude - 0.02, lng: disruption.longitude + 0.015 },
+            color: '#3B82F6' // Blue
+          },
+          {
+            name: 'Route Option 2',
+            description: 'Secondary alternate route',
+            origin: { lat: disruption.latitude + 0.02, lng: disruption.longitude + 0.015 },
+            destination: { lat: disruption.latitude - 0.02, lng: disruption.longitude - 0.015 },
+            color: '#10B981' // Green
+          }
+        ];
+      }
+      
+      console.log(`🗺️ Calculating ${routeScenarios.length} practical alternate routes...`);
+      
+      // Fetch routes for each scenario
+      const routePromises = routeScenarios.map(async (scenario, index) => {
+        try {
+          const response = await fetch('http://localhost:5000/api/calculate-alternate-routes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              origin: scenario.origin,
+              destination: scenario.destination,
+              disruption_center,
+              disruption_radius_m: 800, // Larger avoidance radius
+              avoid_tolls: false,
+              all_disruptions: allDisruptionCenters, // ✅ Pass ALL disruptions
+              scenario_name: scenario.name
+            })
+          });
+          
+          const data = await response.json();
+          
+          if (data.success && data.routes && data.routes.length > 0) {
+            // Get the route that best avoids disruptions (trust backend first)
+            let bestRoute = data.routes.find(r => !r.passes_through_disruption);
+            
+            // If no route marked as avoiding disruption, do client-side check
+            if (!bestRoute) {
+              bestRoute = data.routes.find(r => routeAvoidsAllDisruptions(r));
+            }
+            
+            // Fallback to first route if nothing avoids disruption
+            if (!bestRoute) {
+              bestRoute = data.routes[0];
+            }
+            
+            return {
+              ...bestRoute,
+              name: scenario.name,
+              description: scenario.description,
+              color: scenario.color, // Use scenario color
+              unique_id: `route_${index}_${Date.now()}`,
+              display_index: index + 1,
+              avoids_all_disruptions: routeAvoidsAllDisruptions(bestRoute) // ✅ Client-verified
+            };
+          }
+          return null;
+        } catch (err) {
+          console.error(`❌ Failed to fetch ${scenario.name}:`, err);
+          return null;
+        }
+      });
+      
+      // Wait for all route calculations
+      const allRoutes = await Promise.all(routePromises);
+      
+      // Filter out failed requests and prioritize routes that avoid all disruptions
+      const validRoutes = allRoutes
+        .filter(route => route !== null)
+        .sort((a, b) => {
+          // Prioritize routes that avoid all disruptions
+          if (a.avoids_all_disruptions && !b.avoids_all_disruptions) return -1;
+          if (!a.avoids_all_disruptions && b.avoids_all_disruptions) return 1;
+          return 0;
+        });
+      
+      if (validRoutes.length > 0) {
+        setAlternateRoutes(validRoutes);
+        console.log(`✅ Found ${validRoutes.length} alternate routes (${validRoutes.filter(r => r.avoids_all_disruptions).length} avoid all disruptions)`);
+        
+        // ✅ Automatically draw all routes on map
+        setTimeout(() => {
+          drawAllRoutesOnMap(validRoutes);
+        }, 500);
+      } else {
+        console.warn('⚠️ No valid alternate routes found');
+        alert('Unable to calculate alternate routes. The area may have limited road options or too many active disruptions.');
+      }
+      
+    } catch (error) {
+      console.error('❌ Error fetching alternate routes:', error);
+      alert('Error calculating alternate routes. Please try again.');
+    } finally {
+      setLoadingRoutes(false);
+    }
+  };
+
+  // ✅ NEW: Draw all alternate routes on map automatically
+  const drawAllRoutesOnMap = (routes) => {
+    if (!mapInstanceRef.current || !routes || routes.length === 0) return;
+    
+    const map = mapInstanceRef.current;
+    
+    console.log(`🗺️ Drawing ${routes.length} alternate routes on public map`);
+    
+    // Remove existing route layers
+    layersRef.current = layersRef.current.filter(layer => {
+      if (layer._routeLayer) {
+        map.removeLayer(layer);
+        return false;
+      }
+      return true;
+    });
+    
+    // Draw each route
+    routes.forEach((route, index) => {
+      const coordinates = decodePolyline(route.polyline);
+      
+      if (coordinates.length === 0) {
+        console.error(`Failed to decode polyline for route ${index}`);
+        return;
+      }
+      
+      // Draw route line
+      const routeLine = L.polyline(coordinates, {
+        color: route.color,
+        weight: 5,
+        opacity: 0.75,
+        lineCap: 'round',
+        lineJoin: 'round'
+      }).addTo(map);
+      
+      routeLine._routeLayer = true;
+      routeLine._routeId = route.unique_id; 
+      
+      // Add popup
+      const popupContent = `
+        <div style="padding: 12px; min-width: 220px;">
+          <h3 style="margin: 0 0 6px 0; font-weight: bold; color: ${route.color}; font-size: 15px;">
+            ${route.name}
+          </h3>
+          <p style="margin: 0 0 10px 0; font-size: 11px; color: #6b7280; font-style: italic; line-height: 1.4;">
+            ${route.description}
+          </p>
+          <div style="padding-top: 8px; border-top: 1px solid #e5e7eb;">
+            <p style="margin: 4px 0; font-size: 12px;">
+              <strong>Distance:</strong> ${route.distance_text}
+            </p>
+            <p style="margin: 4px 0; font-size: 12px;">
+              <strong>Time:</strong> ${route.duration_text}
+            </p>
+            <p style="margin: 8px 0 0 0; padding: 6px 8px; background: #d1fae5; border-radius: 6px; font-size: 11px; color: #065f46; font-weight: 600;">
+              ✓ Avoids all disruptions
+            </p>
+          </div>
+        </div>
+      `;
+      
+      routeLine.bindPopup(popupContent);
+      
+      // Highlight on hover
+      routeLine.on('mouseover', function() {
+        this.setStyle({ weight: 7, opacity: 1 });
+      });
+      
+      routeLine.on('mouseout', function() {
+        this.setStyle({ weight: 5, opacity: 0.75 });
+      });
+      
+      layersRef.current.push(routeLine);
+    });
+    
+    console.log('✅ All alternate routes drawn on map');
+  };
+
+  const viewRouteDirections = (route) => {
+    setSelectedRoute(route);
+    
+    // ✅ Draw the route on map
+    drawRouteOnMap(route);
+    
+    console.log('✅ Route drawn on map:', route.scenario_name || route.name);
+  };
+
+  const shareRoute = (method) => {
+    if (!selectedRoute) return;
+    
+    const routeText = `
+  🗺️ UrbanFlow Alternate Route
+
+  Route: ${selectedRoute.name}
+  Distance: ${selectedRoute.distance_text}
+  Time: ${selectedRoute.duration_text}
+  ${selectedRoute.passes_through_disruption ? `⚠️ Expected delay: +${selectedRoute.estimated_delay_minutes} min` : '✓ Avoids disruption'}
+
+  View on Google Maps: https://www.google.com/maps/dir/?api=1
+    `.trim();
+    
+    if (method === 'sms') {
+      // Open SMS app (mobile only)
+      window.location.href = `sms:?body=${encodeURIComponent(routeText)}`;
+    } else if (method === 'email') {
+      // Open email client
+      window.location.href = `mailto:?subject=UrbanFlow Alternate Route&body=${encodeURIComponent(routeText)}`;
+    }
+  };
+
+  const copyRouteLink = () => {
+    if (!selectedRoute) return;
+    
+    // Simple text copy (you can enhance this with a proper Google Maps link)
+    const routeInfo = `${selectedRoute.name}: ${selectedRoute.distance_text}, ${selectedRoute.duration_text}`;
+    
+    navigator.clipboard.writeText(routeInfo).then(() => {
+      alert('✅ Route info copied to clipboard!');
+    }).catch(() => {
+      alert('❌ Failed to copy. Please try manually.');
+    });
+  };
+
+  // Add this function with your other drawing functions
+  const drawRouteOnMap = (selectedRoute) => {
+    if (!mapInstanceRef.current || !selectedRoute.polyline) return;
+    
+    const map = mapInstanceRef.current;
+    
+    // Don't remove all routes, just update their styles
+    layersRef.current.forEach(layer => {
+      if (layer._routeLayer) {
+        // Reset all routes to normal style
+        layer.setStyle({
+          weight: 5,
+          opacity: 0.75
+        });
+      }
+    });
+    
+    // Decode the selected route's polyline
+    const coordinates = decodePolyline(selectedRoute.polyline);
+    
+    if (coordinates.length === 0) {
+      console.error('Failed to decode polyline');
+      return;
+    }
+    
+    // Find and highlight the selected route layer
+    layersRef.current.forEach(layer => {
+      if (layer._routeLayer && layer._routeId === selectedRoute.unique_id) {
+        layer.setStyle({
+          weight: 8,
+          opacity: 1
+        });
+        layer.bringToFront();
+      }
+    });
+    
+    // Fit map to show the selected route
+    const bounds = L.latLngBounds(coordinates);
+    map.fitBounds(bounds, { 
+      padding: [50, 50],
+      maxZoom: 15
+    });
+    
+    console.log('✅ Route highlighted on map:', selectedRoute.scenario_name || selectedRoute.name);
+  };
+
   const drawCongestionSegments = (disruption, hourlyData, color) => {
     const map = mapInstanceRef.current;
 
@@ -1612,8 +2159,13 @@ export default function HomeMapWithSidebar() {
   };
 
   const createActivePopup = (disruption) => {
+    // Get current hour in Philippines timezone (UTC+8)
+    const now = new Date();
+    const currentHour = (now.getUTCHours() + 8) % 24;
+    
     // Check if using real-time data
-    const isUsingRealTime = disruption.realtime?.congestion_ratio;
+    // Check if using real-time data
+    const isUsingRealTime = disruption.realtime && typeof disruption.realtime.congestion_ratio === 'number';
     const currentSeverity = isUsingRealTime 
       ? disruption.realtime.congestion_ratio 
       : disruption.hourly_predictions?.find(h => h.hour === currentHour)?.severity || disruption.avg_severity;
@@ -1676,6 +2228,28 @@ export default function HomeMapWithSidebar() {
           ℹ️ Showing predicted data for hour ${currentHour}
         </p>
         ` : ''}
+        
+        <!-- ✅ ADD THIS: Alternate Routes Button -->
+        <button 
+          onclick="window.showAlternateRoutes(${disruption.id})"
+          style="
+            width: 100%;
+            margin-top: 10px;
+            padding: 8px;
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+          "
+          onmouseover="this.style.transform='scale(1.02)'"
+          onmouseout="this.style.transform='scale(1)'"
+        >
+          🗺️ Show Alternate Routes
+        </button>
       </div>
     `;
   };
@@ -2682,6 +3256,95 @@ export default function HomeMapWithSidebar() {
           alert('✅ Thank you! Your report has been submitted to city planners.');
         }}
       />
+    )}
+
+    {/* ✅ NEW: Alternate Routes Modal */}
+    {selectedDisruption && showRoutesModal && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold mb-1">Alternate Routes</h2>
+                <p className="text-blue-100 text-sm">
+                  {selectedDisruption.title}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowRoutesModal(false)}
+                className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition"
+              >
+                <FaTimes size={24} />
+              </button>
+            </div>
+          </div>
+          
+          {/* Content */}
+          <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+            {loadingRoutes ? (
+              <div className="text-center py-12">
+                <FaSpinner className="animate-spin text-4xl text-blue-600 mx-auto mb-4" />
+                <p className="text-gray-600">Calculating best routes...</p>
+              </div>
+            ) : alternateRoutes.length > 0 ? (
+              <>
+                <p className="text-gray-600 mb-6">
+                  📍 Routes calculated to avoid the disruption zone. Choose the route that best fits your needs.
+                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {alternateRoutes.map((route) => (
+                    <RouteCard
+                      key={route.unique_id}
+                      route={route}
+                      onSelect={() => viewRouteDirections(route)}
+                      isSelected={selectedRoute?.unique_id === route.unique_id}
+                    />
+                  ))}
+                </div>
+                
+                {/* Share/Export Options */}
+                {selectedRoute && (
+                  <div className="mt-6 border-t pt-6">
+                    <h3 className="font-semibold text-gray-900 mb-3">Share this route:</h3>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        onClick={() => shareRoute('sms')}
+                        className="btn btn-secondary flex items-center space-x-2"
+                      >
+                        <FaMobileAlt />
+                        <span>Text Message</span>
+                      </button>
+                      
+                      <button
+                        onClick={() => shareRoute('email')}
+                        className="btn btn-secondary flex items-center space-x-2"
+                      >
+                        <FaEnvelope />
+                        <span>Email</span>
+                      </button>
+                      
+                      <button
+                        onClick={() => copyRouteLink()}
+                        className="btn btn-secondary flex items-center space-x-2"
+                      >
+                        <FaLink />
+                        <span>Copy Link</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-center py-12">
+                <FaRoute className="text-5xl text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-600">No alternate routes available</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     )}
     </div>
   );

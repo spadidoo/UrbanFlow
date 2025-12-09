@@ -2,7 +2,7 @@
 // Google Maps Directions API service - calls backend to avoid CORS
 
 // ✅ Feature flag to enable/disable Google API
-const USE_GOOGLE_API = false; // Set to false to disable Google API
+const USE_GOOGLE_API = true; // Set to false to disable Google API
 
 // Backend URL
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://backend.urbanflowph.com';

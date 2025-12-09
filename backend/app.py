@@ -322,6 +322,231 @@ def google_directions():
     except Exception as e:
         print(f"❌ Google Directions error: {e}")
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/calculate-alternate-routes', methods=['POST'])
+def calculate_alternate_routes():
+    """
+    Calculate up to 3 alternate routes avoiding a disruption zone
+    
+    Request body:
+    {
+        "origin": {"lat": 14.1894, "lng": 121.1653},
+        "destination": {"lat": 14.2096, "lng": 121.1640},
+        "disruption_center": {"lat": 14.1950, "lng": 121.1670},
+        "disruption_radius_m": 500,
+        "avoid_tolls": false
+    }
+    
+    Returns 3 routes:
+    - Route 1: Fastest (may go through disruption if unavoidable)
+    - Route 2: Avoiding disruption zone
+    - Route 3: Alternative avoiding disruption
+    """
+    try:
+        data = request.get_json()
+        
+        origin = data.get('origin')  # {lat, lng}
+        destination = data.get('destination')  # {lat, lng}
+        disruption = data.get('disruption_center')  # {lat, lng}
+        disruption_radius = data.get('disruption_radius_m', 500)
+        avoid_tolls = data.get('avoid_tolls', False)
+        
+        # Validate inputs
+        if not origin or not destination:
+            return jsonify({
+                'success': False,
+                'error': 'origin and destination are required'
+            }), 400
+        
+        # Format coordinates for Google API
+        origin_str = f"{origin['lat']},{origin['lng']}"
+        dest_str = f"{destination['lat']},{destination['lng']}"
+        
+        api_key = os.getenv('GOOGLE_MAPS_API_KEY')
+        
+        routes = []
+        
+        # ============================================
+        # Route 1: Direct/Fastest (baseline)
+        # ============================================
+        url1 = f"https://maps.googleapis.com/maps/api/directions/json"
+        params1 = {
+            'origin': origin_str,
+            'destination': dest_str,
+            'mode': 'driving',
+            'alternatives': 'false',
+            'key': api_key
+        }
+        
+        response1 = requests.get(url1, params=params1, timeout=10)
+        if response1.status_code == 200:
+            data1 = response1.json()
+            if data1['status'] == 'OK' and len(data1['routes']) > 0:
+                route = data1['routes'][0]
+                leg = route['legs'][0]
+                
+                routes.append({
+                    'route_id': 1,
+                    'name': 'Fastest Route',
+                    'description': 'Direct route (may pass through disruption)',
+                    'color': '#3B82F6',  # Blue
+                    'distance_text': leg['distance']['text'],
+                    'distance_m': leg['distance']['value'],
+                    'duration_text': leg['duration']['text'],
+                    'duration_seconds': leg['duration']['value'],
+                    'polyline': route['overview_polyline']['points'],
+                    'steps': leg['steps'],
+                    'warnings': route.get('warnings', []),
+                    'passes_through_disruption': _route_intersects_disruption(
+                        route['overview_polyline']['points'],
+                        disruption,
+                        disruption_radius
+                    ) if disruption else False
+                })
+        
+        # ============================================
+        # Route 2 & 3: Alternates (request alternatives=true)
+        # ============================================
+        url2 = f"https://maps.googleapis.com/maps/api/directions/json"
+        params2 = {
+            'origin': origin_str,
+            'destination': dest_str,
+            'mode': 'driving',
+            'alternatives': 'true',  # ✅ Request multiple routes
+            'avoid': 'tolls' if avoid_tolls else '',
+            'key': api_key
+        }
+        
+        response2 = requests.get(url2, params=params2, timeout=10)
+        if response2.status_code == 200:
+            data2 = response2.json()
+            if data2['status'] == 'OK':
+                # Google returns up to 3 routes when alternatives=true
+                for idx, route in enumerate(data2['routes'][1:], start=2):  # Skip first (same as Route 1)
+                    if idx > 3:  # Limit to 3 total routes
+                        break
+                    
+                    leg = route['legs'][0]
+                    
+                    passes_disruption = _route_intersects_disruption(
+                        route['overview_polyline']['points'],
+                        disruption,
+                        disruption_radius
+                    ) if disruption else False
+                    
+                    routes.append({
+                        'route_id': idx,
+                        'name': f'Alternate Route {idx - 1}',
+                        'description': 'Avoids disruption zone' if not passes_disruption else 'May have delays',
+                        'color': '#10B981' if not passes_disruption else '#F59E0B',  # Green or Orange
+                        'distance_text': leg['distance']['text'],
+                        'distance_m': leg['distance']['value'],
+                        'duration_text': leg['duration']['text'],
+                        'duration_seconds': leg['duration']['value'],
+                        'polyline': route['overview_polyline']['points'],
+                        'steps': leg['steps'],
+                        'warnings': route.get('warnings', []),
+                        'passes_through_disruption': passes_disruption,
+                        'estimated_delay_minutes': 0 if not passes_disruption else 15  # Rough estimate
+                    })
+        
+        # Sort routes: prefer those avoiding disruption
+        routes.sort(key=lambda r: (r['passes_through_disruption'], r['duration_seconds']))
+        
+        return jsonify({
+            'success': True,
+            'routes': routes[:3],  # Return max 3 routes
+            'origin': origin,
+            'destination': destination,
+            'disruption_center': disruption,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        print(f"❌ Route calculation error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+def _route_intersects_disruption(encoded_polyline, disruption_center, radius_m):
+    """Check if route passes through disruption zone - IMPROVED"""
+    try:
+        # Try to use polyline library
+        try:
+            from polyline import decode
+            points = decode(encoded_polyline)
+        except ImportError:
+            # Fallback: Manual polyline decoding
+            points = _manual_decode_polyline(encoded_polyline)
+        
+        disruption_lat = disruption_center['lat']
+        disruption_lng = disruption_center['lng']
+        
+        # Check each point - use smaller check interval for accuracy
+        for lat, lng in points:
+            distance = _haversine_distance(lat, lng, disruption_lat, disruption_lng)
+            if distance <= radius_m:
+                return True
+        
+        return False
+        
+    except Exception as e:
+        print(f"⚠️ Error checking route intersection: {e}")
+        # Be conservative - assume it does intersect if we can't check
+        return True  # Changed from False for safety
+
+def _manual_decode_polyline(encoded):
+    """Manual polyline decoder as fallback"""
+    coordinates = []
+    index = lat = lng = 0
+    
+    while index < len(encoded):
+        result = 1
+        shift = 0
+        while True:
+            b = ord(encoded[index]) - 63 - 1
+            index += 1
+            result += b << shift
+            shift += 5
+            if b < 0x1f:
+                break
+        lat += (~result >> 1) if (result & 1) != 0 else (result >> 1)
+        
+        result = 1
+        shift = 0
+        while True:
+            b = ord(encoded[index]) - 63 - 1
+            index += 1
+            result += b << shift
+            shift += 5
+            if b < 0x1f:
+                break
+        lng += (~result >> 1) if (result & 1) != 0 else (result >> 1)
+        
+        coordinates.append([lat * 1e-5, lng * 1e-5])
+    
+    return coordinates
+
+
+def _haversine_distance(lat1, lng1, lat2, lng2):
+    """Calculate distance in meters between two coordinates"""
+    from math import radians, sin, cos, sqrt, atan2
+    
+    R = 6371000  # Earth radius in meters
+    
+    lat1, lng1, lat2, lng2 = map(radians, [lat1, lng1, lat2, lng2])
+    
+    dlat = lat2 - lat1
+    dlng = lng2 - lng1
+    
+    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlng/2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1-a))
+    
+    return R * c
 
 # ============================================================
 # NEW ROUTE: Upload Avatar
