@@ -1,10 +1,32 @@
 "use client";
 
+import api from "@/services/api";
+import {
+  AlertTriangle,
+  Calendar,
+  Clock,
+  Edit,
+  FileText,
+  MapPin,
+  TrendingUp,
+  X,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
-import { X, Calendar, MapPin, AlertTriangle, Clock, TrendingUp, Edit, FileText } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
-export default function SimulationPreviewModal({ simulation, isOpen, onClose }) {
+export default function SimulationPreviewModal({
+  simulation,
+  isOpen,
+  onClose,
+}) {
   const router = useRouter();
 
   if (!isOpen || !simulation) return null;
@@ -48,10 +70,32 @@ export default function SimulationPreviewModal({ simulation, isOpen, onClose }) 
   const severityLabel =
     avgSeverity >= 2 ? "Heavy" : avgSeverity >= 1 ? "Moderate" : "Light";
 
-  // Handle Edit
-  const handleEdit = () => {
-    onClose();
-    router.push(`/data?edit=${simulation.simulation_id}`);
+  // Handle Edit - reuse Data Management edit logic so it opens the Simulate page pre-filled
+  const handleEdit = async () => {
+    try {
+      onClose();
+
+      const details = await api.getSimulation(simulation.simulation_id);
+      if (details) {
+        const simulationData = details.simulation || details;
+
+        // Remove internal edit markers if present
+        const { is_edited, last_edited_at, ...cleanData } = simulationData;
+
+        const editData = {
+          ...cleanData,
+          _isEditMode: true,
+          _originalId: simulation.simulation_id,
+        };
+
+        sessionStorage.setItem("editSimulation", JSON.stringify(editData));
+
+        router.push("/simulation");
+      }
+    } catch (error) {
+      console.error("Error loading simulation for edit:", error);
+      alert("Failed to load simulation details");
+    }
   };
 
   // Handle View Full Report
@@ -64,7 +108,7 @@ export default function SimulationPreviewModal({ simulation, isOpen, onClose }) 
 
   return (
     <>
-       {/* Backdrop - increase z-index */}
+      {/* Backdrop - increase z-index */}
       <div
         className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] animate-in fade-in duration-200"
         onClick={onClose}
@@ -159,7 +203,9 @@ export default function SimulationPreviewModal({ simulation, isOpen, onClose }) 
                   <TrendingUp className="w-5 h-5 text-orange-600" />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500 font-medium">Avg Severity</p>
+                  <p className="text-xs text-gray-500 font-medium">
+                    Avg Severity
+                  </p>
                   <p
                     className={`text-sm font-semibold mt-1 ${
                       avgSeverity >= 2
@@ -202,7 +248,11 @@ export default function SimulationPreviewModal({ simulation, isOpen, onClose }) 
                       }}
                       formatter={(value) => {
                         const label =
-                          value < 1 ? "Light" : value < 2 ? "Moderate" : "Heavy";
+                          value < 1
+                            ? "Light"
+                            : value < 2
+                            ? "Moderate"
+                            : "Heavy";
                         return [label, "Severity"];
                       }}
                     />
