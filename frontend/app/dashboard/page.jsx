@@ -4,7 +4,6 @@ import PlannerNavbar from "@/components/PlannerNavBar";
 import SimulationPreviewModal from "@/components/SimulationPreviewModal";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
-import PublishReportModal from '@/components/PublishReportModal';
 import { useEffect, useRef, useState } from "react";
 import {
   CartesianGrid,
@@ -130,6 +129,7 @@ function MiniOngoingMap() {
       }
     };
   }, []); // Empty dependency array - only run once
+
 
   // Draw disruptions when data changes
   useEffect(() => {
@@ -494,16 +494,13 @@ export default function DashboardPage() {
     roads: [],
   });
 
-  // Weekly trend data
-  const [weeklyTrend, setWeeklyTrend] = useState([
-    { day: "Mon", level: 0 },
-    { day: "Tue", level: 0 },
-    { day: "Wed", level: 0 },
-    { day: "Thu", level: 0 },
-    { day: "Fri", level: 0 },
-    { day: "Sat", level: 0 },
-    { day: "Sun", level: 0 },
-  ]);
+// Daily trend data (24 hours)
+const [dailyTrend, setDailyTrend] = useState(
+  Array.from({ length: 24 }, (_, hour) => ({
+    hour: hour < 12 ? `${hour === 0 ? 12 : hour}AM` : `${hour === 12 ? 12 : hour - 12}PM`,
+    level: 0,
+  }))
+);
 
   //redirect if not autheticated
   useEffect(() => {
@@ -774,40 +771,47 @@ export default function DashboardPage() {
   };
 
   // Add this function in page.jsx, before fetchDashboardData
-  const calculateWeeklyTrend = (simulations) => {
-    const dayMap = {
-      Sunday: 0,
-      Monday: 1,
-      Tuesday: 2,
-      Wednesday: 3,
-      Thursday: 4,
-      Friday: 5,
-      Saturday: 6,
-    };
-
-    const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const dayCounts = new Array(7).fill(0);
-    const daySeverities = new Array(7).fill(0);
-
-    simulations.forEach((sim) => {
-      if (sim.start_time && sim.average_delay_ratio) {
-        const startDate = new Date(sim.start_time);
-        const dayIndex = startDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
-
-        dayCounts[dayIndex]++;
-        daySeverities[dayIndex] += parseFloat(sim.average_delay_ratio);
-      }
-    });
-
-    // Calculate averages and format for chart
-    return dayLabels.map((day, index) => ({
-      day: day,
-      level:
-        dayCounts[index] > 0
-          ? parseFloat((daySeverities[index] / dayCounts[index]).toFixed(2))
-          : 0,
+  // Calculate Daily (Hourly) Trend from heatmap data
+  const calculateDailyTrend = () => {
+  // Reuse heatmap data which already has hourly predictions
+  if (!heatmapData || !heatmapData.roads || heatmapData.roads.length === 0) {
+    // Return empty 24-hour structure if no data
+    return Array.from({ length: 24 }, (_, hour) => ({
+      hour: hour < 12 ? `${hour === 0 ? 12 : hour}AM` : `${hour === 12 ? 12 : hour - 12}PM`,
+      level: 0,
     }));
-  };
+  }
+
+  // Average all roads' hourly values to get overall daily trend
+  const hourlyAverages = Array.from({ length: 24 }, (_, hourIndex) => {
+    const values = heatmapData.roads
+      .map(road => road.values[hourIndex])
+      .filter(val => val !== undefined && val !== null);
+    
+    const avg = values.length > 0 
+      ? values.reduce((sum, val) => sum + val, 0) / values.length 
+      : 0;
+
+    return {
+      hour: hourIndex < 12 
+        ? `${hourIndex === 0 ? 12 : hourIndex}AM` 
+        : `${hourIndex === 12 ? 12 : hourIndex - 12}PM`,
+      level: parseFloat(avg.toFixed(2)),
+    };
+  });
+
+  return hourlyAverages;
+};
+
+  // Update daily trend whenever heatmap data changes
+  useEffect(() => {
+    if (heatmapData && heatmapData.roads && heatmapData.roads.length > 0) {
+      const dailyData = calculateDailyTrend();
+      setDailyTrend(dailyData);
+      console.log("Daily trend updated:", dailyData);
+    }
+  }, [heatmapData]);
+
 
   // Fetch public reports
   const fetchPublicReports = async () => {
@@ -1089,14 +1093,9 @@ export default function DashboardPage() {
           avgCongestion: avgLabel,
         });
 
-        // ✅ ADD THIS - Calculate weekly trend from actual data
-        const weeklyData = calculateWeeklyTrend(savedData.simulations);
-        setWeeklyTrend(weeklyData);
-
-        console.log("Weekly trend data:", weeklyData);
-
-        console.log("Calculating 24-hour heatmap...");
+        // Calculate heatmap (24-hour) which will update `heatmapData`
         await calculateHeatmap(savedData.simulations);
+        console.log("24-hour heatmap calculated");
       }
 
       const publishedResponse = await fetch(
@@ -1671,17 +1670,18 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Weekly Trend */}
+            {/* Daily Trend */}
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-lg font-bold text-gray-800 mb-4">
-                Weekly Trend
+                Daily Trend
               </h2>
               <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={weeklyTrend}>
+                <LineChart data={dailyTrend}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis
-                    dataKey="day"
-                    tick={{ fill: "#6b7280", fontSize: 11 }}
+                    dataKey="hour"
+                    tick={{ fill: "#6b7280", fontSize: 9 }}
+                    interval={2}
                   />
                   <YAxis
                     domain={[0, 3]}
@@ -1704,24 +1704,23 @@ export default function DashboardPage() {
                           : "Heavy";
                       return [label, "Congestion"];
                     }}
+                    labelFormatter={(label) => `Time: ${label}`}
                   />
                   <Line
                     type="monotone"
                     dataKey="level"
                     stroke="#f97316"
                     strokeWidth={2}
-                    dot={{ fill: "#f97316", r: 4 }}
+                    dot={{ fill: "#f97316", r: 3 }}
                   />
                 </LineChart>
               </ResponsiveContainer>
               <p className="text-xs text-gray-500 text-center mt-2">
                 {loading
                   ? "Loading..."
-                  : savedSimulations.length === 0
-                  ? "No data yet - create simulations to see trends"
-                  : `Based on ${savedSimulations.length} simulation${
-                      savedSimulations.length > 1 ? "s" : ""
-                    }`}
+                  : heatmapData.roads.length === 0
+                  ? "No data yet - hourly predictions will appear here"
+                  : "24-hour traffic pattern based on current predictions"}
               </p>
             </div>
           </div>
