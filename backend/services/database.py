@@ -254,30 +254,18 @@ class DatabaseService:
                 cursor.close()
             if conn:
                 conn.close()
-    
-    # ============================================================
-    # ✅ NEW: Save Severity Lines (Map Visualization)
-    # ============================================================
+                
     
     def _save_severity_lines(self, cursor, simulation_id: int, results_data: Dict):
         """
-        ✅ NEW: Save severity lines that appear on the map
-        
-        This saves the colored lines showing congestion severity along routes.
-        Each line has:
-        - Geometry (path coordinates)
-        - Severity level (light/moderate/heavy)
-        - Time period (which hour/day)
-        - Color coding
+        ✅ FIXED: Save severity lines with guaranteed valid coordinates
         """
         try:
-            # Extract severity lines from results
             severity_lines = []
             
-            # Method 1: From hourly predictions (for single-day or hourly view)
+            # Build severity_lines from hourly predictions
             hourly_preds = results_data.get('hourly_predictions', [])
             if hourly_preds and len(hourly_preds) <= 24:
-                # For short durations, save each hour as a separate line
                 for pred in hourly_preds:
                     severity_lines.append({
                         'time_period': pred.get('datetime'),
@@ -288,7 +276,7 @@ class DatabaseService:
                         'granularity': 'hourly'
                     })
             
-            # Method 2: From aggregated view (for multi-day view)
+            # OR from aggregated view (multi-day)
             agg_view = results_data.get('aggregated_view', {})
             if agg_view and agg_view.get('map_data'):
                 for period in agg_view['map_data']:
@@ -301,115 +289,108 @@ class DatabaseService:
                     })
 
             if not severity_lines:
-                print("  ⚠️ No severity lines to save")
+                print("  ⚠️ No severity lines - creating empty array")
+                # Still save empty array to avoid undefined in DB
+                cursor.execute("""
+                    UPDATE simulation_runs
+                    SET severity_lines = %s
+                    WHERE simulation_id = %s
+                """, (Json([]), simulation_id))
                 return
-            
-            # ✅ CRITICAL: Extract road geometry from multiple possible sources
-            road_coords = None
 
-            # ✅ CRITICAL FIX: Generate coordinates from simulation geometry
+            # ✅ GET COORDINATES (Priority Order)
             coords_to_attach = None
 
-            # Method 1: Try road_info from results_data
-            road_info = results_data.get('road_info') or {}
+            # Priority 1: From road_info in results_data
+            road_info = results_data.get('road_info', {})
             if isinstance(road_info, dict):
                 coords_to_attach = (
                     road_info.get('coordinates') or 
                     road_info.get('coords') or 
                     road_info.get('geometry')
                 )
+                if coords_to_attach:
+                    print(f"  ✅ Using coordinates from road_info ({len(coords_to_attach)} points)")
 
-            # Method 2: Generate from disruption_geometry in database
+            # Priority 2: Fetch from existing simulation in database
             if not coords_to_attach:
-                # Get the disruption point from what we're about to save
                 try:
                     cursor.execute("""
-                        SELECT ST_Y(disruption_geometry) as lat, ST_X(disruption_geometry) as lng
+                        SELECT ST_Y(disruption_geometry) as lat, 
+                            ST_X(disruption_geometry) as lng
                         FROM simulation_runs 
                         WHERE simulation_id = %s
                     """, (simulation_id,))
+                    
                     point = cursor.fetchone()
                     
                     if point and point[0] and point[1]:
-                        lat, lng = point[0], point[1]
-                        # Create a simple 3-point line around the disruption
+                        lat, lng = float(point[0]), float(point[1])
+                        # Create 3-point line segment
                         coords_to_attach = [
-                            [lat - 0.005, lng - 0.005],
+                            [lat - 0.003, lng - 0.003],
                             [lat, lng],
-                            [lat + 0.005, lng + 0.005]
+                            [lat + 0.003, lng + 0.003]
                         ]
-                        print(f"  ℹ️ Generated coordinates from disruption point: ({lat}, {lng})")
+                        print(f"  ✅ Generated coordinates from DB geometry: ({lat:.4f}, {lng:.4f})")
                 except Exception as e:
                     print(f"  ⚠️ Could not fetch disruption geometry: {e}")
 
-            # Method 3: Last resort - use a default line in Calamba
+            # Priority 3: Default Calamba coordinates
             if not coords_to_attach:
                 coords_to_attach = [
-                    [14.209, 121.164],
-                    [14.210, 121.165],
-                    [14.211, 121.166]
+                    [14.2090, 121.1640],
+                    [14.2100, 121.1650],
+                    [14.2110, 121.1660]
                 ]
                 print("  ⚠️ Using default Calamba coordinates")
 
-            # Attach coordinates to ALL severity entries
+            # ✅ ATTACH coordinates to ALL lines
             for entry in severity_lines:
                 entry['coordinates'] = coords_to_attach
 
-            print(f"  ✅ Attached coordinates to {len(severity_lines)} severity lines")
-            if isinstance(road_info, dict):
-                road_coords = (
-                    road_info.get('coordinates') or 
-                    road_info.get('coords') or 
-                    road_info.get('geometry') or
-                    road_info.get('path')
-                )
+            # ✅ VALIDATE before saving
+            valid_lines = []
+            for line in severity_lines:
+                coords = line.get('coordinates')
+                if coords and isinstance(coords, list) and len(coords) > 0:
+                    # Ensure each coordinate is [lat, lng] format
+                    if all(isinstance(c, list) and len(c) == 2 for c in coords):
+                        valid_lines.append(line)
+                    else:
+                        print(f"  ⚠️ Skipping line with malformed coordinates")
+                else:
+                    print(f"  ⚠️ Skipping line without coordinates")
 
-            # If not in road_info, check simulation_data
-            if not road_coords and 'simulation_data' in locals():
-                sim_road_info = simulation_data.get('road_info', {})
-                road_coords = (
-                    sim_road_info.get('coordinates') or 
-                    sim_road_info.get('coords') or 
-                    sim_road_info.get('geometry')
-                )
+            if not valid_lines:
+                print("  ❌ No valid severity lines after validation!")
+                valid_lines = []
 
-            # Last resort: generate simple coordinates from disruption location
-            if not road_coords:
-                coords = simulation_data.get('coordinates', {})
-                lat = coords.get('lat')
-                lng = coords.get('lng')
-                
-                if lat and lng:
-                    # Create a short line segment around the point
-                    road_coords = [
-                        [lat - 0.002, lng - 0.002],
-                        [lat, lng],
-                        [lat + 0.002, lng + 0.002]
-                    ]
-                    print(f"  ⚠️ Generated fallback coordinates from disruption point: {road_coords}")
+            print(f"  ✅ Validated {len(valid_lines)} severity_lines")
 
-            # Attach coordinates to ALL severity line entries
-            if road_coords:
-                print(f"  ✅ Attaching {len(road_coords) if isinstance(road_coords, list) else 'N/A'} coordinates to severity lines")
-                for entry in severity_lines:
-                    if not entry.get('coordinates'):
-                        entry['coordinates'] = road_coords
-            else:
-                print("  ❌ WARNING: No road coordinates found - lines won't draw on map!")
-
-            # Save to database as JSONB
+            # Save to database
             cursor.execute("""
                 UPDATE simulation_runs
                 SET severity_lines = %s
                 WHERE simulation_id = %s
-            """, (Json(severity_lines), simulation_id))
+            """, (Json(valid_lines), simulation_id))
             
-            print(f"  ✅ Saved {len(severity_lines)} severity lines ({severity_lines[0]['granularity']})")
+            print(f"  ✅ Saved {len(valid_lines)} severity_lines to database")
             
         except Exception as e:
-            print(f"  ❌ Error saving severity lines: {e}")
+            print(f"  ❌ Error in _save_severity_lines: {e}")
             import traceback
             traceback.print_exc()
+            # Save empty array as fallback
+            try:
+                cursor.execute("""
+                    UPDATE simulation_runs
+                    SET severity_lines = %s
+                    WHERE simulation_id = %s
+                """, (Json([]), simulation_id))
+                print("  ⚠️ Saved empty severity_lines as fallback")
+            except:
+                pass
     
     # ============================================================
     # ✅ FIXED: Save Time Segment Results (No duplicate INSERT)

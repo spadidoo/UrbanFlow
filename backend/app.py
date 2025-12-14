@@ -2665,14 +2665,26 @@ def simulate_disruption_realtime():
         # ✅ SMART DECISION: Should we use real-time data?
         # ============================================================
         
-       # ✅ Use PH timezone for accurate same-day detection
+      # ✅ CRITICAL FIX: Use PH timezone for accurate same-day detection
+        import pytz
+        
         ph_tz = pytz.timezone('Asia/Manila')
-        now = datetime.now(ph_tz).replace(tzinfo=None)  # Remove timezone for comparison
+        now_utc = datetime.now(pytz.UTC)
+        now = now_utc.astimezone(ph_tz).replace(tzinfo=None)
         today = now.date()
         disruption_start_date = start_datetime.date()
-
+        
         # Calculate hours until disruption starts
         hours_until_disruption = (start_datetime - now).total_seconds() / 3600
+        
+        # ✅ DEBUG LOGGING
+        app.logger.error(f"\n🔍 TIMEZONE DEBUG:")
+        app.logger.error(f"   Server UTC time: {now_utc.strftime('%Y-%m-%d %H:%M:%S')}")
+        app.logger.error(f"   PH time: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+        app.logger.error(f"   Today (PH): {today}")
+        app.logger.error(f"   Disruption date: {disruption_start_date}")
+        app.logger.error(f"   Hours until disruption: {hours_until_disruption:.2f}")
+        app.logger.error(f"   Same day? {disruption_start_date == today}")
 
         # ✅ DEBUG: Log the values
         print(f"\n🔍 REAL-TIME CHECK:")
@@ -2723,6 +2735,9 @@ def simulate_disruption_realtime():
                 if free_flow_speed > 0:
                     realtime_speed_factor = current_speed / free_flow_speed
                 
+                # ✅ DEBUG: Log the calculated factor
+                app.logger.error(f"   📊 Calculated realtime_speed_factor: {realtime_speed_factor:.2f}")
+                app.logger.error(f"   Current: {current_speed} km/h, Free-flow: {free_flow_speed} km/h")
                 print(f"✅ Real-time API Success")
                 print(f"🚗 Current Speed: {current_speed} km/h")
                 print(f"🏁 Free Flow Speed: {free_flow_speed} km/h")
@@ -2781,6 +2796,10 @@ def simulate_disruption_realtime():
                 -1 <= hours_until_this_prediction <= 6  # Current hour to 6 hours ahead
             )
             
+            # ✅ DEBUG: Log which hours get real-time adjustment
+            if apply_realtime_to_this_hour:
+                app.logger.error(f"   ✅ Hour {current_datetime.hour} will use real-time adjustment")
+                        
             # Calculate delay with optional real-time adjustment
             # ✅ NEW (add AFTER Line ~1900):
             # Calculate location-specific multiplier
@@ -2814,6 +2833,15 @@ def simulate_disruption_realtime():
                 disruption_type=str(disruption_type),  # âœ… CRITICAL
                 area=str(area)  # âœ… CRITICAL
             )
+            
+            if apply_realtime_to_this_hour:
+                app.logger.error(f"   📤 Passing to estimate_delay:")
+                app.logger.error(f"      realtime_speed_factor={realtime_speed_factor}")
+                app.logger.error(f"      apply_realtime_to_this_hour={apply_realtime_to_this_hour}")
+
+            # ✅ DEBUG: Check if delay_info has realtime_adjusted flag
+            if apply_realtime_to_this_hour:
+                app.logger.error(f"   📊 Delay info for hour {current_datetime.hour}: realtime_adjusted={delay_info.get('realtime_adjusted', False)}")
 
             # Store context for this hour
             hourly_predictions.append({
@@ -3599,8 +3627,11 @@ def simulate_disruption():
                 hour=current_datetime.hour,  # âœ… Add this
                 lanes=lanes,  # âœ… Add this
                 disruption_type=disruption_type,  # âœ… Add this
+                realtime_speed_factor=realtime_speed_factor if apply_realtime_to_this_hour else None,
                 area=area  # âœ… Add this
             )
+            
+        
             
             # Add to results
             hourly_predictions.append({
@@ -3612,6 +3643,9 @@ def simulate_disruption():
                 'severity_label': prediction['severity_label'],
                 'confidence': round(prediction['confidence'], 3),
                 'delay_info': delay_info,  # ← THIS IS THE KEY LINE
+                'impact_zones': impact_zones,  # ✅ NEW
+                'location_multiplier': location_multiplier,  # ✅ NEW
+                'realtime_adjusted': bool(delay_info.get('realtime_adjusted', False)),
                 'probabilities': {
                     k: round(v, 3) for k, v in prediction['probabilities'].items()
                 }

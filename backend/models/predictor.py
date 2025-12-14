@@ -687,6 +687,7 @@ class TrafficPredictor:
             'stop_go_penalty_min': round(stop_go_penalty, 1),
             'final_multiplier': round(final_multiplier, 2),
             'location_multiplier': round(location_multiplier, 2),
+            'realtime_adjusted': realtime_speed_factor is not None,  # ✅ ADD THIS LINE
         }
     
     def get_location_multiplier(self, lat, lng, hour, day_of_week, is_friday=False):
