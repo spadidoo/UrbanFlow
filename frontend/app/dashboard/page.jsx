@@ -502,6 +502,18 @@ const [dailyTrend, setDailyTrend] = useState(
   }))
 );
 
+const [weeklyTrend, setWeeklyTrend] = useState([
+  { day: 'Sun', level: 0, value: 0 },
+  { day: 'Mon', level: 0, value: 0 },
+  { day: 'Tue', level: 0, value: 0 },
+  { day: 'Wed', level: 0, value: 0 },
+  { day: 'Thu', level: 0, value: 0 },
+  { day: 'Fri', level: 0, value: 0 },
+  { day: 'Sat', level: 0, value: 0 },
+]);
+
+const [trendView, setTrendView] = useState("weekly"); // 'weekly' or 'daily'
+
   //redirect if not autheticated
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -770,47 +782,105 @@ const [dailyTrend, setDailyTrend] = useState(
     }
   };
 
+// Calculate Weekly Trend (day-by-day aggregation)
+const calculateWeeklyTrend = () => {
+  if (!savedSimulations || savedSimulations.length === 0) {
+    // Return structure with 0s instead of nulls so line curves through all days
+    return [
+      { day: 'Sun', level: 0, value: 0 },
+      { day: 'Mon', level: 0, value: 0 },
+      { day: 'Tue', level: 0, value: 0 },
+      { day: 'Wed', level: 0, value: 0 },
+      { day: 'Thu', level: 0, value: 0 },
+      { day: 'Fri', level: 0, value: 0 },
+      { day: 'Sat', level: 0, value: 0 },
+    ];
+  }
+
+  // Group simulations by day of week
+  const dayGroups = {
+    0: [], // Sunday
+    1: [], // Monday
+    2: [], // Tuesday
+    3: [], // Wednesday
+    4: [], // Thursday
+    5: [], // Friday
+    6: [], // Saturday
+  };
+
+  savedSimulations.forEach((sim) => {
+    if (!sim || !sim.created_at) return;
+    const val = Number(sim.average_delay_ratio);
+    if (!Number.isFinite(val)) return; // skip invalid values
+    const date = new Date(sim.created_at);
+    const dayOfWeek = date.getDay();
+    dayGroups[dayOfWeek].push(val);
+  });
+
+  // Calculate average for each day
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  const result = dayNames.map((day, index) => {
+    const values = dayGroups[index];
+    if (!values || values.length === 0) {
+      // Use 0 instead of null so the line curves through all days
+      return { day, level: 0, value: 0 };
+    }
+    const avg = values.reduce((sum, val) => sum + val, 0) / values.length;
+    const rounded = parseFloat(avg.toFixed(2));
+    return { day, level: rounded, value: rounded };
+  });
+
+  // Debugging aid: log weekly computation
+  // eslint-disable-next-line no-console
+  console.log("Weekly trend computed:", { totalSimulations: savedSimulations.length, result });
+
+  return result;
+};
+
   // Add this function in page.jsx, before fetchDashboardData
   // Calculate Daily (Hourly) Trend from heatmap data
   const calculateDailyTrend = () => {
-  // Reuse heatmap data which already has hourly predictions
-  if (!heatmapData || !heatmapData.roads || heatmapData.roads.length === 0) {
-    // Return empty 24-hour structure if no data
-    return Array.from({ length: 24 }, (_, hour) => ({
-      hour: hour < 12 ? `${hour === 0 ? 12 : hour}AM` : `${hour === 12 ? 12 : hour - 12}PM`,
-      level: 0,
-    }));
-  }
-
-  // Average all roads' hourly values to get overall daily trend
-  const hourlyAverages = Array.from({ length: 24 }, (_, hourIndex) => {
-    const values = heatmapData.roads
-      .map(road => road.values[hourIndex])
-      .filter(val => val !== undefined && val !== null);
-    
-    const avg = values.length > 0 
-      ? values.reduce((sum, val) => sum + val, 0) / values.length 
-      : 0;
-
-    return {
-      hour: hourIndex < 12 
-        ? `${hourIndex === 0 ? 12 : hourIndex}AM` 
-        : `${hourIndex === 12 ? 12 : hourIndex - 12}PM`,
-      level: parseFloat(avg.toFixed(2)),
-    };
-  });
-
-  return hourlyAverages;
-};
-
-  // Update daily trend whenever heatmap data changes
-  useEffect(() => {
-    if (heatmapData && heatmapData.roads && heatmapData.roads.length > 0) {
-      const dailyData = calculateDailyTrend();
-      setDailyTrend(dailyData);
-      console.log("Daily trend updated:", dailyData);
+    // Reuse heatmap data which already has hourly predictions
+    if (!heatmapData || !heatmapData.roads || heatmapData.roads.length === 0) {
+      // Return empty 24-hour structure if no data
+      return Array.from({ length: 24 }, (_, hour) => ({
+        hour: hour < 12 ? `${hour === 0 ? 12 : hour}AM` : `${hour === 12 ? 12 : hour - 12}PM`,
+        level: 0,
+      }));
     }
-  }, [heatmapData]);
+
+    // Average all roads' hourly values to get overall daily trend
+    const hourlyAverages = Array.from({ length: 24 }, (_, hourIndex) => {
+      const values = heatmapData.roads
+        .map((road) => road.values[hourIndex])
+        .filter((val) => val !== undefined && val !== null);
+
+      const avg = values.length > 0 ? values.reduce((sum, val) => sum + val, 0) / values.length : 0;
+
+      return {
+        hour: hourIndex < 12 ? `${hourIndex === 0 ? 12 : hourIndex}AM` : `${hourIndex === 12 ? 12 : hourIndex - 12}PM`,
+        level: parseFloat(avg.toFixed(2)),
+      };
+    });
+
+    return hourlyAverages;
+  };
+
+// Update both daily and weekly trends when data changes
+useEffect(() => {
+  if (heatmapData && heatmapData.roads && heatmapData.roads.length > 0) {
+    const dailyData = calculateDailyTrend();
+    setDailyTrend(dailyData);
+    console.log("Daily trend updated:", dailyData);
+  }
+  
+  if (savedSimulations && savedSimulations.length > 0) {
+    const weeklyData = calculateWeeklyTrend();
+    setWeeklyTrend(weeklyData);
+    console.log("Weekly trend updated:", weeklyData);
+  }
+}, [heatmapData, savedSimulations]);
 
 
   // Fetch public reports
@@ -1058,6 +1128,9 @@ const [dailyTrend, setDailyTrend] = useState(
 
       if (savedData.success) {
         setSavedSimulations(savedData.simulations);
+        // Debug: show lightweight simulation summary to help diagnose weekly aggregation
+        // eslint-disable-next-line no-console
+        console.log('Loaded saved simulations (summary):', savedData.simulations.map(s => ({ simulation_id: s.simulation_id, created_at: s.created_at, avg: s.average_delay_ratio })));
 
         const totalSaved = savedData.simulations.length;
         const completed = savedData.simulations.filter(
@@ -1670,18 +1743,61 @@ const [dailyTrend, setDailyTrend] = useState(
               </div>
             </div>
 
-            {/* Daily Trend */}
+            {/* Weekly/Daily Trend Toggle */}
             <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-lg font-bold text-gray-800 mb-4">
-                Daily Trend
-              </h2>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-bold text-gray-800">
+                  {trendView === 'weekly' ? 'Weekly Trend' : 'Daily Trend'}
+                </h2>
+                
+                {/* Toggle Switch */}
+                <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+                  <button
+                    onClick={() => setTrendView('weekly')}
+                    className={`px-4 py-2 rounded-md text-sm font-semibold transition-all ${
+                      trendView === 'weekly'
+                        ? 'bg-orange-500 text-white shadow-sm'
+                        : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                  >
+                    Weekly
+                  </button>
+                  <button
+                    onClick={() => setTrendView('daily')}
+                    className={`px-4 py-2 rounded-md text-sm font-semibold transition-all ${
+                      trendView === 'daily'
+                        ? 'bg-orange-500 text-white shadow-sm'
+                        : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                  >
+                    Daily
+                  </button>
+                </div>
+              </div>
+
               <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={dailyTrend}>
+                <LineChart data={trendView === 'weekly' ? weeklyTrend : dailyTrend}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis
-                    dataKey="hour"
-                    tick={{ fill: "#6b7280", fontSize: 9 }}
-                    interval={2}
+                    dataKey={trendView === 'weekly' ? 'day' : 'hour'}
+                    interval={trendView === 'weekly' ? 0 : 2}
+                    height={50}
+                    tick={(props) => {
+                      const { x, y, payload } = props;
+                      // Force "Saturday" to display as "Sat"
+                      const displayValue = payload.value === 'Sa' ? 'Sat' : payload.value;
+                      return (
+                        <text
+                          x={x}
+                          y={y + 15}
+                          textAnchor="middle"
+                          fill="#6b7280"
+                          fontSize={11}
+                        >
+                          {displayValue}
+                        </text>
+                      );
+                    }}
                   />
                   <YAxis
                     domain={[0, 3]}
@@ -1704,23 +1820,34 @@ const [dailyTrend, setDailyTrend] = useState(
                           : "Heavy";
                       return [label, "Congestion"];
                     }}
-                    labelFormatter={(label) => `Time: ${label}`}
+                    labelFormatter={(label) => 
+                      trendView === 'weekly' ? `Day: ${label}` : `Time: ${label}`
+                    }
                   />
                   <Line
                     type="monotone"
-                    dataKey="level"
+                    dataKey={trendView === 'weekly' ? 'value' : 'level'}
                     stroke="#f97316"
                     strokeWidth={2}
-                    dot={{ fill: "#f97316", r: 3 }}
+                    dot={{ fill: "#f97316", r: 4 }}
+                    connectNulls={false}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    isAnimationActive={false}
                   />
                 </LineChart>
               </ResponsiveContainer>
+              
               <p className="text-xs text-gray-500 text-center mt-2">
-                {loading
-                  ? "Loading..."
-                  : heatmapData.roads.length === 0
-                  ? "No data yet - hourly predictions will appear here"
-                  : "24-hour traffic pattern based on current predictions"}
+                {loading ? (
+                  "Loading..."
+                ) : trendView === 'weekly' ? (
+                  `Based on ${savedSimulations.length} simulation${savedSimulations.length !== 1 ? 's' : ''}`
+                ) : (
+                  heatmapData.roads.length === 0
+                    ? "No data yet - hourly predictions will appear here"
+                    : "24-hour traffic pattern based on current predictions"
+                )}
               </p>
             </div>
           </div>
