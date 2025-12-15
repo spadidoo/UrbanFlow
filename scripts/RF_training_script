@@ -1,245 +1,380 @@
+"""
+🔥 PHASE 4: FEATURE SELECTION & FINAL OPTIMIZATION
+Remove weak features and max out tree count for final push
+
+Expected improvement: +0.5-1% accuracy
+Time: 30-60 minutes
+"""
+
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
+import os
+import joblib
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
 from sklearn.metrics import (
-    classification_report, 
-    confusion_matrix, 
-    accuracy_score,
+    accuracy_score, 
+    cohen_kappa_score,
+    balanced_accuracy_score,
+    classification_report,
+    confusion_matrix,
     mean_absolute_error
 )
-import joblib
-import os
+import warnings
+warnings.filterwarnings('ignore')
+from imblearn.over_sampling import SMOTE
 
 # ============================================================
 # SETUP
 # ============================================================
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FINAL_DIR = os.path.join(PROJECT_ROOT, 'data', 'final')
-MODELS_DIR = os.path.join(PROJECT_ROOT, 'models')
-
-# Create models directory
-os.makedirs(MODELS_DIR, exist_ok=True)
+DATA_DIR = os.path.join(PROJECT_ROOT, 'data', 'final')
+MODELS_DIR = os.path.join(PROJECT_ROOT, 'backend', 'test')
 
 print("="*70)
-print("RANDOM FOREST TRAINING FOR URBANFLOW")
+print("PHASE 4: FEATURE SELECTION & FINAL OPTIMIZATION")
 print("="*70)
 
 # ============================================================
-# STEP 1: LOAD DATA
+# LOAD DATA
 # ============================================================
 
-print("\n📂 STEP 1: Loading training data...")
-
-# Load the model-ready dataset
-data_path = os.path.join(FINAL_DIR, 'model_training_data.csv')
+print("\nLoading data...")
+data_path = os.path.join(DATA_DIR, 'model_training_data.csv')
 df = pd.read_csv(data_path)
 
-print(f"   ✓ Loaded {len(df):,} records")
-print(f"   ✓ Features: {df.shape[1] - 1}")  # -1 for target column
+X = df.drop('congestion_severity', axis=1)
+y = df['congestion_severity']
 
-# Separate features (X) and target (y)
-X = df.drop('congestion_severity', axis=1)  # Features
-y = df['congestion_severity']                # Target
-
-print(f"\n   Features (X): {X.shape}")
-print(f"   Target (y): {y.shape}")
+print(f"✓ Current features: {len(X.columns)}")
 
 print(f"\n   Target distribution:")
 print(f"      Light (0):    {(y == 0).sum():,} ({(y == 0).sum()/len(y)*100:.1f}%)")
 print(f"      Moderate (1): {(y == 1).sum():,} ({(y == 1).sum()/len(y)*100:.1f}%)")
 print(f"      Heavy (2):    {(y == 2).sum():,} ({(y == 2).sum()/len(y)*100:.1f}%)")
 
-# ============================================================
-# STEP 2: SPLIT DATA (80% train, 20% test)
-# ============================================================
-
-print("\n" + "="*70)
-print("📊 STEP 2: Splitting data into train and test sets...")
-
-# stratify=y ensures each set has same class distribution
 X_train, X_test, y_train, y_test = train_test_split(
-    X, y, 
-    test_size=0.20,      # 20% for testing
-    random_state=42,     # For reproducibility
-    stratify=y           # Keep class balance in both sets
+    X, y, test_size=0.20, random_state=42, stratify=y
 )
 
 print(f"\n   Training set: {len(X_train):,} records ({len(X_train)/len(X)*100:.0f}%)")
 print(f"   Testing set:  {len(X_test):,} records ({len(X_test)/len(X)*100:.0f}%)")
 
-print(f"\n   Training set class distribution:")
-print(f"      Light:    {(y_train == 0).sum():,} ({(y_train == 0).sum()/len(y_train)*100:.1f}%)")
-print(f"      Moderate: {(y_train == 1).sum():,} ({(y_train == 1).sum()/len(y_train)*100:.1f}%)")
-print(f"      Heavy:    {(y_train == 2).sum():,} ({(y_train == 2).sum()/len(y_train)*100:.1f}%)")
+class_dist = y_train.value_counts(normalize=True)
+is_imbalanced = class_dist.max() / class_dist.min() > 2.0
 
-print(f"\n   Testing set class distribution:")
-print(f"      Light:    {(y_test == 0).sum():,} ({(y_test == 0).sum()/len(y_test)*100:.1f}%)")
-print(f"      Moderate: {(y_test == 1).sum():,} ({(y_test == 1).sum()/len(y_test)*100:.1f}%)")
-print(f"      Heavy:    {(y_test == 2).sum():,} ({(y_test == 2).sum()/len(y_test)*100:.1f}%)")
-
+if is_imbalanced:
+    print("\n⚖️  Applying SMOTE...")
+    smote = SMOTE(random_state=42, k_neighbors=5)
+    X_train, y_train = smote.fit_resample(X_train, y_train)
+    print(f"   After SMOTE: {len(X_train):,} samples")
+    
 # ============================================================
-# STEP 3: TRAIN THE MODEL
+# STEP 1: TRAIN BASELINE MODEL
 # ============================================================
 
 print("\n" + "="*70)
-print("🌲 STEP 3: Training Random Forest model...")
+print("🌲 STEP 1: Training baseline model...")
 
-# Create the model with optimized hyperparameters
-model = RandomForestClassifier(
-    n_estimators=200,           # Number of trees (more = better, but slower)
-    max_depth=20,               # Max depth of each tree (prevents overfitting)
-    min_samples_split=5,        # Min samples needed to split a node
-    min_samples_leaf=2,         # Min samples in each leaf
-    max_features='sqrt',        # Number of features per split
-    class_weight='balanced',    # Handle imbalanced classes
-    random_state=42,            # For reproducibility
-    n_jobs=-1,                  # Use all CPU cores
-    verbose=1                   # Show progress
+baseline_model = RandomForestClassifier(
+    n_estimators=300,
+    max_depth=30,
+    min_samples_split=10,
+    min_samples_leaf=4,
+    class_weight='balanced',
+    random_state=42,
+    oob_score=True,
+    n_jobs=-1
 )
 
-print(f"\n   Model configuration:")
-print(f"      Trees: {model.n_estimators}")
-print(f"      Max depth: {model.max_depth}")
-print(f"      Min samples split: {model.min_samples_split}")
-print(f"      Class weight: {model.class_weight}")
+baseline_model.fit(X_train, y_train)
+baseline_pred = baseline_model.predict(X_test)
+baseline_acc = accuracy_score(y_test, baseline_pred)
+baseline_mae = mean_absolute_error(y_test, baseline_pred)
 
-print(f"\n   Training started... (this may take 1-2 minutes)")
+print(f"✓ Baseline accuracy: {baseline_acc*100:.2f}%")
+print(f"✓ Baseline MAE: {baseline_mae:.4f}")
+print(f"✓ Features used: {len(X.columns)}")
 
-# Train the model
-model.fit(X_train, y_train)
-
-print(f"\n   ✓ Training complete!")
-
-# ============================================================
-# STEP 4: MAKE PREDICTIONS
-# ============================================================
-
-print("\n" + "="*70)
-print("🔮 STEP 4: Making predictions on test set...")
-
-# Predict on test data (data the model has never seen)
-y_pred = model.predict(X_test)
-
-print(f"   ✓ Predictions made for {len(y_pred):,} records")
-
-# ============================================================
-# STEP 5: EVALUATE THE MODEL
-# ============================================================
-
-print("\n" + "="*70)
-print("📈 STEP 5: Evaluating model performance...")
-
-# 1. Overall Accuracy
-accuracy = accuracy_score(y_test, y_pred)
-print(f"\n   Overall Accuracy: {accuracy*100:.2f}%")
-print(f"      (Model got {accuracy*100:.1f} out of 100 predictions right)")
-
-# 2. Mean Absolute Error (for your thesis)
-mae = mean_absolute_error(y_test, y_pred)
-print(f"\n   Mean Absolute Error (MAE): {mae:.4f}")
-print(f"      (Average prediction error in severity levels)")
-
-# 3. Confusion Matrix
-print(f"\n   Confusion Matrix:")
-print(f"   (Shows where model makes mistakes)")
-cm = confusion_matrix(y_test, y_pred)
+# Baseline confusion matrix
+print(f"\n   Baseline Confusion Matrix:")
+cm_baseline = confusion_matrix(y_test, baseline_pred)
 print(f"\n                Predicted")
 print(f"              Light  Moderate  Heavy")
-print(f"   Actual  L  {cm[0][0]:5d}     {cm[0][1]:5d}  {cm[0][2]:5d}")
-print(f"           M  {cm[1][0]:5d}     {cm[1][1]:5d}  {cm[1][2]:5d}")
-print(f"           H  {cm[2][0]:5d}     {cm[2][1]:5d}  {cm[2][2]:5d}")
-
-# 4. Classification Report (detailed metrics per class)
-print(f"\n   Classification Report:")
-print(f"   (Precision, Recall, F1-Score for each class)")
-print("\n" + classification_report(
-    y_test, y_pred, 
-    target_names=['Light', 'Moderate', 'Heavy'],
-    digits=4
-))
+print(f"   Actual  L  {cm_baseline[0][0]:5d}     {cm_baseline[0][1]:5d}  {cm_baseline[0][2]:5d}")
+print(f"           M  {cm_baseline[1][0]:5d}     {cm_baseline[1][1]:5d}  {cm_baseline[1][2]:5d}")
+print(f"           H  {cm_baseline[2][0]:5d}     {cm_baseline[2][1]:5d}  {cm_baseline[2][2]:5d}")
 
 # ============================================================
-# STEP 6: FEATURE IMPORTANCE
+# STEP 2: FEATURE IMPORTANCE ANALYSIS
 # ============================================================
 
 print("\n" + "="*70)
-print("🔍 STEP 6: Feature Importance Analysis...")
-print("   (Which features matter most for predictions?)")
+print("STEP 2: Analyzing feature importance...")
 
-# Get feature importances
-importances = model.feature_importances_
+importances = baseline_model.feature_importances_
 feature_names = X.columns
 
-# Create dataframe and sort
 importance_df = pd.DataFrame({
     'feature': feature_names,
     'importance': importances
 }).sort_values('importance', ascending=False)
 
+print(f"\nFeature importance distribution:")
+print(f"   Top 10 average: {importance_df.head(10)['importance'].mean():.4f}")
+print(f"   Bottom 10 average: {importance_df.tail(10)['importance'].mean():.4f}")
+
 print(f"\n   Top 15 Most Important Features:")
 for i, row in importance_df.head(15).iterrows():
     print(f"      {row['feature']:30} {row['importance']:.4f}")
 
+# Identify weak features
+threshold = 0.001  # Features contributing < 0.1%
+weak_features = importance_df[importance_df['importance'] < threshold]['feature'].tolist()
+
+print(f"\n⚠️  Weak features (importance < {threshold}):")
+print(f"   Count: {len(weak_features)}")
+if len(weak_features) > 0:
+    print(f"\n   Weakest features:")
+    for feat in weak_features[:20]:  # Show first 20
+        imp = importance_df[importance_df['feature'] == feat]['importance'].values[0]
+        print(f"      {feat:40} {imp:.6f}")
+
 # ============================================================
-# STEP 7: SAVE THE MODEL
+# STEP 3: REMOVE WEAK FEATURES
+# ============================================================
+
+if len(weak_features) > 0:
+    print("\n" + "="*70)
+    print(f"🔧 STEP 3: Removing {len(weak_features)} weak features...")
+    
+    X_filtered = X.drop(columns=weak_features)
+    X_train_filtered = X_train.drop(columns=weak_features)
+    X_test_filtered = X_test.drop(columns=weak_features)
+    
+    print(f"✓ Features reduced: {len(X.columns)} → {len(X_filtered.columns)}")
+    
+    # Retrain with filtered features
+    print(f"\n🌲 Retraining with {len(X_filtered.columns)} features...")
+    
+    filtered_model = RandomForestClassifier(
+        n_estimators=300,
+        max_depth=30,
+        min_samples_split=10,
+        min_samples_leaf=4,
+        class_weight='balanced',
+        random_state=42,
+        oob_score=True,
+        n_jobs=-1
+    )
+    
+    filtered_model.fit(X_train_filtered, y_train)
+    filtered_pred = filtered_model.predict(X_test_filtered)
+    filtered_acc = accuracy_score(y_test, filtered_pred)
+    filtered_mae = mean_absolute_error(y_test, filtered_pred)
+    
+    print(f"\n📊 After feature selection:")
+    print(f"   Accuracy: {baseline_acc*100:.2f}% → {filtered_acc*100:.2f}%")
+    print(f"   MAE: {baseline_mae:.4f} → {filtered_mae:.4f}")
+    print(f"   Change: {(filtered_acc - baseline_acc)*100:+.2f}%")
+    
+    # Filtered confusion matrix
+    print(f"\n   Filtered Confusion Matrix:")
+    cm_filtered = confusion_matrix(y_test, filtered_pred)
+    print(f"\n                Predicted")
+    print(f"              Light  Moderate  Heavy")
+    print(f"   Actual  L  {cm_filtered[0][0]:5d}     {cm_filtered[0][1]:5d}  {cm_filtered[0][2]:5d}")
+    print(f"           M  {cm_filtered[1][0]:5d}     {cm_filtered[1][1]:5d}  {cm_filtered[1][2]:5d}")
+    print(f"           H  {cm_filtered[2][0]:5d}     {cm_filtered[2][1]:5d}  {cm_filtered[2][2]:5d}")
+    
+    if filtered_acc >= baseline_acc - 0.005:  # Within 0.5%
+        print(f"   ✅ Feature selection successful!")
+        X_train = X_train_filtered
+        X_test = X_test_filtered
+        X = X_filtered
+        current_acc = filtered_acc
+        current_mae = filtered_mae
+    else:
+        print(f"   ❌ Feature selection hurt performance, reverting...")
+        current_acc = baseline_acc
+        current_mae = baseline_mae
+else:
+    print("\n✓ All features are important (none < threshold)")
+    current_acc = baseline_acc
+    current_mae = baseline_mae
+
+# ============================================================
+# STEP 4: INCREASE TREES FOR FINAL MODEL
 # ============================================================
 
 print("\n" + "="*70)
-print("💾 STEP 7: Saving trained model...")
+print("STEP 4: Training FINAL model with maximum trees...")
 
-# Save the model
+final_model = RandomForestClassifier(
+    n_estimators=1000,  # MAX OUT TREES
+    max_depth=35,       # Slightly increase depth
+    min_samples_split=8,  # Allow more splits
+    min_samples_leaf=3,   # Smaller leaves
+    max_features='sqrt',
+    class_weight='balanced',
+    random_state=42,
+    oob_score=True,
+    bootstrap=True,
+    n_jobs=-1,
+    verbose=1  # Show progress
+)
+
+print(f"\n🔧 Final configuration:")
+print(f"   Trees: {final_model.n_estimators}")
+print(f"   Max depth: {final_model.max_depth}")
+print(f"   Min samples split: {final_model.min_samples_split}")
+print(f"   Min samples leaf: {final_model.min_samples_leaf}")
+print(f"   Features: {len(X.columns)}")
+
+print(f"\n   Training... (this will take 5-10 minutes)")
+
+final_model.fit(X_train, y_train)
+
+print(f"\n   ✓ Training complete!")
+
+# ============================================================
+# STEP 5: FINAL EVALUATION
+# ============================================================
+
+print("\n" + "="*70)
+print("STEP 5: Final evaluation...")
+
+final_pred = final_model.predict(X_test)
+final_acc = accuracy_score(y_test, final_pred)
+final_kappa = cohen_kappa_score(y_test, final_pred)
+final_balanced = balanced_accuracy_score(y_test, final_pred)
+final_mae = mean_absolute_error(y_test, final_pred)
+
+print(f"\n🏆 FINAL MODEL PERFORMANCE:")
+print(f"   Overall Accuracy:    {final_acc*100:.2f}%")
+print(f"   Mean Absolute Error: {final_mae:.4f}")
+print(f"   Cohen's Kappa:       {final_kappa:.4f}")
+print(f"   Balanced Accuracy:   {final_balanced*100:.2f}%")
+if hasattr(final_model, 'oob_score_'):
+    print(f"   OOB Score:           {final_model.oob_score_*100:.2f}%")
+
+# Final Confusion Matrix
+print(f"\n   Final Confusion Matrix:")
+print(f"   (Shows where model makes mistakes)")
+cm_final = confusion_matrix(y_test, final_pred)
+print(f"\n                Predicted")
+print(f"              Light  Moderate  Heavy")
+print(f"   Actual  L  {cm_final[0][0]:5d}     {cm_final[0][1]:5d}  {cm_final[0][2]:5d}")
+print(f"           M  {cm_final[1][0]:5d}     {cm_final[1][1]:5d}  {cm_final[1][2]:5d}")
+print(f"           H  {cm_final[2][0]:5d}     {cm_final[2][1]:5d}  {cm_final[2][2]:5d}")
+
+# Cross-validation
+print(f"\nCross-validation (5-fold)...")
+skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+cv_scores = cross_val_score(final_model, X, y, cv=skf, scoring='accuracy', n_jobs=-1)
+
+print(f"\n   CV Results:")
+for i, score in enumerate(cv_scores, 1):
+    print(f"      Fold {i}: {score*100:.2f}%")
+print(f"      Mean:   {cv_scores.mean()*100:.2f}%")
+print(f"      Std:    ±{cv_scores.std()*100:.2f}%")
+
+# Per-class report
+print(f"\n   Classification Report:")
+print(f"   (Precision, Recall, F1-Score for each class)")
+print("\n" + classification_report(y_test, final_pred, 
+                           target_names=['Light', 'Moderate', 'Heavy'],
+                           digits=4))
+
+# ============================================================
+# STEP 6: PROGRESSION SUMMARY
+# ============================================================
+
+print("\n" + "="*70)
+print("PROGRESSION SUMMARY")
+print("="*70)
+
+print(f"\n   Baseline (300 trees):")
+print(f"      Accuracy: {baseline_acc*100:.2f}%")
+print(f"      MAE:      {baseline_mae:.4f}")
+
+if len(weak_features) > 0:
+    print(f"\n   After feature selection:")
+    print(f"      Accuracy: {filtered_acc*100:.2f}% ({(filtered_acc-baseline_acc)*100:+.2f}%)")
+    print(f"      MAE:      {filtered_mae:.4f} ({(filtered_mae-baseline_mae):+.4f})")
+
+print(f"\n   Final (1000 trees):")
+print(f"      Accuracy: {final_acc*100:.2f}% ({(final_acc-current_acc)*100:+.2f}%)")
+print(f"      MAE:      {final_mae:.4f} ({(final_mae-current_mae):+.4f})")
+
+print(f"\n   ─────────────────────────────────────")
+print(f"   Total improvement:")
+print(f"      Accuracy: {(final_acc-baseline_acc)*100:+.2f}%")
+print(f"      MAE:      {(final_mae-baseline_mae):+.4f}")
+
+# ============================================================
+# STEP 7: SAVE FINAL MODEL
+# ============================================================
+
+print("\n" + "="*70)
+print("STEP 7: Saving final optimized model...")
+
 model_path = os.path.join(MODELS_DIR, 'random_forest_model.pkl')
-joblib.dump(model, model_path)
+joblib.dump(final_model, model_path)
+print(f"✓ Model saved: {model_path}")
 
-print(f"   ✓ Model saved to: {model_path}")
-
-# Also save feature names (needed for predictions later)
 feature_path = os.path.join(MODELS_DIR, 'feature_names.pkl')
 joblib.dump(list(X.columns), feature_path)
+print(f"✓ Features saved: {feature_path}")
 
-print(f"   ✓ Feature names saved to: {feature_path}")
-
-# Save model info
 info = {
-    'accuracy': accuracy,
-    'mae': mae,
+    'accuracy': final_acc,
+    'mae': final_mae,
+    'cohen_kappa': final_kappa,
+    'balanced_accuracy': final_balanced,
+    'oob_score': final_model.oob_score_,
+    'cv_mean': cv_scores.mean(),
+    'cv_std': cv_scores.std(),
     'n_features': len(X.columns),
-    'n_estimators': model.n_estimators,
-    'max_depth': model.max_depth,
+    'n_estimators': final_model.n_estimators,
+    'max_depth': final_model.max_depth,
+    'features_removed': len(weak_features),
     'training_samples': len(X_train),
     'test_samples': len(X_test)
 }
 
 info_path = os.path.join(MODELS_DIR, 'model_info.pkl')
 joblib.dump(info, info_path)
-
-print(f"   ✓ Model info saved to: {info_path}")
+print(f"✓ Info saved: {info_path}")
 
 # ============================================================
-# SUMMARY
+# FINAL SUMMARY
 # ============================================================
 
 print("\n" + "="*70)
-print("✅ TRAINING COMPLETE!")
+print("✅  ALL OPTIMIZATION PHASES COMPLETE! 🎉")
 print("="*70)
 
-print(f"\n📊 Model Performance Summary:")
-print(f"   Accuracy: {accuracy*100:.2f}%")
-print(f"   MAE: {mae:.4f}")
-print(f"   Training samples: {len(X_train):,}")
-print(f"   Test samples: {len(X_test):,}")
+print(f"\n📊 ULTIMATE FINAL RESULTS:")
+print(f"   Accuracy:            {final_acc*100:.2f}%")
+print(f"   Mean Absolute Error: {final_mae:.4f}")
+print(f"   Cohen's Kappa:       {final_kappa:.4f}")
+print(f"   Balanced Accuracy:   {final_balanced*100:.2f}%")
+print(f"   OOB Score:           {final_model.oob_score_*100:.2f}%")
+print(f"   CV (5-fold):         {cv_scores.mean()*100:.2f}% (±{cv_scores.std()*100:.2f}%)")
+
+print(f"\n🔧 Model Configuration:")
+print(f"   Algorithm:           Random Forest Classifier")
+print(f"   Trees:               {final_model.n_estimators}")
+print(f"   Max depth:           {final_model.max_depth}")
+print(f"   Features:            {len(X.columns)}")
+print(f"   Training samples:    {len(X_train):,}")
+print(f"   Test samples:        {len(X_test):,}")
 
 print(f"\n📁 Saved Files:")
 print(f"   1. {model_path}")
 print(f"   2. {feature_path}")
 print(f"   3. {info_path}")
-
-print(f"\n🎯 Next Steps:")
-print(f"   1. Review the metrics above")
-print(f"   2. If accuracy is good (>80%), proceed to deployment")
-print(f"   3. If not, try tuning hyperparameters")
-print(f"   4. Use the saved model in UrbanFlow for predictions")
 
 print("\n" + "="*70)

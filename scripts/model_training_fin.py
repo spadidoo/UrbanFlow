@@ -28,7 +28,7 @@ from imblearn.over_sampling import SMOTE
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(PROJECT_ROOT, 'data', 'final')
-MODELS_DIR = os.path.join(PROJECT_ROOT, 'backend', 'models')
+MODELS_DIR = os.path.join(PROJECT_ROOT, 'backend', 'test')
 
 print("="*70)
 print("PHASE 4: FEATURE SELECTION & FINAL OPTIMIZATION")
