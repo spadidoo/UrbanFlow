@@ -44,9 +44,14 @@ from flask_mail import Message
 import requests
 from routes.public_reports import public_reports_bp
 from routes.reports import reports_bp
-
+from supabase import create_client, Client
 
 load_dotenv()
+
+# Initialize Supabase
+SUPABASE_URL = os.environ.get('SUPABASE_URL')
+SUPABASE_KEY = os.environ.get('SUPABASE_KEY')
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Correct static path
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -298,7 +303,7 @@ Message:
 
 @app.route('/api/google-directions', methods=['POST'])
 def google_directions():
-    """Proxy endpoint for Google Directions API to avoid CORS"""
+    """Proxy endpoint for Google Directions API with alternatives"""
     try:
         data = request.get_json()
         origin = data.get('origin')  # "lat,lng"
@@ -307,20 +312,66 @@ def google_directions():
         if not origin or not destination:
             return jsonify({'error': 'Missing origin or destination'}), 400
         
-        # Get API key from environment or hardcode temporarily
-        api_key = os.environ.get('GOOGLE_MAPS_API_KEY', 'YOUR_API_KEY_HERE')
+        # Get API key from environment
+        api_key = os.environ.get('GOOGLE_MAPS_API_KEY')
         
-        url = f"https://maps.googleapis.com/maps/api/directions/json?origin={origin}&destination={destination}&mode=driving&key={api_key}"
+        if not api_key:
+            return jsonify({'error': 'Google Maps API key not configured'}), 500
         
-        response = requests.get(url, timeout=10)
+        # Get waypoints if provided
+        waypoints = data.get('waypoints')
+        
+        # Build URL
+      # Build URL
+        url = (
+            f"https://maps.googleapis.com/maps/api/directions/json?"
+            f"origin={origin}"
+            f"&destination={destination}"
+            f"&mode=driving"
+            f"&alternatives=true"
+        )
+                
+        # Add waypoints if provided
+        if waypoints:
+            url += f"&waypoints=via:{waypoints.replace('|', '|via:')}"
+            print(f"   📍 Including waypoints: {waypoints}")
+        
+        url += f"&key={api_key}"
+        
+        print(f"🔄 Requesting Google Directions...")
+        print(f"   Origin: {origin}")
+        print(f"   Destination: {destination}")
+        print(f"   Alternatives: true")
+        
+        response = requests.get(url, timeout=15)
         
         if response.status_code == 200:
-            return jsonify(response.json())
+            result = response.json()
+            
+            if result.get('status') == 'OK':
+                num_routes = len(result.get('routes', []))
+                print(f"✅ Google returned {num_routes} route(s)")
+                
+                # 🔍 DEBUG: Print route details
+                for i, route in enumerate(result.get('routes', [])):
+                    leg = route['legs'][0]
+                    distance_km = leg['distance']['value'] / 1000
+                    duration_min = leg['duration']['value'] / 60
+                    print(f"   Route {i+1}: {distance_km:.1f}km, {duration_min:.0f}min")
+                
+                return jsonify(result)
+            else:
+                print(f"⚠️ Google API status: {result.get('status')}")
+                print(f"   Message: {result.get('error_message', 'No error message')}")
+                return jsonify(result)
         else:
+            print(f"❌ Google API HTTP error: {response.status_code}")
             return jsonify({'error': f'Google API error: {response.status_code}'}), response.status_code
             
     except Exception as e:
         print(f"❌ Google Directions error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
     
 @app.route('/api/calculate-alternate-routes', methods=['POST'])
@@ -470,6 +521,7 @@ def calculate_alternate_routes():
             'success': False,
             'error': str(e)
         }), 500
+        
 
 
 def _route_intersects_disruption(encoded_polyline, disruption_center, radius_m):
@@ -548,6 +600,110 @@ def _haversine_distance(lat1, lng1, lat2, lng2):
     
     return R * c
 
+@app.route('/api/predict-delay', methods=['POST'])
+def predict_delay():
+    """Predict traffic delay using ML model based on published simulations"""
+    try:
+        data = request.get_json()
+        
+        # Extract parameters
+        disruption_id = data.get('disruption_id')
+        route_distance = data.get('route_distance', 3.0)
+        distance_through_disruption = data.get('distance_through_disruption', 0.5)
+        
+        if not disruption_id:
+            return jsonify({'error': 'Missing disruption_id'}), 400
+        
+        # Get published simulation details from database
+        disruption = supabase.table('v_published_user_simulations')\
+            .select('*')\
+            .eq('published_id', disruption_id)\
+            .execute()
+        
+        if not disruption.data or len(disruption.data) == 0:
+            return jsonify({'error': 'Published simulation not found'}), 404
+        
+        disruption_data = disruption.data[0]
+        
+        # Extract the average_delay_ratio from the simulation
+        average_delay_ratio = float(disruption_data.get('average_delay_ratio', 1.0))
+        
+        # ✅ Get current time info HERE (BEFORE the try block)
+        from datetime import datetime
+        now = datetime.now()
+        current_hour = now.hour
+        day_of_week = now.weekday()
+        
+        # ✅ Prepare prediction input HERE (BEFORE the try block)
+        prediction_input = {
+            'hour': current_hour,
+            'day_of_week': day_of_week,
+            'disruption_type': disruption_data.get('disruption_type', 'roadwork'),
+            'location': disruption_data.get('disruption_location', 'Unknown'),
+            'route_distance': route_distance,
+            'distance_through_disruption': distance_through_disruption,
+            'average_delay_ratio': average_delay_ratio,
+            'severity_level': disruption_data.get('severity_level', 'moderate')
+        }
+        
+        # NOW use the predictor
+        try:
+            from models.predictor import TrafficPredictor
+            
+            predictor = TrafficPredictor()
+            predicted_delay_minutes = predictor.predict_disruption_impact(prediction_input)
+            
+            if predicted_delay_minutes is None or predicted_delay_minutes <= 0:
+                raise ValueError("Invalid prediction result")
+            
+            print(f"✅ ML Prediction for simulation '{disruption_data.get('published_title')}':")
+            print(f"   Hour: {current_hour}, Day: {day_of_week}")
+            print(f"   Route: {route_distance}km, Through disruption: {distance_through_disruption}km")
+            print(f"   Average delay ratio: {average_delay_ratio}")
+            print(f"   Severity: {disruption_data.get('severity_level')}")
+            print(f"   Predicted delay: {predicted_delay_minutes} min")
+            
+            return jsonify({
+                'disruption_id': disruption_id,
+                'disruption_title': disruption_data.get('published_title'),
+                'predicted_delay_minutes': round(predicted_delay_minutes, 1),
+                'average_delay_ratio': average_delay_ratio,
+                'severity_level': disruption_data.get('severity_level'),
+                'confidence': 'high',
+                'factors': {
+                    'hour': current_hour,
+                    'day_of_week': day_of_week,
+                    'disruption_type': disruption_data.get('disruption_type'),
+                    'distance_through': distance_through_disruption,
+                    'delay_ratio': average_delay_ratio
+                }
+            })
+            
+        except Exception as e:
+            print(f"❌ ML Prediction error: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Fallback calculation
+            fallback_delay = (distance_through_disruption / route_distance) * 10 * average_delay_ratio
+            fallback_delay = max(fallback_delay, 3)
+            
+            print(f"   Using fallback delay: {fallback_delay} min")
+            
+            return jsonify({
+                'disruption_id': disruption_id,
+                'disruption_title': disruption_data.get('published_title'),
+                'predicted_delay_minutes': round(fallback_delay, 1),
+                'average_delay_ratio': average_delay_ratio,
+                'confidence': 'fallback',
+                'error': str(e)
+            })
+            
+    except Exception as e:
+        print(f"❌ Predict delay error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 # ============================================================
 # NEW ROUTE: Upload Avatar
 # ============================================================

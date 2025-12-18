@@ -901,3 +901,138 @@ class TrafficPredictor:
             })
         
         return adjusted_zones
+    
+    def predict_disruption_impact(self, input_data):
+        """
+        Predict traffic delay impact for a route passing through a disruption.
+        
+        Args:
+            input_data (dict): {
+                'hour': int (0-23),
+                'day_of_week': int (0=Monday, 6=Sunday),
+                'disruption_type': str ('roadwork', 'accident', 'event', etc.),
+                'location': str,
+                'route_distance': float (km),
+                'distance_through_disruption': float (km),
+                'average_delay_ratio': float (from simulation, e.g., 1.0, 1.1, 1.5),
+                'severity_level': str ('moderate', 'heavy', etc.)
+            }
+        
+        Returns:
+            float: Predicted delay in minutes
+        """
+        import pandas as pd
+        import numpy as np
+        
+        # Extract features
+        hour = input_data.get('hour', 12)
+        day_of_week = input_data.get('day_of_week', 1)
+        disruption_type = input_data.get('disruption_type', 'roadwork')
+        route_distance = input_data.get('route_distance', 3.0)
+        distance_through = input_data.get('distance_through_disruption', 0.5)
+        average_delay_ratio = input_data.get('average_delay_ratio', 1.0)  # ✅ Key metric from simulation
+        severity_level = input_data.get('severity_level', 'moderate')
+        
+        # Map disruption type to numeric
+        type_mapping = {
+            'roadwork': 0,
+            'construction': 0,
+            'accident': 1,
+            'crash': 1,
+            'event': 2,
+            'parade': 2,
+            'weather': 3,
+            'flooding': 3,
+            'flood': 3
+        }
+        
+        disruption_type_code = type_mapping.get(disruption_type.lower(), 0)
+        
+        # Map severity to numeric
+        severity_mapping = {
+            'minor': 0.8,
+            'moderate': 1.0,
+            'heavy': 1.3,
+            'severe': 1.5
+        }
+        
+        severity_multiplier = severity_mapping.get(severity_level.lower(), 1.0)
+        
+        # Time-based features
+        is_rush_hour = 1 if (7 <= hour <= 9) or (17 <= hour <= 19) else 0
+        is_weekend = 1 if day_of_week >= 5 else 0
+        
+        # ✅ Calculate base delay using the average_delay_ratio from simulation
+        # The delay ratio represents how much slower traffic moves (1.0 = normal, 1.5 = 50% slower)
+        
+        # Normal travel time through the disruption zone at 30 km/h
+        normal_time_minutes = (distance_through / 30) * 60  # minutes
+        
+        # Actual travel time with the delay ratio applied
+        actual_time_minutes = normal_time_minutes * average_delay_ratio
+        
+        # Base delay is the difference
+        base_delay = actual_time_minutes - normal_time_minutes
+        
+        # Apply time-of-day multipliers
+        if is_rush_hour:
+            base_delay *= 1.4
+        elif hour >= 10 and hour <= 16:
+            base_delay *= 1.15
+        else:
+            base_delay *= 0.9
+        
+        # Apply weekend adjustment
+        if is_weekend:
+            base_delay *= 0.75
+        
+        # Apply severity multiplier
+        base_delay *= severity_multiplier
+        
+        # Apply route-specific factors
+        route_impact = 1.0 + ((route_distance - 3.0) * 0.03)  # Longer routes = slightly more delay
+        route_impact = max(0.9, min(1.2, route_impact))
+        base_delay *= route_impact
+        
+        # Try to use ML model if available
+        try:
+            import pickle
+            import os
+            
+            model_path = os.path.join(os.path.dirname(__file__), 'random_forest_model.pkl')
+            
+            with open(model_path, 'rb') as f:
+                model = pickle.load(f)
+            
+            # Create feature vector
+            features = pd.DataFrame({
+                'hour': [hour],
+                'day_of_week': [day_of_week],
+                'disruption_type': [disruption_type_code],
+                'is_rush_hour': [is_rush_hour],
+                'is_weekend': [is_weekend],
+                'route_distance_km': [route_distance],
+                'distance_through_disruption_km': [distance_through],
+                'delay_ratio': [average_delay_ratio],
+                'severity_multiplier': [severity_multiplier]
+            })
+            
+            # Make prediction
+            predicted_congestion = model.predict(features)[0]
+            
+            # Combine ML prediction with calculated delay
+            ml_adjusted_delay = base_delay * (predicted_congestion / 2.5) * 1.2
+            
+            # Use the higher of the two estimates
+            final_delay = max(base_delay, ml_adjusted_delay)
+            
+            print(f"   ML model prediction: {predicted_congestion:.2f}")
+            print(f"   Base calculated delay: {base_delay:.1f} min")
+            print(f"   ML adjusted delay: {ml_adjusted_delay:.1f} min")
+            
+            return max(round(final_delay, 1), 2)
+            
+        except Exception as e:
+            print(f"   ML model not available, using calculated delay: {e}")
+            # Return calculated delay
+            return max(round(base_delay, 1), 2)

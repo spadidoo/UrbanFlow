@@ -238,3 +238,9 @@ input[type="password"]::-ms-clear {
 input[type="password"]::-webkit-textfield-decoration-container {
   display: none;
 }
+
+/* user alternate routes */
+.user-route-line {
+  z-index: 1000 !important;
+  pointer-events: auto;
+}

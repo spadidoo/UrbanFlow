@@ -4,6 +4,7 @@ import PlannerNavbar from "@/components/PlannerNavBar";
 import SimulationPreviewModal from "@/components/SimulationPreviewModal";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
+import PublishReportModal from '@/components/PublishReportModal';
 import { useEffect, useRef, useState } from "react";
 import {
   CartesianGrid,
