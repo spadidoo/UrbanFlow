@@ -135,7 +135,13 @@ export default function SmartResultsMap({
   // MAP INITIALIZATION
   // ========================================
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return;
+    if (!mapRef.current) return;
+    
+    // ✅ Reinitialize map if it was cleaned up
+    if (mapInstanceRef.current) {
+      console.log('⚠️ Map already exists, skipping...');
+      return;
+    }
 
     const map = L.map(mapRef.current, {
       center: [14.2096, 121.164],
@@ -153,12 +159,46 @@ export default function SmartResultsMap({
 
     mapInstanceRef.current = map;
 
-    // ✅ Create layer groups
+    // ✅ Create layer groups - force recreation if null
+    if (!layerGroupsRef.current) {
+      layerGroupsRef.current = {};
+    }
+
     layerGroupsRef.current.shadows = L.layerGroup().addTo(map);
     layerGroupsRef.current.nearbyRoads = L.layerGroup().addTo(map);
     layerGroupsRef.current.connectedRoads = L.layerGroup().addTo(map);
     layerGroupsRef.current.mainRoads = L.layerGroup().addTo(map);
     layerGroupsRef.current.markers = L.layerGroup().addTo(map);
+
+    console.log('✅ Layer groups created:', Object.keys(layerGroupsRef.current));
+
+    // ✅ Add any pending segments that were created before initialization
+    if (window._pendingSegments && window._pendingSegments.length > 0) {
+      console.log('📥 Adding', window._pendingSegments.length, 'pending segments');
+      
+      window._pendingSegments.forEach(({ segment, targetGroup }) => {
+        if (layerGroupsRef.current[targetGroup]) {
+          layerGroupsRef.current[targetGroup].addLayer(segment);
+          layersRef.current.push(segment);
+        }
+      });
+      
+      window._pendingSegments = [];
+    }
+
+    // ✅ Same for shadows
+    if (window._pendingShadows && window._pendingShadows.length > 0) {
+      console.log('📥 Adding', window._pendingShadows.length, 'pending shadows');
+      
+      window._pendingShadows.forEach(shadow => {
+        if (layerGroupsRef.current.shadows) {
+          layerGroupsRef.current.shadows.addLayer(shadow);
+          layersRef.current.push(shadow);
+        }
+      });
+      
+      window._pendingShadows = [];
+    }
 
     // ✅ Set z-indices for proper layering
     layerGroupsRef.current.shadows.setZIndex(100);
@@ -167,15 +207,65 @@ export default function SmartResultsMap({
     layerGroupsRef.current.mainRoads.setZIndex(400);
     layerGroupsRef.current.markers.setZIndex(500);
 
+    // ✅ ADD THIS - Force layer group validation
+    console.log('✅ Layer groups ready:', {
+      shadows: !!layerGroupsRef.current.shadows,
+      mainRoads: !!layerGroupsRef.current.mainRoads,
+      connectedRoads: !!layerGroupsRef.current.connectedRoads,
+      nearbyRoads: !!layerGroupsRef.current.nearbyRoads,
+      markers: !!layerGroupsRef.current.markers,
+    });
+
     setMapReady(true);
 
     return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-        setMapReady(false);
+    console.log('🧹 Cleaning up SmartResultsMap...');
+    
+    // Clear all layers first
+    layersRef.current.forEach((layer) => {
+      try {
+        if (layer && mapInstanceRef.current && mapInstanceRef.current.hasLayer(layer)) {
+          if (layer.unbindPopup) layer.unbindPopup();
+          if (layer.unbindTooltip) layer.unbindTooltip();
+          if (layer.off) layer.off();
+          mapInstanceRef.current.removeLayer(layer);
+        }
+      } catch (e) {
+        console.error('Error removing layer:', e);
       }
-    };
+    });
+    layersRef.current = [];
+    
+    // Clear layer groups properly
+    if (layerGroupsRef.current) {
+      Object.keys(layerGroupsRef.current).forEach((key) => {
+        if (layerGroupsRef.current[key]) {
+          try {
+            layerGroupsRef.current[key].clearLayers();
+            if (mapInstanceRef.current && mapInstanceRef.current.hasLayer(layerGroupsRef.current[key])) {
+              mapInstanceRef.current.removeLayer(layerGroupsRef.current[key]);
+            }
+          } catch (error) {
+            console.warn(`Failed to clean up layer group ${key}:`, error);
+          }
+        }
+      });
+      // Reset to empty object (not null, to prevent errors)
+      layerGroupsRef.current = null;
+    }
+    
+    // Clear pending items
+    window._pendingShadows = [];
+    window._pendingSegments = [];
+    
+    segmentLayersRef.current.clear();
+    
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.remove();
+      mapInstanceRef.current = null;
+      setMapReady(false);
+    }
+  };
   }, []);
 
   // ========================================
@@ -1171,16 +1261,15 @@ export default function SmartResultsMap({
             renderer: canvasRenderer,
           }
         );
-       // ✅ ADD SAFETY CHECK - Ensure layer groups exist before adding
-        if (layerGroupsRef.current && layerGroupsRef.current.shadows) {
-          layerGroupsRef.current.shadows.addLayer(shadow);
-        } else {
-          console.warn('⚠️ Shadow layer group not initialized yet');
-        }
-
-        // ✅ ADD SAFETY CHECK - Ensure layersRef exists
-        if (layersRef.current) {
-          layersRef.current.push(shadow);
+        // ✅ Add shadow with proper validation
+       // ✅ Add shadow with proper validation
+        if (layerGroupsRef.current?.shadows && mapInstanceRef.current && typeof layerGroupsRef.current.shadows.addLayer === 'function') {
+          try {
+            layerGroupsRef.current.shadows.addLayer(shadow);
+            layersRef.current.push(shadow);
+          } catch (error) {
+            console.warn('⚠️ Shadow layer failed:', error.message);
+          }
         }
 
         const segment = L.polyline(
@@ -1204,23 +1293,29 @@ export default function SmartResultsMap({
           }
         );
 
-        const targetGroup = isMainRoad ? "mainRoads" : groupType;
+      const targetGroup = isMainRoad ? "mainRoads" : groupType;
 
-        if (!layerGroupsRef.current?.[targetGroup]) {
-          console.warn(`⚠️ Layer group "${targetGroup}" not initialized yet`);
-          continue; // ✅ Skip this segment instead of proceeding
+      // ✅ Validate and add segment safely
+      if (layerGroupsRef.current?.[targetGroup] && typeof layerGroupsRef.current[targetGroup].addLayer === 'function') {
+        try {
+          layerGroupsRef.current[targetGroup].addLayer(segment);
+          layersRef.current.push(segment);
+          
+          // ✅ Store segment reference for fast updates
+          const segmentId = `${road.id}-${i}`;
+          segmentLayersRef.current.set(segmentId, {
+            layer: segment,
+            impactLevel: segmentImpact,
+            impactIntensity: impactIntensity,
+          });
+        } catch (error) {
+          console.warn(`⚠️ Failed to add segment ${i}:`, error.message);
         }
+      } else {
+        console.warn(`⚠️ Skipping segment ${i} - layer group '${targetGroup}' not ready`);
+      }
 
-        layerGroupsRef.current[targetGroup].addLayer(segment);
-        layersRef.current.push(segment);
-
-        // ✅ Store segment reference for fast updates
-        const segmentId = `${road.id}-${i}`;
-        segmentLayersRef.current.set(segmentId, {
-          layer: segment,
-          impactLevel: segmentImpact,
-          impactIntensity: impactIntensity,
-        });
+  
       }
 
       const fullLine = L.polyline(
@@ -1235,21 +1330,32 @@ export default function SmartResultsMap({
       );
 
       const targetGroup = isMainRoad ? "mainRoads" : groupType;
-      layerGroupsRef.current[targetGroup].addLayer(fullLine);
 
-      if (isMainRoad) {
-        fullLine.bindPopup(
-          createMainRoadPopup(
-            road,
-            baseSeverity,
-            simulationResults,
-            currentHourData
-          )
-        );
+      // ✅ Validate and add fullLine safely
+      if (layerGroupsRef.current?.[targetGroup] && typeof layerGroupsRef.current[targetGroup].addLayer === 'function') {
+        try {
+          layerGroupsRef.current[targetGroup].addLayer(fullLine);
+          
+          if (isMainRoad) {
+            fullLine.bindPopup(
+              createMainRoadPopup(
+                road,
+                baseSeverity,
+                simulationResults,
+                currentHourData
+              )
+            );
+          } else {
+            fullLine.bindPopup(createRoadPopup(road, baseSeverity));
+          }
+          
+          layersRef.current.push(fullLine);
+        } catch (error) {
+          console.warn(`⚠️ Failed to add fullLine:`, error.message);
+        }
       } else {
-        fullLine.bindPopup(createRoadPopup(road, baseSeverity));
+        console.warn(`⚠️ Layer group '${targetGroup}' not ready for fullLine`);
       }
-      layersRef.current.push(fullLine);
     };
 
     // ✅ IMPROVED: Coordinate filtering to prevent gaps
@@ -1709,20 +1815,34 @@ export default function SmartResultsMap({
     layerGroupsRef.current.markers.addLayer(epicenter);
     layersRef.current.push(epicenter);
 
-    // Fit bounds
+    // Fit bounds with validation
     const allCoords = [];
     if (mainRoad?.coordinates) {
-      allCoords.push(...mainRoad.coordinates.map((c) => [c.lat, c.lng]));
+      mainRoad.coordinates.forEach((c) => {
+        if (c?.lat != null && c?.lng != null) {
+          allCoords.push([c.lat, c.lng]);
+        }
+      });
     }
     connectedRoads.forEach((road) => {
-      allCoords.push(...road.coordinates.map((c) => [c.lat, c.lng]));
+      if (road?.coordinates) {
+        road.coordinates.forEach((c) => {
+          if (c?.lat != null && c?.lng != null) {
+            allCoords.push([c.lat, c.lng]);
+          }
+        });
+      }
     });
 
     if (allCoords.length > 0) {
-      map.fitBounds(L.latLngBounds(allCoords), {
-        padding: [60, 60],
-        maxZoom: 17,
-      });
+      try {
+        map.fitBounds(L.latLngBounds(allCoords), {
+          padding: [60, 60],
+          maxZoom: 17,
+        });
+      } catch (error) {
+        console.warn('⚠️ Could not fit bounds:', error.message);
+      }
     }
   }, [
     simulationResults,
