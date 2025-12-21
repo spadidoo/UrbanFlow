@@ -43,6 +43,23 @@ export default function LoginPage() {
   // Use ref to track if we've already redirected
   const hasRedirected = useRef(false);
 
+  // ✅ NEW: Force clear form on mount (prevents persistent autocomplete)
+  useEffect(() => {
+    setFormData({
+      email: "",
+      password: "",
+    });
+    setError("");
+    
+    // ✅ Also clear browser's autofill cache
+    if (typeof window !== 'undefined') {
+      const form = document.querySelector('form');
+      if (form) {
+        form.reset();
+      }
+    }
+  }, []); // Empty dependency array = runs once on mount
+
   // Disable page scrolling while on login page (restore on unmount)
   useEffect(() => {
     const prev =
@@ -303,6 +320,7 @@ export default function LoginPage() {
                       placeholder="Email"
                       required
                       disabled={loading}
+                      autoComplete="off"  // ✅ ADD THIS - prevents browser autofill
                       className="w-full px-2 py-1 border border-gray-300 text-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F5820D] focus:border-transparent disabled:bg-gray-100"
                     />
                   </div>
@@ -317,6 +335,7 @@ export default function LoginPage() {
                       placeholder="Password"
                       required
                       disabled={loading}
+                      autoComplete="new-password"
                       className="w-full px-2 py-1 pr-10 border border-gray-300 text-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F5820D] focus:border-transparent disabled:bg-gray-100"
                     />
                     <button

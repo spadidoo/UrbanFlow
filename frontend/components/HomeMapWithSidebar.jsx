@@ -2432,7 +2432,7 @@ export default function HomeMapWithSidebar() {
     }
   };
 
-  // FIND drawActiveDisruption function (around line 160):
+    // FIND drawActiveDisruption function (around line 160):
   const drawActiveDisruption = async (disruption) => {
     if (!disruption.latitude || !disruption.longitude) return;
 
@@ -2457,51 +2457,48 @@ export default function HomeMapWithSidebar() {
     const isSelected = selectedDisruption?.id === disruption.id;
     const center = { lat: disruption.latitude, lng: disruption.longitude };
 
-    // ✅ Get severity for CURRENT HOUR (not average)
-    // ✅ Get severity for CURRENT HOUR (not average)
-    // ✅ BLEND REAL-TIME WITH PREDICTIONS
-    let severity,
-      delayMin,
-      color,
-      isUsingRealTime = false;
-
     // Get current hour in Philippines timezone (UTC+8)
     const now = new Date();
     const currentHour = (now.getUTCHours() + 8) % 24;
 
-    // 1. Try to get real-time data first (most accurate)
-    // 1. Try to get real-time data first (most accurate)
+    // ✅ STEP 1: Calculate BLENDED severity (real-time + predicted)
+    let severity, delayMin, color, isUsingRealTime = false;
+
+    // Get predicted disruption impact from ML model
+    const hourPrediction = disruption.hourly_predictions?.find(
+      (h) => h.hour === currentHour
+    );
+    const predictedDisruptionSeverity = hourPrediction?.severity || disruption.avg_severity || 1.5;
+    const predictedDelay = hourPrediction?.delay_info?.additional_delay_min || disruption.expected_delay || 0;
+
+    // ✅ BLEND with real-time traffic if available
     if (
       disruption.realtime &&
       typeof disruption.realtime.congestion_ratio === "number"
     ) {
-      severity = disruption.realtime.congestion_ratio;
-      delayMin =
-        disruption.realtime.delay_minutes || disruption.expected_delay || 0;
+      const realtimeBaseline = disruption.realtime.congestion_ratio;
+      
+      // ✅ ADD disruption impact to current real-time conditions
+      severity = realtimeBaseline + (predictedDisruptionSeverity * 0.6); // 60% of predicted impact added
+      delayMin = (disruption.realtime.delay_minutes || 0) + predictedDelay;
       isUsingRealTime = true;
+      
+      console.log(`🔴 BLENDED: ${disruption.title}`);
+      console.log(`   Real-time baseline: ${realtimeBaseline.toFixed(2)}`);
+      console.log(`   Predicted disruption: +${(predictedDisruptionSeverity * 0.6).toFixed(2)}`);
+      console.log(`   Final severity: ${severity.toFixed(2)}`);
+      console.log(`   Blended delay: ${delayMin}min`);
+    } else {
+      // ✅ Fallback to prediction only
+      severity = predictedDisruptionSeverity;
+      delayMin = predictedDelay;
       console.log(
-        `🔴 LIVE: ${disruption.title} - Severity: ${severity.toFixed(
-          2
-        )} (Real-time)`,
-        disruption.realtime
+        `📊 PREDICTED ONLY: ${disruption.title} - Hour ${currentHour} Severity: ${severity.toFixed(2)}`
       );
     }
-    // 2. Fall back to current hour prediction
-    else {
-      const hourPrediction = disruption.hourly_predictions?.find(
-        (h) => h.hour === currentHour
-      );
-      severity = hourPrediction?.severity || disruption.avg_severity || 1.5;
-      delayMin =
-        hourPrediction?.delay_info?.additional_delay_min ||
-        disruption.expected_delay ||
-        0;
-      console.log(
-        `📊 PREDICTED: ${
-          disruption.title
-        } - Hour ${currentHour} Severity: ${severity.toFixed(2)}`
-      );
-    }
+
+    // Cap severity at reasonable max (2.5 = severe)
+    severity = Math.min(severity, 2.5);
 
     color = getImpactColor(severity);
 
@@ -2517,69 +2514,69 @@ export default function HomeMapWithSidebar() {
       );
     }
 
-    // Draw marker
+    // ✅ STEP 2: Draw marker FIRST (always visible if showReports is true)
     const marker = L.marker([disruption.latitude, disruption.longitude], {
       icon: L.divIcon({
         className: "disruption-marker-active",
         html: `
-        <div style="position: relative; width: 40px; height: 40px; pointer-events: none;">
-          ${
-            isUsingRealTime
-              ? `
-          <div style="
-            position: absolute;
-            top: -8px;
-            right: -8px;
-            width: 20px;
-            height: 20px;
-            background: linear-gradient(135deg, #ef4444, #dc2626);
-            border: 2px solid white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.5);
-            animation: live-pulse 1.5s ease-in-out infinite;
-            z-index: 20;
-          ">🔴</div>
-          <style>
-            @keyframes live-pulse {
-              0%, 100% { transform: scale(1); opacity: 1; }
-              50% { transform: scale(1.15); opacity: 0.8; }
+          <div style="position: relative; width: 40px; height: 40px; pointer-events: none;">
+            ${
+              isUsingRealTime
+                ? `
+            <div style="
+              position: absolute;
+              top: -8px;
+              right: -8px;
+              width: 20px;
+              height: 20px;
+              background: linear-gradient(135deg, #ef4444, #dc2626);
+              border: 2px solid white;
+              border-radius: 50%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 10px;
+              box-shadow: 0 2px 8px rgba(239, 68, 68, 0.5);
+              animation: live-pulse 1.5s ease-in-out infinite;
+              z-index: 20;
+            ">🔴</div>
+            <style>
+              @keyframes live-pulse {
+                0%, 100% { transform: scale(1); opacity: 1; }
+                50% { transform: scale(1.15); opacity: 0.8; }
+              }
+            </style>
+            `
+                : ""
             }
-          </style>
-          `
-              : ""
-          }
-          <div style="
-            position: absolute; top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            width: 48px; height: 48px;
-            border: 2px solid ${color}; border-radius: 50%;
-            opacity: ${isSelected ? "0.5" : "0.3"};
-            animation: pulse-active 2s ease-out infinite;
-            pointer-events: none;
-          "></div>
-          <div style="
-            background: white;
-            border: ${isSelected ? "4px" : "3px"} solid ${color};
-            border-radius: 50%;
-            width: 40px; height: 40px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 20px;
-            box-shadow: ${
-              isSelected
-                ? "0 6px 20px rgba(0,0,0,0.5)"
-                : "0 4px 12px rgba(0,0,0,0.3)"
-            };
-            cursor: pointer;
-            pointer-events: all;
-            position: relative;
-            z-index: 10;
-          ">🚧</div>
-        </div>
-      `,
+            <div style="
+              position: absolute; top: 50%; left: 50%;
+              transform: translate(-50%, -50%);
+              width: 48px; height: 48px;
+              border: 2px solid ${color}; border-radius: 50%;
+              opacity: ${isSelected ? "0.5" : "0.3"};
+              animation: pulse-active 2s ease-out infinite;
+              pointer-events: none;
+            "></div>
+            <div style="
+              background: white;
+              border: ${isSelected ? "4px" : "3px"} solid ${color};
+              border-radius: 50%;
+              width: 40px; height: 40px;
+              display: flex; align-items: center; justify-content: center;
+              font-size: 20px;
+              box-shadow: ${
+                isSelected
+                  ? "0 6px 20px rgba(0,0,0,0.5)"
+                  : "0 4px 12px rgba(0,0,0,0.3)"
+              };
+              cursor: pointer;
+              pointer-events: all;
+              position: relative;
+              z-index: 10;
+            ">🚧</div>
+          </div>
+        `,
         iconSize: [40, 40],
         iconAnchor: [20, 20],
       }),
@@ -2603,7 +2600,13 @@ export default function HomeMapWithSidebar() {
     marker._disruptionId = disruption.id;
     layersRef.current.push(marker);
 
-    if (!showCongestion) return;
+    // ✅ STEP 3: Check showCongestion (only affects road lines, not marker)
+    if (!showCongestion) {
+      console.log(`⚠️ Skipping congestion lines for ${disruption.title} (showCongestion is OFF)`);
+      return; // Exit - marker is already drawn above
+    }
+
+    // ✅ STEP 4: Draw congestion lines (only if showCongestion is true)
 
     // ✅ CRITICAL: Verify coordinates
     console.log(
@@ -2620,6 +2623,7 @@ export default function HomeMapWithSidebar() {
       osmCacheRef
     );
     console.log(`🗺️ Fetched ${roads?.length || 0} roads near disruption`);
+    
     if (!roads || roads.length === 0) {
       // ✅ Only create fallback circle if roads genuinely failed (not just cached error)
       // Don't create circle if OSM is timing out - this prevents piling up
