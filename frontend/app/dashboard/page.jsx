@@ -895,13 +895,32 @@ useEffect(() => {
       const data = await response.json();
       console.log('Full response data:', data);
       
-     if (data.success) {
-      console.log('Total reports from API:', data.data.length);
+      if (data.success) {
+        console.log('Total reports from API:', data.data.length);
+        
+        // ✅ STEP 1: Filter by status (exclude dismissed and resolved)
+        let activeReports = data.data.filter(r => 
+          r.status !== 'dismissed' && r.status !== 'resolved'
+        );
+        
+        console.log(`After status filter: ${activeReports.length} reports`);
+        
+        // ✅ STEP 2: Filter out reports older than 2 days
+        const now = new Date();
+        const twoDaysAgo = new Date(now.getTime() - (2 * 24 * 60 * 60 * 1000));
+        
+        activeReports = activeReports.filter(r => {
+          const reportDate = new Date(r.reported_at);
+          const isRecent = reportDate > twoDaysAgo;
+          
+          if (!isRecent) {
+            console.log(`Filtering out expired report (>2 days): ${r.id}`);
+          }
+          
+          return isRecent;
+        });
       
-      // ✅ STEP 1: Filter by status (exclude dismissed and resolved)
-      let activeReports = data.data.filter(r => 
-        r.status !== 'dismissed' && r.status !== 'resolved'
-      );
+      console.log(`After date filter: ${activeReports.length} reports (removed reports older than 2 days)`);
       
       console.log(`After status filter: ${activeReports.length} reports`);
       
@@ -1860,26 +1879,39 @@ useEffect(() => {
           {/* PUBLIC REPORTS PREVIEW - FIXED VERSION */}
           {/* ============================================================ */}
           <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex justify-between items-center mb-4">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-800">Public Reports</h2>
-                <p className="text-xs text-gray-500 mt-1">
-                  Reports auto-expire after 2 days
-                </p>
-              </div>
-              <div className="flex gap-2">
-                {publicReports.filter(r => r.status === 'pending').length > 0 && (
-                  <span className="bg-red-100 text-red-600 text-xs px-2 py-1 rounded-full font-semibold">
-                    {publicReports.filter(r => r.status === 'pending').length} New
-                  </span>
-                )}
-                {publicReports.filter(r => r.status === 'published').length > 0 && (
-                  <span className="bg-green-100 text-green-600 text-xs px-2 py-1 rounded-full font-semibold">
-                    {publicReports.filter(r => r.status === 'published').length} Published
-                  </span>
-                )}
-              </div>
+           <div className="flex justify-between items-center mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800">Public Reports</h2>
+              <p className="text-xs text-gray-500 mt-1">
+                {publicReports.length === 0 
+                  ? 'No active reports' 
+                  : `${publicReports.length} active report${publicReports.length !== 1 ? 's' : ''} • Auto-expire after 2 days`
+                }
+              </p>
             </div>
+            <div className="flex gap-2">
+              {(() => {
+                const pendingCount = publicReports.filter(r => r.status === 'pending').length;
+                const publishedCount = publicReports.filter(r => r.status === 'published').length;
+                
+                return (
+                  <>
+                    {pendingCount > 0 && (
+                      <span className="bg-red-100 text-red-600 text-xs px-2 py-1 rounded-full font-semibold animate-pulse">
+                        {pendingCount} New
+                      </span>
+                    )}
+                    {publishedCount > 0 && (
+                      <span className="bg-green-100 text-green-600 text-xs px-2 py-1 rounded-full font-semibold">
+                        {publishedCount} Published
+                      </span>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+               
             
             <div className="space-y-3 max-h-[500px] overflow-y-auto">
               {publicReports.length === 0 ? (
@@ -2044,111 +2076,338 @@ useEffect(() => {
 
             {/* Notifications */}
             <div className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-lg font-bold text-gray-800 mb-4">
-                Notifications
-              </h3>
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800">Notifications</h3>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Important alerts and updates
+                  </p>
+                </div>
+                
+                {/* Clear All Button */}
+                {(() => {
+                  const hasNotifications = (
+                    publicReports.filter(r => r.status === 'pending' && !viewedReports.has(r.id)).length > 0 ||
+                    savedSimulations.some(sim => {
+                      const endDate = new Date(sim.end_time);
+                      const hoursUntilEnd = (endDate - new Date()) / (1000 * 60 * 60);
+                      return hoursUntilEnd > 0 && hoursUntilEnd <= 24 && sim.simulation_status === 'published';
+                    }) ||
+                    savedSimulations.some(sim => {
+                      const endDate = new Date(sim.end_time);
+                      const hoursUntilEnd = (endDate - new Date()) / (1000 * 60 * 60);
+                      return hoursUntilEnd > 0 && hoursUntilEnd <= 12 && sim.simulation_status === 'completed';
+                    })
+                  );
+                  
+                  return hasNotifications ? (
+                    <button
+                      onClick={() => {
+                        const allReportIds = publicReports.map(r => r.id);
+                        const allSimIds = savedSimulations.map(s => `sim_${s.simulation_id}`);
+                        setViewedReports(prev => new Set([...prev, ...allReportIds, ...allSimIds]));
+                        
+                        setActivePopup({ 
+                          type: 'success', 
+                          message: 'All notifications cleared' 
+                        });
+                        setTimeout(() => setActivePopup(null), 2000);
+                      }}
+                      className="text-xs text-gray-500 hover:text-gray-700 font-medium transition flex items-center gap-1.5"
+                      title="Clear all notifications"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      <span>Clear All</span>
+                    </button>
+                  ) : null;
+                })()}
+              </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
                 {loading ? (
                   <div className="flex items-center justify-center p-4">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500"></div>
                   </div>
                 ) : (
                   <>
-                    {/* ✅ SHOW PUBLIC REPORTS FIRST (pending only) */}
-                    {publicReports
-                      .filter(r => r.status === 'pending')
-                      .slice(0, 2)
-                      .map((report) => {
-                        const reportDate = new Date(report.reported_at);
-                        const hoursSince = (new Date() - reportDate) / (1000 * 60 * 60);
+                    {(() => {
+                      const notifications = [];
+                      
+                      // ============================================
+                      // 1. NEW PUBLIC REPORTS (Highest Priority)
+                      // ============================================
+                      publicReports
+                        .filter(r => r.status === 'pending' && !viewedReports.has(r.id))
+                        .slice(0, 3)
+                        .forEach((report) => {
+                          const reportDate = new Date(report.reported_at);
+                          const minutesOld = Math.floor((new Date() - reportDate) / (1000 * 60));
+                          
+                          notifications.push({
+                            id: `report-${report.id}`,
+                            priority: 1,
+                            type: 'alert',
+                            color: 'red',
+                            title: `New Public Report: ${report.report_type}`,
+                            subtitle: minutesOld < 5 ? 'Just now' : `${minutesOld < 60 ? minutesOld + ' min' : Math.floor(minutesOld/60) + 'h'} ago`,
+                            time: reportDate,
+                            isUrgent: minutesOld < 5,
+                            onClick: () => setSelectedReport(report)
+                          });
+                        });
+                      
+                      // ============================================
+                      // 2. ACTIVE DISRUPTIONS ENDING SOON (< 24h)
+                      // ============================================
+                      savedSimulations
+                        .filter(sim => {
+                          if (sim.simulation_status !== 'published') return false;
+                          if (viewedReports.has(`sim_${sim.simulation_id}`)) return false;
+                          
+                          const endDate = new Date(sim.end_time);
+                          const hoursUntilEnd = (endDate - new Date()) / (1000 * 60 * 60);
+                          
+                          return hoursUntilEnd > 0 && hoursUntilEnd <= 24;
+                        })
+                        .forEach((sim) => {
+                          const endDate = new Date(sim.end_time);
+                          const hoursUntilEnd = Math.floor((endDate - new Date()) / (1000 * 60 * 60));
+                          
+                          notifications.push({
+                            id: `ending-${sim.simulation_id}`,
+                            priority: 2,
+                            type: 'clock',
+                            color: 'orange',
+                            title: 'Published disruption ending soon',
+                            subtitle: `${sim.simulation_name || 'Unnamed'} • Ends in ${hoursUntilEnd}h`,
+                            time: endDate,
+                            isUrgent: hoursUntilEnd <= 6,
+                            onClick: () => handleOpenPreview(sim)
+                          });
+                        });
+                      
+                      // ============================================
+                      // 3. UNPUBLISHED SIMULATIONS ENDING SOON (< 12h)
+                      // ============================================
+                      savedSimulations
+                        .filter(sim => {
+                          if (sim.simulation_status !== 'completed') return false;
+                          if (viewedReports.has(`sim_unpub_${sim.simulation_id}`)) return false;
+                          
+                          const endDate = new Date(sim.end_time);
+                          const hoursUntilEnd = (endDate - new Date()) / (1000 * 60 * 60);
+                          
+                          return hoursUntilEnd > 0 && hoursUntilEnd <= 12;
+                        })
+                        .forEach((sim) => {
+                          const endDate = new Date(sim.end_time);
+                          const hoursUntilEnd = Math.floor((endDate - new Date()) / (1000 * 60 * 60));
+                          
+                          notifications.push({
+                            id: `unpublished-${sim.simulation_id}`,
+                            priority: 3,
+                            type: 'warning',
+                            color: 'yellow',
+                            title: 'Simulation ending soon - not published',
+                            subtitle: `${sim.simulation_name || 'Unnamed'} • Ends in ${hoursUntilEnd}h`,
+                            time: endDate,
+                            isUrgent: hoursUntilEnd <= 3,
+                            onClick: () => handleOpenPreview(sim)
+                          });
+                        });
+                      
+                      // ============================================
+                      // 4. HIGH TRAFFIC ALERT (Current hour)
+                      // ============================================
+                      if (heatmapData.roads.length > 0) {
+                        const currentHour = new Date().getHours();
+                        const heavyRoads = heatmapData.roads.filter(road => {
+                          const currentValue = road.values[currentHour];
+                          return currentValue >= 2.5; // Heavy congestion threshold
+                        });
+                        
+                        if (heavyRoads.length > 0 && !viewedReports.has(`traffic_${currentHour}`)) {
+                          notifications.push({
+                            id: `traffic-${currentHour}`,
+                            priority: 2,
+                            type: 'traffic',
+                            color: 'red',
+                            title: 'Heavy traffic detected now',
+                            subtitle: `${heavyRoads.length} road${heavyRoads.length > 1 ? 's' : ''}: ${heavyRoads.map(r => r.name).join(', ')}`,
+                            time: new Date(),
+                            isUrgent: true,
+                            onClick: () => scrollToCurrentHour()
+                          });
+                        }
+                      }
+                      
+                      // ============================================
+                      // 5. RECENTLY PUBLISHED SUCCESS (< 1 hour)
+                      // ============================================
+                      savedSimulations
+                        .filter(sim => {
+                          if (sim.simulation_status !== 'published') return false;
+                          if (viewedReports.has(`published_${sim.simulation_id}`)) return false;
+                          
+                          const publishedDate = new Date(sim.updated_at || sim.created_at);
+                          const hoursAgo = (new Date() - publishedDate) / (1000 * 60 * 60);
+                          
+                          return hoursAgo <= 1;
+                        })
+                        .slice(0, 2)
+                        .forEach((sim) => {
+                          const publishedDate = new Date(sim.updated_at || sim.created_at);
+                          const minutesAgo = Math.floor((new Date() - publishedDate) / (1000 * 60));
+                          
+                          notifications.push({
+                            id: `published-${sim.simulation_id}`,
+                            priority: 4,
+                            type: 'success',
+                            color: 'green',
+                            title: 'Simulation published successfully',
+                            subtitle: `${sim.simulation_name || 'Unnamed'} • ${minutesAgo}m ago`,
+                            time: publishedDate,
+                            isUrgent: false,
+                            onClick: () => handleOpenPreview(sim)
+                          });
+                        });
+                      
+                      // ============================================
+                      // SORT BY PRIORITY & RENDER
+                      // ============================================
+                      notifications.sort((a, b) => {
+                        if (a.priority !== b.priority) return a.priority - b.priority;
+                        return b.time - a.time;
+                      });
+                      
+                      if (notifications.length === 0) {
+                        return (
+                          <div className="text-center py-8">
+                            <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-green-100 flex items-center justify-center">
+                              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                            <p className="text-sm text-gray-600 font-medium">All clear!</p>
+                            <p className="text-xs text-gray-400 mt-1">No urgent notifications</p>
+                          </div>
+                        );
+                      }
+                      
+                      return notifications.map((notif) => {
+                        // Icon components based on type
+                        const icons = {
+                          alert: (
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                          ),
+                          clock: (
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          ),
+                          warning: (
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                          ),
+                          traffic: (
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                          ),
+                          success: (
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          )
+                        };
+                        
+                        // Color schemes
+                        const colorSchemes = {
+                          red: {
+                            bg: 'bg-red-50',
+                            iconBg: 'bg-red-100',
+                            iconColor: 'text-red-600',
+                            border: 'border-red-200',
+                            hoverBg: 'hover:bg-red-100'
+                          },
+                          orange: {
+                            bg: 'bg-orange-50',
+                            iconBg: 'bg-orange-100',
+                            iconColor: 'text-orange-600',
+                            border: 'border-orange-200',
+                            hoverBg: 'hover:bg-orange-100'
+                          },
+                          yellow: {
+                            bg: 'bg-yellow-50',
+                            iconBg: 'bg-yellow-100',
+                            iconColor: 'text-yellow-600',
+                            border: 'border-yellow-200',
+                            hoverBg: 'hover:bg-yellow-100'
+                          },
+                          green: {
+                            bg: 'bg-green-50',
+                            iconBg: 'bg-green-100',
+                            iconColor: 'text-green-600',
+                            border: 'border-green-200',
+                            hoverBg: 'hover:bg-green-100'
+                          }
+                        };
+                        
+                        const scheme = colorSchemes[notif.color];
                         
                         return (
                           <div
-                            key={`report-${report.id}`}
-                            className="flex gap-2 p-2 bg-red-50 border-l-4 border-red-500 rounded text-sm cursor-pointer hover:shadow-md transition"
-                            onClick={() => setSelectedReport(report)}
+                            key={notif.id}
+                            className={`flex gap-3 p-3 ${scheme.bg} border ${scheme.border} rounded-lg cursor-pointer ${scheme.hoverBg} transition-all duration-200 group relative`}
+                            onClick={notif.onClick}
                           >
-                            <span>🚨</span>
-                            <div className="flex-1">
-                              <p className="font-semibold text-gray-800">
-                                New Public Report: {report.report_type}
-                              </p>
-                             <p className="text-xs text-gray-500">
-                              {(() => {
-                                const reportDate = new Date(report.reported_at);
-                                const now = new Date();
-                                const minutesOld = Math.floor((now - reportDate) / (1000 * 60));
-                                const hoursOld = Math.floor(minutesOld / 60);
-                                const daysOld = Math.floor(hoursOld / 24);
-                                
-                                if (minutesOld < 5) return '🔴 Just now';
-                                if (minutesOld < 60) return `${minutesOld} min ago`;
-                                if (hoursOld < 24) return `${hoursOld}h ago`;
-                                return `${daysOld}d ago`;
-                              })()}
-                            </p>
+                            {/* Icon Badge */}
+                            <div className={`flex-shrink-0 w-10 h-10 ${scheme.iconBg} rounded-lg flex items-center justify-center ${scheme.iconColor}`}>
+                              {icons[notif.type]}
                             </div>
+                            
+                            {/* Content */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="font-semibold text-gray-800 text-sm leading-tight">
+                                  {notif.title}
+                                </p>
+                                {notif.isUrgent && (
+                                  <span className="flex-shrink-0 w-2 h-2 bg-red-500 rounded-full animate-pulse" title="Urgent"></span>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-600 mt-1 truncate">
+                                {notif.subtitle}
+                              </p>
+                            </div>
+                            
+                            {/* Dismiss Button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setViewedReports(prev => new Set([...prev, notif.id]));
+                              }}
+                              className="flex-shrink-0 w-6 h-6 rounded-full hover:bg-white/50 flex items-center justify-center text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-all"
+                              title="Dismiss"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
                           </div>
                         );
-                      })
-                    }
-
-                    {/* ✅ THEN SHOW SIMULATION NOTIFICATIONS */}
-                    {savedSimulations.length === 0 && publicReports.filter(r => r.status === 'pending').length === 0 ? (
-                      <div className="text-center p-4 text-gray-500 text-sm">
-                        No notifications yet
-                      </div>
-                    ) : (
-                      <>
-                        {savedSimulations.slice(0, 3).map((sim) => {
-                          const simDate = new Date(sim.created_at);
-                          const hoursSince = (new Date() - simDate) / (1000 * 60 * 60);
-
-                          let icon, bgColor, borderColor, title;
-
-                          if (sim.simulation_status === "published") {
-                            icon = "✅";
-                            bgColor = "bg-green-50";
-                            borderColor = "border-green-500";
-                            title = "Report generated";
-                          } else if (hoursSince < 1) {
-                            icon = "ℹ️";
-                            bgColor = "bg-blue-50";
-                            borderColor = "border-blue-500";
-                            title = "Simulation ready";
-                          } else {
-                            icon = "⚠️";
-                            bgColor = "bg-yellow-50";
-                            borderColor = "border-yellow-500";
-                            title = "Draft expiring";
-                          }
-
-                          return (
-                            <div
-                              key={sim.simulation_id}
-                              className={`flex gap-2 p-2 ${bgColor} border-l-4 ${borderColor} rounded text-sm cursor-pointer hover:shadow-md transition`}
-                              onClick={() => router.push("/data")}
-                            >
-                              <span>{icon}</span>
-                              <div className="flex-1">
-                                <p className="font-semibold text-gray-800">
-                                  {title}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  {getRelativeTime(sim.created_at)}
-                                </p>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </>
-                    )}
+                      });
+                    })()}
                   </>
                 )}
               </div>
             </div>
-          
+                      
 
             {/* Ongoing Disruptions Map - BELOW NOTIFICATIONS */}
             <div className="bg-white rounded-lg shadow-md p-6">
