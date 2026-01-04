@@ -12,7 +12,7 @@ export function AuthProvider({ children }) {
   const router = useRouter();
 
   // ✅ FIXED: Properly construct base URL and auth URL
-  const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://backend.urbanflowph.com";
   const API_BASE_URL = `${BASE_URL}/api/auth`; // Auth endpoints are at /api/auth/*
 
   useEffect(() => {
@@ -39,6 +39,30 @@ export function AuthProvider({ children }) {
     
     if (!token) {
       console.log("❌ No token - setting loading to false");
+      setLoading(false);
+      return;
+    }
+
+    // ✅ NEW: Check if token is expired before making API call
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1])); // Decode JWT payload
+      const expiryTime = payload.exp * 1000; // Convert to milliseconds
+      
+      if (Date.now() >= expiryTime) {
+        console.log("⏰ Token expired - clearing session");
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+      
+      console.log(`✅ Token valid - expires in ${Math.round((expiryTime - Date.now()) / 1000 / 60)} minutes`);
+    } catch (e) {
+      console.error("❌ Failed to decode token:", e);
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      setUser(null);
       setLoading(false);
       return;
     }
@@ -120,11 +144,31 @@ export function AuthProvider({ children }) {
     localStorage.setItem("just_logged_out", "true");
     
     console.log("🔑 Token before clear:", localStorage.getItem("token"));
+    
+    // ✅ Clear ALL auth-related data
     localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    sessionStorage.clear(); // ✅ Also clear session storage
+    
     console.log("🔑 Token after clear:", localStorage.getItem("token"));
     
     setUser(null);
     console.log("👤 User set to null");
+    
+    // ✅ Optional: Call backend logout endpoint (if you want to blacklist the token)
+    try {
+      const token = localStorage.getItem("token");
+      if (token) {
+        await fetch(`${API_BASE_URL}/logout`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      }
+    } catch (e) {
+      console.log("⚠️ Backend logout failed (non-critical):", e);
+    }
     
     await new Promise(resolve => setTimeout(resolve, 200));
     

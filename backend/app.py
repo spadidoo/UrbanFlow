@@ -2,7 +2,18 @@
 # Replace your entire app.py with this file
 import os
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, jsonify
+from api.generate_recommendations import recommendations_bp
+
+# Load environment-specific .env file
+env = os.getenv('FLASK_ENV', 'development')
+if env == 'production':
+    load_dotenv('.env.production')
+    print("✅ Loaded .env.production")
+else:
+    load_dotenv('.env')
+    print("✅ Loaded .env (development)")
+
+from flask import Flask, render_template, request, jsonify,  send_from_directory
 from flask_cors import CORS
 from models.predictor import TrafficPredictor
 from datetime import datetime, timedelta
@@ -19,13 +30,8 @@ from flask import jsonify, request, send_file, make_response
 from datetime import datetime
 import pandas as pd
 import io
-from reportlab.lib.pagesizes import letter, A4
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
-from reportlab.lib.units import inch
-import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment
+## ReportLab and openpyxl are used in the PDF/report generator service and route modules.
+## They are intentionally not imported at the top-level here to avoid duplication.
 from psycopg2.extras import RealDictCursor
 from werkzeug.utils import secure_filename
 import os
@@ -36,23 +42,51 @@ import smtplib
 from flask import Blueprint, request, jsonify
 from flask_mail import Message
 import requests
-
-
+from routes.public_reports import public_reports_bp
+from routes.reports import reports_bp
+from supabase import create_client, Client
 
 load_dotenv()
 
-app = Flask(__name__)
+# Initialize Supabase
+SUPABASE_URL = os.environ.get('SUPABASE_URL')
+SUPABASE_KEY = os.environ.get('SUPABASE_KEY')
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# Correct static path
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FRONTEND_DIR = os.path.join(BASE_DIR, '..', 'frontend')
+
+app = Flask(__name__, static_folder=FRONTEND_DIR, static_url_path='/')
+
+# CORS for production + dev
 CORS(app, resources={
     r"/api/*": {
-        "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "origins": [
+            "https://urbanflowph.com",
+            "https://www.urbanflowph.com",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000"
+        ],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
         "allow_headers": ["Content-Type", "Authorization"],
         "supports_credentials": True
+        
     }
 })
 
+
 # register blueprints after CORS
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
+app.register_blueprint(public_reports_bp)
+app.register_blueprint(reports_bp)
+app.register_blueprint(recommendations_bp)
+
+# After your blueprint registrations
+@app.route('/uploads/public_reports/<filename>')
+def uploaded_file(filename):
+    upload_folder = '/home/urbanflow/uploads/public_reports'
+    return send_from_directory(upload_folder, filename)
 
 # ============================================================
 # File upload configuration
@@ -93,8 +127,12 @@ MAX_FILE_SIZE = 2 * 1024 * 1024
 # ============================================================
 
 print("Loading trained model...")
-predictor = TrafficPredictor()
-print("✓ Model loaded and ready!")
+try:
+    predictor = TrafficPredictor()
+    print("✓ Model loaded and ready!")
+except Exception as e:
+    print(f"⚠️ Model loading failed: {e}")
+    predictor = None
 
 # After creating the app
 traffic_service = TrafficAPIService()
@@ -265,7 +303,7 @@ Message:
 
 @app.route('/api/google-directions', methods=['POST'])
 def google_directions():
-    """Proxy endpoint for Google Directions API to avoid CORS"""
+    """Proxy endpoint for Google Directions API with alternatives"""
     try:
         data = request.get_json()
         origin = data.get('origin')  # "lat,lng"
@@ -274,22 +312,398 @@ def google_directions():
         if not origin or not destination:
             return jsonify({'error': 'Missing origin or destination'}), 400
         
-        # Get API key from environment or hardcode temporarily
-        api_key = os.environ.get('GOOGLE_MAPS_API_KEY', 'YOUR_API_KEY_HERE')
+        # Get API key from environment
+        api_key = os.environ.get('GOOGLE_MAPS_API_KEY')
         
-        url = f"https://maps.googleapis.com/maps/api/directions/json?origin={origin}&destination={destination}&mode=driving&key={api_key}"
+        if not api_key:
+            return jsonify({'error': 'Google Maps API key not configured'}), 500
         
-        response = requests.get(url, timeout=10)
+        # Get waypoints if provided
+        waypoints = data.get('waypoints')
+        
+        # Build URL
+      # Build URL
+        url = (
+            f"https://maps.googleapis.com/maps/api/directions/json?"
+            f"origin={origin}"
+            f"&destination={destination}"
+            f"&mode=driving"
+            f"&alternatives=true"
+        )
+                
+        # Add waypoints if provided
+        if waypoints:
+            url += f"&waypoints=via:{waypoints.replace('|', '|via:')}"
+            print(f"   📍 Including waypoints: {waypoints}")
+        
+        url += f"&key={api_key}"
+        
+        print(f"🔄 Requesting Google Directions...")
+        print(f"   Origin: {origin}")
+        print(f"   Destination: {destination}")
+        print(f"   Alternatives: true")
+        
+        response = requests.get(url, timeout=15)
         
         if response.status_code == 200:
-            return jsonify(response.json())
+            result = response.json()
+            
+            if result.get('status') == 'OK':
+                num_routes = len(result.get('routes', []))
+                print(f"✅ Google returned {num_routes} route(s)")
+                
+                # 🔍 DEBUG: Print route details
+                for i, route in enumerate(result.get('routes', [])):
+                    leg = route['legs'][0]
+                    distance_km = leg['distance']['value'] / 1000
+                    duration_min = leg['duration']['value'] / 60
+                    print(f"   Route {i+1}: {distance_km:.1f}km, {duration_min:.0f}min")
+                
+                return jsonify(result)
+            else:
+                print(f"⚠️ Google API status: {result.get('status')}")
+                print(f"   Message: {result.get('error_message', 'No error message')}")
+                return jsonify(result)
         else:
+            print(f"❌ Google API HTTP error: {response.status_code}")
             return jsonify({'error': f'Google API error: {response.status_code}'}), response.status_code
             
     except Exception as e:
         print(f"❌ Google Directions error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/calculate-alternate-routes', methods=['POST'])
+def calculate_alternate_routes():
+    """
+    Calculate up to 3 alternate routes avoiding a disruption zone
+    
+    Request body:
+    {
+        "origin": {"lat": 14.1894, "lng": 121.1653},
+        "destination": {"lat": 14.2096, "lng": 121.1640},
+        "disruption_center": {"lat": 14.1950, "lng": 121.1670},
+        "disruption_radius_m": 500,
+        "avoid_tolls": false
+    }
+    
+    Returns 3 routes:
+    - Route 1: Fastest (may go through disruption if unavoidable)
+    - Route 2: Avoiding disruption zone
+    - Route 3: Alternative avoiding disruption
+    """
+    try:
+        data = request.get_json()
+        
+        origin = data.get('origin')  # {lat, lng}
+        destination = data.get('destination')  # {lat, lng}
+        disruption = data.get('disruption_center')  # {lat, lng}
+        disruption_radius = data.get('disruption_radius_m', 500)
+        avoid_tolls = data.get('avoid_tolls', False)
+        
+        # Validate inputs
+        if not origin or not destination:
+            return jsonify({
+                'success': False,
+                'error': 'origin and destination are required'
+            }), 400
+        
+        # Format coordinates for Google API
+        origin_str = f"{origin['lat']},{origin['lng']}"
+        dest_str = f"{destination['lat']},{destination['lng']}"
+        
+        api_key = os.getenv('GOOGLE_MAPS_API_KEY')
+        
+        routes = []
+        
+        # ============================================
+        # Route 1: Direct/Fastest (baseline)
+        # ============================================
+        url1 = f"https://maps.googleapis.com/maps/api/directions/json"
+        params1 = {
+            'origin': origin_str,
+            'destination': dest_str,
+            'mode': 'driving',
+            'alternatives': 'false',
+            'key': api_key
+        }
+        
+        response1 = requests.get(url1, params=params1, timeout=10)
+        if response1.status_code == 200:
+            data1 = response1.json()
+            if data1['status'] == 'OK' and len(data1['routes']) > 0:
+                route = data1['routes'][0]
+                leg = route['legs'][0]
+                
+                routes.append({
+                    'route_id': 1,
+                    'name': 'Fastest Route',
+                    'description': 'Direct route (may pass through disruption)',
+                    'color': '#3B82F6',  # Blue
+                    'distance_text': leg['distance']['text'],
+                    'distance_m': leg['distance']['value'],
+                    'duration_text': leg['duration']['text'],
+                    'duration_seconds': leg['duration']['value'],
+                    'polyline': route['overview_polyline']['points'],
+                    'steps': leg['steps'],
+                    'warnings': route.get('warnings', []),
+                    'passes_through_disruption': _route_intersects_disruption(
+                        route['overview_polyline']['points'],
+                        disruption,
+                        disruption_radius
+                    ) if disruption else False
+                })
+        
+        # ============================================
+        # Route 2 & 3: Alternates (request alternatives=true)
+        # ============================================
+        url2 = f"https://maps.googleapis.com/maps/api/directions/json"
+        params2 = {
+            'origin': origin_str,
+            'destination': dest_str,
+            'mode': 'driving',
+            'alternatives': 'true',  # ✅ Request multiple routes
+            'avoid': 'tolls' if avoid_tolls else '',
+            'key': api_key
+        }
+        
+        response2 = requests.get(url2, params=params2, timeout=10)
+        if response2.status_code == 200:
+            data2 = response2.json()
+            if data2['status'] == 'OK':
+                # Google returns up to 3 routes when alternatives=true
+                for idx, route in enumerate(data2['routes'][1:], start=2):  # Skip first (same as Route 1)
+                    if idx > 3:  # Limit to 3 total routes
+                        break
+                    
+                    leg = route['legs'][0]
+                    
+                    passes_disruption = _route_intersects_disruption(
+                        route['overview_polyline']['points'],
+                        disruption,
+                        disruption_radius
+                    ) if disruption else False
+                    
+                    routes.append({
+                        'route_id': idx,
+                        'name': f'Alternate Route {idx - 1}',
+                        'description': 'Avoids disruption zone' if not passes_disruption else 'May have delays',
+                        'color': '#10B981' if not passes_disruption else '#F59E0B',  # Green or Orange
+                        'distance_text': leg['distance']['text'],
+                        'distance_m': leg['distance']['value'],
+                        'duration_text': leg['duration']['text'],
+                        'duration_seconds': leg['duration']['value'],
+                        'polyline': route['overview_polyline']['points'],
+                        'steps': leg['steps'],
+                        'warnings': route.get('warnings', []),
+                        'passes_through_disruption': passes_disruption,
+                        'estimated_delay_minutes': 0 if not passes_disruption else 15  # Rough estimate
+                    })
+        
+        # Sort routes: prefer those avoiding disruption
+        routes.sort(key=lambda r: (r['passes_through_disruption'], r['duration_seconds']))
+        
+        return jsonify({
+            'success': True,
+            'routes': routes[:3],  # Return max 3 routes
+            'origin': origin,
+            'destination': destination,
+            'disruption_center': disruption,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        print(f"❌ Route calculation error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+        
 
+
+def _route_intersects_disruption(encoded_polyline, disruption_center, radius_m):
+    """Check if route passes through disruption zone - IMPROVED"""
+    try:
+        # Try to use polyline library
+        try:
+            from polyline import decode
+            points = decode(encoded_polyline)
+        except ImportError:
+            # Fallback: Manual polyline decoding
+            points = _manual_decode_polyline(encoded_polyline)
+        
+        disruption_lat = disruption_center['lat']
+        disruption_lng = disruption_center['lng']
+        
+        # Check each point - use smaller check interval for accuracy
+        for lat, lng in points:
+            distance = _haversine_distance(lat, lng, disruption_lat, disruption_lng)
+            if distance <= radius_m:
+                return True
+        
+        return False
+        
+    except Exception as e:
+        print(f"⚠️ Error checking route intersection: {e}")
+        # Be conservative - assume it does intersect if we can't check
+        return True  # Changed from False for safety
+
+def _manual_decode_polyline(encoded):
+    """Manual polyline decoder as fallback"""
+    coordinates = []
+    index = lat = lng = 0
+    
+    while index < len(encoded):
+        result = 1
+        shift = 0
+        while True:
+            b = ord(encoded[index]) - 63 - 1
+            index += 1
+            result += b << shift
+            shift += 5
+            if b < 0x1f:
+                break
+        lat += (~result >> 1) if (result & 1) != 0 else (result >> 1)
+        
+        result = 1
+        shift = 0
+        while True:
+            b = ord(encoded[index]) - 63 - 1
+            index += 1
+            result += b << shift
+            shift += 5
+            if b < 0x1f:
+                break
+        lng += (~result >> 1) if (result & 1) != 0 else (result >> 1)
+        
+        coordinates.append([lat * 1e-5, lng * 1e-5])
+    
+    return coordinates
+
+
+def _haversine_distance(lat1, lng1, lat2, lng2):
+    """Calculate distance in meters between two coordinates"""
+    from math import radians, sin, cos, sqrt, atan2
+    
+    R = 6371000  # Earth radius in meters
+    
+    lat1, lng1, lat2, lng2 = map(radians, [lat1, lng1, lat2, lng2])
+    
+    dlat = lat2 - lat1
+    dlng = lng2 - lng1
+    
+    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlng/2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1-a))
+    
+    return R * c
+
+@app.route('/api/predict-delay', methods=['POST'])
+def predict_delay():
+    """Predict traffic delay using ML model based on published simulations"""
+    try:
+        data = request.get_json()
+        
+        # Extract parameters
+        disruption_id = data.get('disruption_id')
+        route_distance = data.get('route_distance', 3.0)
+        distance_through_disruption = data.get('distance_through_disruption', 0.5)
+        
+        if not disruption_id:
+            return jsonify({'error': 'Missing disruption_id'}), 400
+        
+        # Get published simulation details from database
+        disruption = supabase.table('v_published_user_simulations')\
+            .select('*')\
+            .eq('published_id', disruption_id)\
+            .execute()
+        
+        if not disruption.data or len(disruption.data) == 0:
+            return jsonify({'error': 'Published simulation not found'}), 404
+        
+        disruption_data = disruption.data[0]
+        
+        # Extract the average_delay_ratio from the simulation
+        average_delay_ratio = float(disruption_data.get('average_delay_ratio', 1.0))
+        
+        # ✅ Get current time info HERE (BEFORE the try block)
+        from datetime import datetime
+        now = datetime.now()
+        current_hour = now.hour
+        day_of_week = now.weekday()
+        
+        # ✅ Prepare prediction input HERE (BEFORE the try block)
+        prediction_input = {
+            'hour': current_hour,
+            'day_of_week': day_of_week,
+            'disruption_type': disruption_data.get('disruption_type', 'roadwork'),
+            'location': disruption_data.get('disruption_location', 'Unknown'),
+            'route_distance': route_distance,
+            'distance_through_disruption': distance_through_disruption,
+            'average_delay_ratio': average_delay_ratio,
+            'severity_level': disruption_data.get('severity_level', 'moderate')
+        }
+        
+        # NOW use the predictor
+        try:
+            from models.predictor import TrafficPredictor
+            
+            predictor = TrafficPredictor()
+            predicted_delay_minutes = predictor.predict_disruption_impact(prediction_input)
+            
+            if predicted_delay_minutes is None or predicted_delay_minutes <= 0:
+                raise ValueError("Invalid prediction result")
+            
+            print(f"✅ ML Prediction for simulation '{disruption_data.get('published_title')}':")
+            print(f"   Hour: {current_hour}, Day: {day_of_week}")
+            print(f"   Route: {route_distance}km, Through disruption: {distance_through_disruption}km")
+            print(f"   Average delay ratio: {average_delay_ratio}")
+            print(f"   Severity: {disruption_data.get('severity_level')}")
+            print(f"   Predicted delay: {predicted_delay_minutes} min")
+            
+            return jsonify({
+                'disruption_id': disruption_id,
+                'disruption_title': disruption_data.get('published_title'),
+                'predicted_delay_minutes': round(predicted_delay_minutes, 1),
+                'average_delay_ratio': average_delay_ratio,
+                'severity_level': disruption_data.get('severity_level'),
+                'confidence': 'high',
+                'factors': {
+                    'hour': current_hour,
+                    'day_of_week': day_of_week,
+                    'disruption_type': disruption_data.get('disruption_type'),
+                    'distance_through': distance_through_disruption,
+                    'delay_ratio': average_delay_ratio
+                }
+            })
+            
+        except Exception as e:
+            print(f"❌ ML Prediction error: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Fallback calculation
+            fallback_delay = (distance_through_disruption / route_distance) * 10 * average_delay_ratio
+            fallback_delay = max(fallback_delay, 3)
+            
+            print(f"   Using fallback delay: {fallback_delay} min")
+            
+            return jsonify({
+                'disruption_id': disruption_id,
+                'disruption_title': disruption_data.get('published_title'),
+                'predicted_delay_minutes': round(fallback_delay, 1),
+                'average_delay_ratio': average_delay_ratio,
+                'confidence': 'fallback',
+                'error': str(e)
+            })
+            
+    except Exception as e:
+        print(f"❌ Predict delay error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 # ============================================================
 # NEW ROUTE: Upload Avatar
 # ============================================================
@@ -649,550 +1063,136 @@ def get_finished_reports():
             'error': str(e)
         }), 500
 
-
-# ============================================================
-# NEW ROUTE: Export Report as PDF
-# ============================================================
-
-@app.route('/api/reports/<int:simulation_id>/export', methods=['GET'])
-def export_report(simulation_id):
-    """
-    Export a report in PDF, CSV, or Excel format
-    
-    Query params:
-        - format: 'pdf', 'csv', or 'excel' (required)
-    """
+@app.route('/api/reports/generate', methods=['POST'])
+def generate_report():
+    """Generate a report for a simulation"""
     try:
-        export_format = request.args.get('format', '').lower()
+        data = request.json
+        simulation_id = data.get('simulation_id')
+        user_id = data.get('user_id')
         
-        if export_format not in ['pdf', 'csv', 'excel']:
+        if not simulation_id or not user_id:
             return jsonify({
                 'success': False,
-                'error': 'Invalid format. Must be pdf, csv, or excel'
+                'error': 'Missing simulation_id or user_id'
             }), 400
         
-        # Get simulation data
-        simulation = db.get_simulation_by_id(simulation_id)
+        # Get connection using your db pattern
+        conn = db._get_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cursor.execute("""
+            SELECT simulation_id, user_id, simulation_name
+            FROM simulation_runs
+            WHERE simulation_id = %s
+        """, (simulation_id,))
+        
+        simulation = cursor.fetchone()
         
         if not simulation:
+            cursor.close()
             return jsonify({
                 'success': False,
                 'error': 'Simulation not found'
             }), 404
         
-        # Generate export based on format
-        if export_format == 'pdf':
-            return export_as_pdf(simulation)
-        elif export_format == 'csv':
-            return export_as_csv(simulation)
-        elif export_format == 'excel':
-            return export_as_excel(simulation)
-            
+        # Verify ownership
+        if simulation['user_id'] != user_id:
+            cursor.close()
+            return jsonify({
+                'success': False,
+                'error': 'Unauthorized'
+            }), 403
+        
+        # Mark simulation as having a report generated
+        cursor.execute("""
+            UPDATE simulation_runs 
+            SET has_report = TRUE, 
+                report_generated_at = CURRENT_TIMESTAMP
+            WHERE simulation_id = %s
+        """, (simulation_id,))
+        
+        conn.commit()
+        cursor.close()
+        
+        print(f"✓ Report generated for simulation {simulation_id}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Report generated successfully',
+            'report_id': simulation_id
+        })
+        
     except Exception as e:
         import traceback
-        print(f"✗ Error exporting report: {e}")
+        print(f"✗ Error generating report: {e}")
         traceback.print_exc()
+        try:
+            conn.rollback()
+        except:
+            pass
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
 
 
-def export_as_pdf(simulation):
-    """
-    Generate COMPACT PDF export with minimal spacing
-    All sections flow continuously without unnecessary page breaks
-    """
-    buffer = io.BytesIO()
-    
-    # ============================================================
-    # COMPACT DOCUMENT SETUP - Reduced margins
-    # ============================================================
-    doc = SimpleDocTemplate(
-        buffer, 
-        pagesize=letter,
-        rightMargin=40,      # Reduced from 50
-        leftMargin=40,       # Reduced from 50
-        topMargin=35,        # Reduced from 50
-        bottomMargin=25      # Reduced from 30
-    )
-    
-    elements = []
-    styles = getSampleStyleSheet()
-    
-    # ============================================================
-    # COMPACT STYLES - Reduced spacing
-    # ============================================================
-    
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=18,          # Reduced from 22
-        textColor=colors.HexColor('#FF6B35'),
-        spaceAfter=8,         # Reduced from 20
-        spaceBefore=0,
-        alignment=1,
-        fontName='Helvetica-Bold'
-    )
-    
-    heading_style = ParagraphStyle(
-        'CustomHeading',
-        parent=styles['Heading2'],
-        fontSize=12,          # Reduced from 14
-        textColor=colors.HexColor('#2C3E50'),
-        spaceAfter=6,         # Reduced from 10
-        spaceBefore=8,        # Reduced from 15
-        fontName='Helvetica-Bold'
-    )
-    
-    subheading_style = ParagraphStyle(
-        'CustomSubheading',
-        parent=styles['Heading3'],
-        fontSize=10,          # Reduced from 12
-        textColor=colors.HexColor('#34495E'),
-        spaceAfter=4,         # Reduced from 8
-        spaceBefore=6,        # Reduced from 10
-        fontName='Helvetica-Bold'
-    )
-    
-    compact_normal = ParagraphStyle(
-        'CompactNormal',
-        parent=styles['Normal'],
-        fontSize=9,
-        spaceAfter=4,
-        spaceBefore=0
-    )
-    
-    # ============================================================
-    # TITLE AND METADATA - Compact
-    # ============================================================
-    
-    title = Paragraph(
-        f"UrbanFlow Traffic Simulation Report<br/>{simulation['simulation_name']}", 
-        title_style
-    )
-    elements.append(title)
-    elements.append(Spacer(1, 6))  # Reduced from 10
-    
-    # Report metadata - compact
-    metadata_text = f"""
-    <b>Report Generated:</b> {datetime.now().strftime('%B %d, %Y at %I:%M %p')}<br/>
-    <b>Simulation ID:</b> {simulation['simulation_id']}<br/>
-    <b>Report Type:</b> Traffic Disruption Analysis
-    """
-    elements.append(Paragraph(metadata_text, compact_normal))
-    elements.append(Spacer(1, 8))  # Reduced from 15
-    
-    # ============================================================
-    # BASIC INFORMATION TABLE - Compact
-    # ============================================================
-    
-    elements.append(Paragraph("Simulation Information", heading_style))
-    
-    info_data = [
-        ['Field', 'Value'],
-        ['Type', (simulation['disruption_type'] or 'N/A').capitalize()],
-        ['Location', simulation['disruption_location'] or 'N/A'],
-        ['Start Date', simulation['start_time'].strftime('%Y-%m-%d %H:%M') if simulation['start_time'] else 'N/A'],
-        ['End Date', simulation['end_time'].strftime('%Y-%m-%d %H:%M') if simulation['end_time'] else 'N/A'],
-        ['Severity Level', (simulation['severity_level'] or 'N/A').capitalize()],
-        ['Duration', f"{calculate_duration_hours(simulation)} hours"],
-    ]
-    
-    info_table = Table(info_data, colWidths=[2.2*inch, 4*inch])
-    info_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498DB')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),  # Reduced from 10
-        ('TOPPADDING', (0, 0), (-1, 0), 6),     # Reduced from 10
-        ('BACKGROUND', (0, 1), (0, -1), colors.HexColor('#ECF0F1')),
-        ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-        ('FONTNAME', (1, 1), (1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 9),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8F9FA')]),
-        ('TOPPADDING', (0, 1), (-1, -1), 4),    # Reduced padding
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
-    ]))
-    
-    elements.append(info_table)
-    elements.append(Spacer(1, 10))  # Reduced from 20
-    
-    # ============================================================
-    # SUMMARY METRICS - Compact
-    # ============================================================
-    
-    elements.append(Paragraph("Key Performance Indicators", heading_style))
-    
-    summary_data = [
-        ['Metric', 'Value', 'Impact Level'],
-        ['Total Affected Segments', str(simulation.get('total_affected_segments', 'N/A')), '-'],
-        ['Average Delay Ratio', f"{simulation.get('average_delay_ratio', 0):.2f}x", get_impact_level(simulation.get('average_delay_ratio', 0))],
-        ['Peak Congestion Hour', get_peak_hour(simulation), '-'],
-        ['Status', simulation.get('simulation_status', 'N/A').capitalize(), '-'],
-    ]
-    
-    summary_table = Table(summary_data, colWidths=[2.2*inch, 1.8*inch, 1.8*inch])
-    summary_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2ECC71')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-        ('TOPPADDING', (0, 0), (-1, 0), 6),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F0F0F0')),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 9),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8F9FA')]),
-        ('TOPPADDING', (0, 1), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
-    ]))
-    
-    elements.append(summary_table)
-    elements.append(Spacer(1, 10))  # Reduced from 20
-    
-    # ============================================================
-    # HOUR-BY-HOUR BREAKDOWN - NO PAGE BREAK, COMPACT
-    # ============================================================
-    
-    if simulation.get('results') and len(simulation['results']) > 0:
-        # NO PageBreak() here - let it flow naturally
-        elements.append(Paragraph("Hour-by-Hour Analysis", heading_style))
-        elements.append(Paragraph(
-            "Detailed breakdown of traffic conditions for each hour.",
-            compact_normal
-        ))
-        elements.append(Spacer(1, 6))  # Reduced from 10
+@app.route('/api/reports/list', methods=['GET'])
+def get_reports():
+    """Get all available reports (uses v_reports view)"""
+    try:
+        from datetime import datetime, date
         
-        # Prepare hourly data - limit to reasonable amount per page
-        hourly_data = [['Hour', 'Time', 'Severity', 'Delay (min)', 'Status']]
+        user_id = request.args.get('user_id', type=int)
         
-        # Show up to 24 hours on first page, then continue if needed
-        max_hours_first = 24
-        for i, result in enumerate(simulation['results'][:max_hours_first]):
-            hour = result.get('hour', i)
-            severity = result.get('severity', 0)
-            delay_minutes = result.get('delay_minutes', 0)
-            
-            if simulation['start_time']:
-                time_obj = simulation['start_time'] + timedelta(hours=hour)
-                time_str = time_obj.strftime('%I:%M %p')
-            else:
-                time_str = f"Hour {hour}"
-            
-            status = get_severity_status(severity)
-            
-            hourly_data.append([
-                str(hour),
-                time_str,
-                f"{severity:.2f}",
-                str(delay_minutes),
-                status
-            ])
+        # Get connection using your db pattern
+        conn = db._get_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
         
-        # Compact hourly table
-        hourly_table = Table(hourly_data, colWidths=[0.5*inch, 1.2*inch, 0.9*inch, 1*inch, 1.2*inch])
+        if user_id:
+            cursor.execute("""
+                SELECT * FROM v_reports
+                WHERE user_id = %s
+                ORDER BY report_generated_at DESC NULLS LAST, end_time DESC
+            """, (user_id,))
+        else:
+            cursor.execute("""
+                SELECT * FROM v_reports
+                ORDER BY report_generated_at DESC NULLS LAST, end_time DESC
+            """)
         
-        # Compact table style
-        table_style = [
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E74C3C')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 9),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 5),  # Reduced
-            ('TOPPADDING', (0, 0), (-1, 0), 5),     # Reduced
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 8),
-            ('TOPPADDING', (0, 1), (-1, -1), 3),    # Reduced
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 3), # Reduced
-        ]
+        reports = cursor.fetchall()
+        cursor.close()
         
-        # Color rows based on severity
-        for i, result in enumerate(simulation['results'][:max_hours_first], start=1):
-            severity = result.get('severity', 0)
-            if severity >= 2.0:
-                bg_color = colors.HexColor('#FADBD8')
-            elif severity >= 1.5:
-                bg_color = colors.HexColor('#FCF3CF')
-            elif severity >= 1.0:
-                bg_color = colors.HexColor('#D5F4E6')
-            else:
-                bg_color = colors.white
-            
-            table_style.append(('BACKGROUND', (0, i), (-1, i), bg_color))
+        # Convert datetime objects to strings for JSON serialization
+        for report in reports:
+            for key, value in report.items():
+                if isinstance(value, (datetime, date)):
+                    report[key] = value.isoformat()
         
-        hourly_table.setStyle(TableStyle(table_style))
-        elements.append(hourly_table)
-        elements.append(Spacer(1, 8))  # Reduced from 15
+        return jsonify({
+            'success': True,
+            'reports': reports,
+            'count': len(reports)
+        })
         
-        # Legend - compact
-        legend_text = """
-        <b>Severity Legend:</b> Light (&lt;1.5), Moderate (1.5-2.0), Heavy (&gt;2.0)
-        """
-        elements.append(Paragraph(legend_text, compact_normal))
-        
-        # ============================================================
-        # DAY-BY-DAY BREAKDOWN - NO PAGE BREAK if multi-day
-        # ============================================================
-        
-        duration_hours = calculate_duration_hours(simulation)
-        if duration_hours > 24:
-            # NO PageBreak() - let it continue on same page if space allows
-            elements.append(Spacer(1, 10))
-            elements.append(Paragraph("Day-by-Day Summary", heading_style))
-            elements.append(Paragraph(
-                "Daily aggregated metrics showing average conditions.",
-                compact_normal
-            ))
-            elements.append(Spacer(1, 6))
-            
-            daily_summary = calculate_daily_summary(simulation)
-            
-            daily_data = [['Day', 'Date', 'Avg Severity', 'Peak Hour', 'Max Delay (min)', 'Status']]
-            
-            for day_info in daily_summary[:14]:  # Limit to 14 days per page
-                daily_data.append([
-                    f"Day {day_info['day_number']}",
-                    day_info['date'],
-                    f"{day_info['avg_severity']:.2f}",
-                    day_info['peak_hour'],
-                    str(day_info['max_delay']),
-                    day_info['status']
-                ])
-            
-            daily_table = Table(daily_data, colWidths=[0.6*inch, 1.3*inch, 1*inch, 1*inch, 1.1*inch, 1*inch])
-            daily_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#9B59B6')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 9),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
-                ('TOPPADDING', (0, 0), (-1, 0), 5),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 1), (-1, -1), 8),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8F9FA')]),
-                ('TOPPADDING', (0, 1), (-1, -1), 3),
-                ('BOTTOMPADDING', (0, 1), (-1, -1), 3),
-            ]))
-            
-            elements.append(daily_table)
-            elements.append(Spacer(1, 8))
-        
-        # ============================================================
-        # WEEK-BY-WEEK BREAKDOWN - Only if very long
-        # ============================================================
-        
-        if duration_hours > 168:  # More than 1 week
-            # Add page break only for weekly summary since it's a separate analysis
-            elements.append(PageBreak())
-            elements.append(Paragraph("Week-by-Week Summary", heading_style))
-            elements.append(Paragraph(
-                "Weekly aggregated trends showing overall patterns.",
-                compact_normal
-            ))
-            elements.append(Spacer(1, 6))
-            
-            weekly_summary = calculate_weekly_summary(simulation)
-            
-            weekly_data = [['Week', 'Date Range', 'Avg Severity', 'Total Hours', 'Avg Delay (min)', 'Trend']]
-            
-            for week_info in weekly_summary:
-                weekly_data.append([
-                    f"Week {week_info['week_number']}",
-                    week_info['date_range'],
-                    f"{week_info['avg_severity']:.2f}",
-                    str(week_info['total_hours']),
-                    f"{week_info['avg_delay']:.1f}",
-                    week_info['trend']
-                ])
-            
-            weekly_table = Table(weekly_data, colWidths=[0.7*inch, 1.8*inch, 1*inch, 1*inch, 1.1*inch, 0.9*inch])
-            weekly_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#16A085')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 9),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
-                ('TOPPADDING', (0, 0), (-1, 0), 5),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 1), (-1, -1), 8),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8F9FA')]),
-                ('TOPPADDING', (0, 1), (-1, -1), 3),
-                ('BOTTOMPADDING', (0, 1), (-1, -1), 3),
-            ]))
-            
-            elements.append(weekly_table)
-            elements.append(Spacer(1, 8))
-    
-    # ============================================================
-    # FOOTER - Compact
-    # ============================================================
-    
-    elements.append(Spacer(1, 15))
-    footer_style = ParagraphStyle(
-        'Footer',
-        parent=styles['Normal'],
-        fontSize=8,
-        textColor=colors.grey,
-        alignment=1
-    )
-    footer_text = f"""
-    <b>UrbanFlow Traffic Simulation System</b><br/>
-    Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}<br/>
-    For official use by CCPOSO and DPWH | Calamba City, Laguna
-    """
-    elements.append(Paragraph(footer_text, footer_style))
-    
-    # Build PDF
-    doc.build(elements)
-    
-    # Prepare response
-    buffer.seek(0)
-    filename = f"urbanflow_report_{simulation['simulation_id']}_{datetime.now().strftime('%Y%m%d')}.pdf"
-    
-    from flask import make_response
-    response = make_response(buffer.getvalue())
-    response.headers['Content-Type'] = 'application/pdf'
-    response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
-    
-    return response
+    except Exception as e:
+        import traceback
+        print(f"✗ Error fetching reports: {e}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+## Removed: App-level PDF/CSV/Excel export route
+## The new blueprint `routes.reports` now handles the `/api/reports/<id>/export` endpoint.
 
 
-def export_as_csv(simulation):
-    """Generate CSV export of simulation report"""
-    # Prepare data
-    data = {
-        'Simulation ID': [simulation['simulation_id']],
-        'Title': [simulation['simulation_name']],
-        'Type': [(simulation['disruption_type'] or 'N/A').capitalize()],
-        'Location': [simulation['disruption_location'] or 'N/A'],
-        'Start Date': [simulation['start_time'].strftime('%Y-%m-%d %H:%M') if simulation['start_time'] else 'N/A'],
-        'End Date': [simulation['end_time'].strftime('%Y-%m-%d %H:%M') if simulation['end_time'] else 'N/A'],
-        'Severity Level': [(simulation['severity_level'] or 'N/A').capitalize()],
-        'Total Affected Segments': [simulation.get('total_affected_segments', 'N/A')],
-        'Average Delay Ratio': [simulation.get('average_delay_ratio', 'N/A')],
-        'Status': [simulation.get('simulation_status', 'N/A').capitalize()],
-    }
-    
-    df = pd.DataFrame(data)
-    
-    # If there are results, add them as well
-    if simulation.get('results') and len(simulation['results']) > 0:
-        # Create a separate section for hourly results
-        results_data = []
-        for result in simulation['results']:
-            results_data.append({
-                'Hour': result.get('hour', 'N/A'),
-                'Severity': result.get('severity', 'N/A'),
-                'Delay Minutes': result.get('delay_minutes', 'N/A')
-            })
-        
-        results_df = pd.DataFrame(results_data)
-        
-        # Combine both dataframes with a separator
-        output = io.StringIO()
-        df.to_csv(output, index=False)
-        output.write('\n\n--- Hourly Results ---\n')
-        results_df.to_csv(output, index=False)
-        csv_content = output.getvalue()
-    else:
-        csv_content = df.to_csv(index=False)
-    
-    # Prepare response
-    filename = f"report_{simulation['simulation_id']}_{simulation['simulation_name'].replace(' ', '_')}.csv"
-    
-    response = make_response(csv_content)
-    response.headers['Content-Type'] = 'text/csv'
-    response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
-    
-    return response
+## CSV export is now handled by the reports blueprint in `backend/routes/reports.py`
+## Keeping minimal reference here for backwards clarity.
 
 
-def export_as_excel(simulation):
-    """Generate Excel export of simulation report"""
-    output = io.BytesIO()
-    
-    # Create workbook
-    wb = openpyxl.Workbook()
-    
-    # Sheet 1: Summary
-    ws_summary = wb.active
-    ws_summary.title = "Summary"
-    
-    # Add header
-    ws_summary['A1'] = 'UrbanFlow Traffic Simulation Report'
-    ws_summary['A1'].font = Font(size=16, bold=True, color='FF6B35')
-    ws_summary.merge_cells('A1:B1')
-    
-    # Add basic info
-    info_data = [
-        ['Simulation ID', simulation['simulation_id']],
-        ['Title', simulation['simulation_name']],
-        ['Type', (simulation['disruption_type'] or 'N/A').capitalize()],
-        ['Location', simulation['disruption_location'] or 'N/A'],
-        ['Start Date', simulation['start_time'].strftime('%Y-%m-%d %H:%M') if simulation['start_time'] else 'N/A'],
-        ['End Date', simulation['end_time'].strftime('%Y-%m-%d %H:%M') if simulation['end_time'] else 'N/A'],
-        ['Severity Level', (simulation['severity_level'] or 'N/A').capitalize()],
-        ['Total Affected Segments', simulation.get('total_affected_segments', 'N/A')],
-        ['Average Delay Ratio', simulation.get('average_delay_ratio', 'N/A')],
-        ['Status', simulation.get('simulation_status', 'N/A').capitalize()],
-    ]
-    
-    row = 3
-    for label, value in info_data:
-        ws_summary[f'A{row}'] = label
-        ws_summary[f'B{row}'] = value
-        ws_summary[f'A{row}'].font = Font(bold=True)
-        row += 1
-    
-    # Style the summary sheet
-    ws_summary.column_dimensions['A'].width = 25
-    ws_summary.column_dimensions['B'].width = 40
-    
-    # Sheet 2: Hourly Results (if available)
-    if simulation.get('results') and len(simulation['results']) > 0:
-        ws_results = wb.create_sheet(title="Hourly Results")
-        
-        # Add headers
-        headers = ['Hour', 'Severity', 'Delay (minutes)']
-        for col, header in enumerate(headers, start=1):
-            cell = ws_results.cell(row=1, column=col, value=header)
-            cell.font = Font(bold=True, color='FFFFFF')
-            cell.fill = PatternFill(start_color='3498DB', end_color='3498DB', fill_type='solid')
-            cell.alignment = Alignment(horizontal='center')
-        
-        # Add data
-        for row, result in enumerate(simulation['results'], start=2):
-            ws_results.cell(row=row, column=1, value=result.get('hour', 'N/A'))
-            ws_results.cell(row=row, column=2, value=result.get('severity', 'N/A'))
-            ws_results.cell(row=row, column=3, value=result.get('delay_minutes', 'N/A'))
-        
-        # Style columns
-        ws_results.column_dimensions['A'].width = 15
-        ws_results.column_dimensions['B'].width = 15
-        ws_results.column_dimensions['C'].width = 20
-    
-    # Save workbook
-    wb.save(output)
-    output.seek(0)
-    
-    # Prepare response
-    filename = f"report_{simulation['simulation_id']}_{simulation['simulation_name'].replace(' ', '_')}.xlsx"
-    
-    response = make_response(output.getvalue())
-    response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+## Excel export is now handled by the reports blueprint in `backend/routes/reports.py`
     
     return response
 
@@ -1481,6 +1481,100 @@ def health_check():
 # ============================================================
 # NEW ROUTE: Get Real-Time Traffic Status for Area
 # ============================================================
+@app.route('/api/traffic/live-flow', methods=['GET'])
+def get_live_traffic_flow():
+    """Get live traffic flow for multiple points in Calamba using TomTom API"""
+    try:
+        bounds = request.args.get('bounds')
+        if not bounds:
+            return jsonify({'error': 'Bounds required'}), 400
+        
+        min_lat, min_lng, max_lat, max_lng = map(float, bounds.split(','))
+        
+        tomtom_key = os.getenv('TOMTOM_API_KEY', '')
+        if not tomtom_key:
+            return jsonify({'success': True, 'segments': [], 'message': 'No API key'}), 200
+        
+        # Create a grid of points across Calamba (4x4 grid = 16 points)
+        lat_step = (max_lat - min_lat) / 4
+        lng_step = (max_lng - min_lng) / 4
+        
+        all_segments = []
+        seen_roads = set()  # Avoid duplicate road segments
+        
+        for i in range(4):
+            for j in range(4):
+                lat = min_lat + (i + 0.5) * lat_step
+                lng = min_lng + (j + 0.5) * lng_step
+                
+                try:
+                    url = f"https://api.tomtom.com/traffic/services/4/flowSegmentData/relative/10/json"
+                    params = {
+                        'point': f"{lat},{lng}",
+                        'key': tomtom_key,
+                        'unit': 'KMPH'
+                    }
+                    
+                    response = requests.get(url, params=params, timeout=5)
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        
+                        if 'flowSegmentData' in data:
+                            seg = data['flowSegmentData']
+                            
+                            # Create unique road ID to avoid duplicates
+                            road_id = f"{seg.get('frc', '')}_{seg.get('currentSpeed', 0)}_{lat:.3f}_{lng:.3f}"
+                            
+                            if road_id not in seen_roads:
+                                seen_roads.add(road_id)
+                                
+                                free_flow = seg.get('freeFlowSpeed', 50)
+                                current = seg.get('currentSpeed', 50)
+                                
+                                ratio = current / free_flow if free_flow > 0 else 1
+                                
+                                if ratio >= 0.8:
+                                    severity = 'low'
+                                elif ratio >= 0.5:
+                                    severity = 'moderate'
+                                elif ratio >= 0.3:
+                                    severity = 'high'
+                                else:
+                                    severity = 'severe'
+                                
+                                coords = seg.get('coordinates', {}).get('coordinate', [])
+                                
+                                if coords:
+                                    all_segments.append({
+                                        'coordinates': coords,
+                                        'currentSpeed': current,
+                                        'freeFlowSpeed': free_flow,
+                                        'severity': severity,
+                                        'roadName': seg.get('roadName', 'Unknown Road')
+                                    })
+                    
+                    # Small delay to avoid rate limiting
+                    import time
+                    time.sleep(0.1)
+                    
+                except Exception as e:
+                    print(f"Error fetching point ({lat}, {lng}): {str(e)}")
+                    continue
+        
+        print(f"✓ Fetched {len(all_segments)} traffic segments for Calamba")
+        
+        return jsonify({
+            'success': True,
+            'timestamp': datetime.now().isoformat(),
+            'segments': all_segments,
+            'count': len(all_segments)
+        })
+        
+    except Exception as e:
+        print(f"Error in live traffic: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    
 @app.route('/api/traffic-status', methods=['GET'])
 def get_traffic_status():
     """
@@ -1750,6 +1844,59 @@ def save_simulation():
         user_id = data.get('user_id')  # Default to planner1 (id=2)
         simulation_data = data.get('simulation_data', {})
         results_data = data.get('results_data', {})
+
+        # ✅ ENSURE road coordinates are included
+        if 'road_info' not in results_data:
+            results_data['road_info'] = simulation_data.get('road_info', {})
+
+        # ✅ CRITICAL: Extract road coordinates for severity_lines
+        road_coords = None
+
+        # Try to get from results_data first
+        if results_data.get('road_info'):
+            road_coords = results_data['road_info'].get('coordinates')
+
+        # Fallback: Try simulation_data
+        if not road_coords and simulation_data.get('road_info'):
+            road_coords = simulation_data['road_info'].get('coordinates')
+
+        # Last resort: Generate from disruption point
+        if not road_coords:
+            sim_coords = simulation_data.get('coordinates', {})
+            if sim_coords.get('lat') and sim_coords.get('lng'):
+                lat, lng = sim_coords['lat'], sim_coords['lng']
+                road_coords = [
+                    [lat - 0.002, lng - 0.002],
+                    [lat, lng],
+                    [lat + 0.002, lng + 0.002]
+                ]
+                print(f"  ℹ️ Generated road coordinates from disruption point")
+                
+                # Store in road_info
+                if 'road_info' not in results_data:
+                    results_data['road_info'] = {}
+                results_data['road_info']['coordinates'] = road_coords
+
+        # ✅ NOW: Attach coordinates to ALL severity_lines
+        if road_coords and results_data.get('hourly_predictions'):
+            print(f"\n📍 Attaching road coordinates to severity_lines")
+            
+            # Generate severity_lines from hourly_predictions
+            severity_lines = []
+            
+            for prediction in results_data['hourly_predictions']:
+                line_entry = {
+                    'hour': prediction.get('hour'),
+                    'time_period': prediction.get('datetime'),
+                    'severity_value': prediction.get('severity'),
+                    'severity_level': prediction.get('severity_label', '').lower(),
+                    'delay_minutes': prediction.get('delay_info', {}).get('additional_delay_min', 0),
+                    'coordinates': road_coords,  # ✅ CRITICAL
+                    'granularity': 'hourly'
+                }
+                severity_lines.append(line_entry)
+            
+           
         
         # Validate required fields
         required_fields = ['scenario_name', 'disruption_type', 'area', 'road_corridor']
@@ -1791,6 +1938,8 @@ def save_simulation():
                 'success': False,
                 'error': 'Failed to save simulation'
             }), 500
+        
+        
             
     except Exception as e:
         import traceback
@@ -1978,10 +2127,6 @@ def unpublish_simulation():
 
 @app.route('/api/published-disruptions', methods=['GET'])
 def get_published_disruptions():
-    """
-    Get all published simulations for the public map
-    This replaces the mock data in HomeMapWithSidebar.jsx
-    """
     conn = None
     try:
         conn = db._get_connection()
@@ -2007,11 +2152,14 @@ def get_published_disruptions():
                 sr.severity_level,
                 sr.total_affected_segments,
                 sr.average_delay_ratio,
+                sr.severity_lines,  -- ✅ CRITICAL
+                sr.road_info,
                 ST_Y(sr.disruption_geometry) as latitude,
                 ST_X(sr.disruption_geometry) as longitude,
                 sr.hourly_predictions::text as hourly_predictions_json,
                 u.organization,
-                u.full_name
+                u.first_name,
+                u.last_name
             FROM published_runs pr
             INNER JOIN simulation_runs sr ON pr.simulation_id = sr.simulation_id
             LEFT JOIN users u ON pr.published_by = u.user_id
@@ -2028,66 +2176,101 @@ def get_published_disruptions():
         # Transform to frontend format
         disruptions = []
         for sim in simulations:
-            # Extract coordinates from simulation_data
-            # ✅ GET COORDINATES DIRECTLY FROM POSTGIS FUNCTIONS
+            # ✅ CRITICAL: Extract and parse severity_lines
+            severity_lines = sim.get('severity_lines')
+            
+            print(f"\n{'='*60}")
+            print(f"📍 Processing: {sim['title']}")
+            print(f"   - Raw severity_lines type: {type(severity_lines)}")
+            print(f"   - Raw severity_lines value: {severity_lines}")
+            
+            # Parse severity_lines if it's a string
+            if severity_lines:
+                if isinstance(severity_lines, str):
+                    import json
+                    try:
+                        severity_lines = json.loads(severity_lines)
+                        print(f"   ✅ Parsed severity_lines: {len(severity_lines)} lines")
+                        # ✅ VALIDATE: Ensure coordinates exist
+                        valid_lines = []
+                        for line in severity_lines:
+                            coords = line.get('coordinates')
+                            if coords and isinstance(coords, list) and len(coords) > 0:
+                                valid_lines.append(line)
+                            else:
+                                print(f"   ⚠️ Skipping line without coordinates: {line.get('time_period', 'unknown')}")
+                        
+                        severity_lines = valid_lines
+                        print(f"   ✅ Validated: {len(severity_lines)} lines have coordinates")
+                    except Exception as e:
+                        print(f"   ❌ Failed to parse severity_lines: {e}")
+                        severity_lines = []
+                elif isinstance(severity_lines, list):
+                    print(f"   ✅ Already a list: {len(severity_lines)} lines")
+                else:
+                    print(f"   ⚠️ Unknown type for severity_lines")
+                    severity_lines = []
+            else:
+                print(f"   ❌ No severity_lines data")
+                severity_lines = []
+
+            # Attempt to enrich severity_lines with geometry from road_info if missing
+            raw_road_info = sim.get('road_info')
+            road_info = None
+            if raw_road_info:
+                try:
+                    if isinstance(raw_road_info, str):
+                        import json
+                        road_info = json.loads(raw_road_info)
+                        # ✅ CRITICAL: Attach road coordinates to EVERY severity line
+                        if road_coords and isinstance(severity_lines, list):
+                            for line_entry in severity_lines:
+                                if not line_entry.get('coordinates'):
+                                    line_entry['coordinates'] = road_coords
+                                    print(f"   ✅ Attached road coordinates to line: {line_entry.get('time_period', 'unknown')}")
+                    elif isinstance(raw_road_info, dict):
+                        road_info = raw_road_info
+                except Exception as e:
+                    print(f"   ❌ Failed to parse road_info: {e}")
+                    road_info = None
+
+            road_coords = None
+            if road_info:
+                # Common keys used by frontend: 'coordinates'
+                road_coords = road_info.get('coordinates') or road_info.get('coords') or road_info.get('geometry')
+                print(f"   ℹ️ road_info coords present: {bool(road_coords)}")
+
+            if road_coords and isinstance(severity_lines, list):
+                updated = 0
+                for entry in severity_lines:
+                    if not entry.get('coordinates'):
+                        entry['coordinates'] = road_coords
+                        updated += 1
+                if updated:
+                    print(f"   ✅ Attached road coordinates to {updated} severity_lines entries")
+            
+            # Extract coordinates
             latitude = sim.get('latitude')
             longitude = sim.get('longitude')
-            road_coordinates = None
-
-            if latitude and longitude:
-                print(f"✅ {sim['title']}: lat={latitude}, lng={longitude}")
-            else:
-                print(f"❌ No coordinates for: {sim['title']}")
-                # Use fallback
-                location = sim.get('disruption_location', '')
-                coords = get_coordinates_for_location(location)
-                latitude = coords['lat']
-                longitude = coords['lng']
-
-            wkt = sim.get('disruption_geometry_wkt')
-            if wkt:
-                # Parse "POINT(121.1640 14.2096)"
-                import re
-                match = re.match(r'POINT\(([0-9.]+)\s+([0-9.]+)\)', wkt)
-                if match:
-                    longitude = float(match.group(1))
-                    latitude = float(match.group(2))
-                    print(f"✅ {sim['title']}: lat={latitude}, lng={longitude}")
-                else:
-                    print(f"❌ Could not parse WKT: {wkt}")
-            else:
-                print(f"⚠️ No geometry for: {sim['title']}")
             
-            simulation_data = sim.get('simulation_data')
-            if simulation_data:
-                if isinstance(simulation_data, str):
-                    import json
-                    simulation_data = json.loads(simulation_data)
-                
-                coords = simulation_data.get('coordinates', {})
-                latitude = coords.get('lat')
-                longitude = coords.get('lng') or coords.get('lon')
-                
-                # Get road coordinates if available (for drawing lines)
-                road_coordinates = simulation_data.get('road_coordinates_json')
-            
-            # Fallback to location-based coordinates if not in simulation_data
             if not latitude or not longitude:
+                print(f"   ❌ No coordinates for {sim['title']}")
                 location = sim.get('disruption_location', '')
                 coords = get_coordinates_for_location(location)
                 latitude = coords['lat']
                 longitude = coords['lng']
+            else:
+                print(f"   ✅ Coordinates: ({latitude}, {longitude})")
             
-            # Extract hourly predictions from results_data
-            hourly_predictions = None
-            results_data = sim.get('results_data')
-            if results_data:
-                if isinstance(results_data, str):
-                    import json
-                    results_data = json.loads(results_data)
-                
-                # Get hourly predictions for active disruptions
-                hourly_predictions = results_data.get('hourly_predictions')
+            # Extract hourly predictions
+            hourly_predictions = []
+            if sim.get('hourly_predictions_json'):
+                import json
+                try:
+                    hourly_predictions = json.loads(sim['hourly_predictions_json'])
+                    print(f"   ✅ Loaded {len(hourly_predictions)} hourly predictions")
+                except Exception as e:
+                    print(f"   ❌ Failed to parse hourly_predictions: {e}")
             
             # Calculate expected delay
             avg_delay_ratio = float(sim.get('average_delay_ratio') or 1.0)
@@ -2129,15 +2312,20 @@ def get_published_disruptions():
                 'organization': sim.get('organization', 'DPWH'),
                 'latitude': latitude,
                 'longitude': longitude,
-                'road_coordinates': road_coordinates,  # For drawing road lines
-                'hourly_predictions': hourly_predictions  # For detailed visualization
+                'severity_lines': severity_lines,  # ✅ CRITICAL
+                'hourly_predictions': hourly_predictions
             }
+            
+            print(f"   ✅ Final disruption has {len(severity_lines)} severity_lines")
+            if len(severity_lines) > 0:
+                print(f"   📊 Sample line: {severity_lines[0]}")
             
             disruptions.append(disruption)
         
-        print(f"✅ Returning {len(disruptions)} disruptions with coordinates")
+        print(f"\n{'='*60}")
+        print(f"✅ Returning {len(disruptions)} disruptions")
         for d in disruptions[:3]:
-            print(f"   - {d['title']}: ({d['latitude']}, {d['longitude']})")
+            print(f"   - {d['title']}: {len(d.get('severity_lines', []))} lines, ({d['latitude']}, {d['longitude']})")
         
         return jsonify({
             'success': True,
@@ -2149,6 +2337,185 @@ def get_published_disruptions():
         import traceback
         print(f"\n❌ Error in get_published_disruptions:")
         traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+        
+    finally:
+        if conn:
+            conn.close()
+
+# Add this to app.py, after your existing /api/published-disruptions route
+
+@app.route('/api/public/disruptions', methods=['GET'])
+def get_public_disruptions_realtime():
+    """
+    ✅ Get all active published disruptions with REAL-TIME severity data
+    Returns disruptions with hourly predictions that change based on current hour
+    """
+    conn = None
+    try:
+        conn = db._get_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Get current time (Philippines timezone)
+        ph_tz = pytz.timezone('Asia/Manila')
+        current_time = datetime.now(ph_tz)
+        current_hour = current_time.hour
+        current_date = current_time.date()
+        
+        print(f"🕐 Current time: {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"📅 Current hour: {current_hour}")
+        
+        # Query published simulations with severity_lines
+        query = """
+            SELECT 
+                pr.published_id,
+                pr.simulation_id,
+                pr.title,
+                pr.public_description,
+                pr.published_at,
+                pr.is_active,
+                pr.slug,
+                sr.simulation_name,
+                sr.description,
+                sr.disruption_type,
+                sr.disruption_location,
+                sr.start_time,
+                sr.end_time,
+                sr.severity_level,
+                sr.total_affected_segments,
+                sr.average_delay_ratio,
+                sr.severity_lines,  -- ✅ NEW: Get severity lines
+                ST_Y(sr.disruption_geometry) as latitude,
+                ST_X(sr.disruption_geometry) as longitude,
+                u.organization,
+                u.first_name,
+                u.last_name
+            FROM published_runs pr
+            INNER JOIN simulation_runs sr ON pr.simulation_id = sr.simulation_id
+            LEFT JOIN users u ON pr.published_by = u.user_id
+            WHERE pr.is_active = TRUE
+            AND sr.simulation_status != 'deleted'
+            ORDER BY pr.published_at DESC
+        """
+        
+        cursor.execute(query)
+        simulations = cursor.fetchall()
+        
+        print(f"\n📊 Fetched {len(simulations)} published disruptions")
+        
+        active_disruptions = []
+        
+        for sim in simulations:
+            # Check if disruption is currently active
+            start_time = sim['start_time']
+            end_time = sim['end_time']
+            
+            # Make timezone-aware if needed
+            if start_time and start_time.tzinfo is None:
+                start_time = ph_tz.localize(start_time)
+            if end_time and end_time.tzinfo is None:
+                end_time = ph_tz.localize(end_time)
+            
+            # Skip if not currently active
+            if not (start_time <= current_time <= end_time):
+                print(f"⏭️ Skipping {sim['title']} - not active now")
+                continue
+            
+            # ✅ Get severity lines from database
+            severity_lines = sim.get('severity_lines', [])
+            
+            if not severity_lines:
+                print(f"⚠️ No severity lines for {sim['title']}")
+                continue
+            
+            # ✅ Find the severity data for current hour
+            current_severity = None
+            
+            for line in severity_lines:
+                granularity = line.get('granularity', 'hourly')
+                
+                if granularity == 'hourly':
+                    # Match by hour
+                    line_hour = line.get('hour')
+                    if line_hour == current_hour:
+                        current_severity = line
+                        break
+                
+                elif granularity == 'daily':
+                    # Match by date
+                    time_period = line.get('time_period', '')
+                    if current_date.isoformat() in time_period:
+                        current_severity = line
+                        break
+            
+            # If no exact match, use average or first available
+            if not current_severity and severity_lines:
+                current_severity = severity_lines[0]
+                print(f"⚠️ Using fallback severity for {sim['title']}")
+            
+            # Extract coordinates
+            latitude = sim.get('latitude')
+            longitude = sim.get('longitude')
+            
+            if not latitude or not longitude:
+                print(f"⚠️ No coordinates for {sim['title']}")
+                continue
+            
+            # ✅ Get severity color
+            severity_level = current_severity.get('severity_level', 'moderate')
+            severity_value = current_severity.get('severity_value', 1.0)
+            
+            # Map severity to color
+            if severity_level == 'light' or severity_value < 1.0:
+                color = '#4ade80'  # Green
+            elif severity_level == 'moderate' or severity_value < 2.0:
+                color = '#fbbf24'  # Yellow
+            else:
+                color = '#ef4444'  # Red
+            
+            # Build disruption object
+            disruption = {
+                'id': sim['simulation_id'],
+                'title': sim['title'],
+                'slug': sim['slug'],
+                'location': sim['disruption_location'],
+                'type': sim['disruption_type'] or 'roadwork',
+                'start_time': start_time.isoformat(),
+                'end_time': end_time.isoformat(),
+                'latitude': float(latitude),
+                'longitude': float(longitude),
+                'current_severity': {
+                    'level': severity_level,
+                    'value': float(severity_value),
+                    'delay_minutes': int(current_severity.get('delay_minutes', 0)),
+                    'time_period': current_severity.get('time_period'),
+                    'hour': current_hour,
+                    'color': color
+                },
+                'all_hours': severity_lines,  # ✅ Include all hours for client-side updates
+                'organization': sim.get('organization', 'DPWH'),
+                'published_by': f"{sim.get('first_name', '')} {sim.get('last_name', '')}".strip() or 'Unknown'
+            }
+            
+            active_disruptions.append(disruption)
+            print(f"✅ Added {sim['title']} - {severity_level} severity at hour {current_hour}")
+        
+        return jsonify({
+            'success': True,
+            'disruptions': active_disruptions,
+            'current_time': current_time.isoformat(),
+            'current_hour': current_hour,
+            'count': len(active_disruptions)
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Error fetching public disruptions: {e}")
+        import traceback
+        traceback.print_exc()
+        
         return jsonify({
             'success': False,
             'error': str(e)
@@ -2454,12 +2821,37 @@ def simulate_disruption_realtime():
         # ✅ SMART DECISION: Should we use real-time data?
         # ============================================================
         
-        now = datetime.now()
+      # ✅ CRITICAL FIX: Use PH timezone for accurate same-day detection
+        import pytz
+        
+        ph_tz = pytz.timezone('Asia/Manila')
+        now_utc = datetime.now(pytz.UTC)
+        now = now_utc.astimezone(ph_tz).replace(tzinfo=None)
         today = now.date()
         disruption_start_date = start_datetime.date()
         
         # Calculate hours until disruption starts
         hours_until_disruption = (start_datetime - now).total_seconds() / 3600
+        
+        # ✅ DEBUG LOGGING
+        app.logger.error(f"\n🔍 TIMEZONE DEBUG:")
+        app.logger.error(f"   Server UTC time: {now_utc.strftime('%Y-%m-%d %H:%M:%S')}")
+        app.logger.error(f"   PH time: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+        app.logger.error(f"   Today (PH): {today}")
+        app.logger.error(f"   Disruption date: {disruption_start_date}")
+        app.logger.error(f"   Hours until disruption: {hours_until_disruption:.2f}")
+        app.logger.error(f"   Same day? {disruption_start_date == today}")
+
+        # ✅ DEBUG: Log the values
+        print(f"\n🔍 REAL-TIME CHECK:")
+        print(f"   Server time (PH): {now.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"   Today: {today}")
+        print(f"   Disruption starts: {start_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"   Disruption date: {disruption_start_date}")
+        print(f"   Hours until disruption: {hours_until_disruption:.2f}")
+        print(f"   Same day? {disruption_start_date == today}")
+        print(f"   Within 6h? {hours_until_disruption <= 6}")
+        print(f"   After -24h? {hours_until_disruption >= -24}")
         
         # ✅ USE REAL-TIME ONLY IF:
         # 1. Disruption starts today
@@ -2469,6 +2861,7 @@ def simulate_disruption_realtime():
             hours_until_disruption <= 6 and 
             hours_until_disruption >= -24  # Allow up to 24h past start (ongoing disruption)
         )
+        print(f"   ✅ use_realtime = {use_realtime}\n")
         
         realtime_data = None
         realtime_speed_factor = None
@@ -2498,6 +2891,9 @@ def simulate_disruption_realtime():
                 if free_flow_speed > 0:
                     realtime_speed_factor = current_speed / free_flow_speed
                 
+                # ✅ DEBUG: Log the calculated factor
+                app.logger.error(f"   📊 Calculated realtime_speed_factor: {realtime_speed_factor:.2f}")
+                app.logger.error(f"   Current: {current_speed} km/h, Free-flow: {free_flow_speed} km/h")
                 print(f"✅ Real-time API Success")
                 print(f"🚗 Current Speed: {current_speed} km/h")
                 print(f"🏁 Free Flow Speed: {free_flow_speed} km/h")
@@ -2556,30 +2952,71 @@ def simulate_disruption_realtime():
                 -1 <= hours_until_this_prediction <= 6  # Current hour to 6 hours ahead
             )
             
+            # ✅ DEBUG: Log which hours get real-time adjustment
+            if apply_realtime_to_this_hour:
+                app.logger.error(f"   ✅ Hour {current_datetime.hour} will use real-time adjustment")
+                        
             # Calculate delay with optional real-time adjustment
+            # ✅ NEW (add AFTER Line ~1900):
+            # Calculate location-specific multiplier
+            location_multiplier = predictor.get_location_multiplier(
+                lat=coordinates['lat'],
+                lng=coordinates['lng'],
+                hour=int(current_datetime.hour),
+                day_of_week=int(current_datetime.weekday()),
+                is_friday=(current_datetime.weekday() == 4)
+            )
+
+            # Get dynamic impact zones
+            impact_zones = predictor.calculate_dynamic_impact_zones(
+                hour=int(current_datetime.hour),
+                day_of_week=int(current_datetime.weekday()),
+                disruption_type=str(disruption_type),
+                lanes=int(road_info['lanes']),
+                severity=float(prediction['severity'])
+            )
+
+            # Enhanced delay calculation
+            # âœ… UPDATED: Enhanced delay calculation with ALL dynamic factors
             delay_info = predictor.estimate_delay(
                 severity=float(prediction['severity']),
                 base_travel_time_minutes=float(road_info['free_flow_time_minutes']),
                 road_length_km=float(road_info['length_km']),
                 impact_factor=float(road_info['disruption_factors'].get(disruption_type, 0.6)),
-                realtime_speed_factor=realtime_speed_factor if apply_realtime_to_this_hour else None
+                realtime_speed_factor=realtime_speed_factor if apply_realtime_to_this_hour else None,
+                hour=int(current_datetime.hour),  # âœ… CRITICAL
+                lanes=int(road_info['lanes']),  # âœ… CRITICAL
+                disruption_type=str(disruption_type),  # âœ… CRITICAL
+                area=str(area)  # âœ… CRITICAL
             )
             
+            if apply_realtime_to_this_hour:
+                app.logger.error(f"   📤 Passing to estimate_delay:")
+                app.logger.error(f"      realtime_speed_factor={realtime_speed_factor}")
+                app.logger.error(f"      apply_realtime_to_this_hour={apply_realtime_to_this_hour}")
+
+            # ✅ DEBUG: Check if delay_info has realtime_adjusted flag
+            if apply_realtime_to_this_hour:
+                app.logger.error(f"   📊 Delay info for hour {current_datetime.hour}: realtime_adjusted={delay_info.get('realtime_adjusted', False)}")
+
+            # Store context for this hour
             hourly_predictions.append({
                 'datetime': current_datetime.strftime('%Y-%m-%d %H:%M'),
                 'date': current_datetime.strftime('%Y-%m-%d'),
-                'hour': int(current_datetime.hour),  # ✅ ENSURE INT
+                'hour': int(current_datetime.hour),
                 'day_of_week': current_datetime.strftime('%A'),
                 'severity': round(float(prediction['severity']), 2),
                 'severity_label': str(prediction['severity_label']),
                 'confidence': round(float(prediction['confidence']), 2),
                 'delay_info': delay_info,
+                'impact_zones': impact_zones,  # ✅ NEW
+                'location_multiplier': location_multiplier,  # ✅ NEW
                 'realtime_adjusted': bool(delay_info.get('realtime_adjusted', False)),
                 'probabilities': {
                     k: round(float(v), 2) for k, v in prediction['probabilities'].items()
                 }
             })
-            
+                        
             current_datetime += timedelta(hours=1)
         
         # ============================================================
@@ -2856,14 +3293,19 @@ def simulate_disruption_realtime():
             'error': str(e),
             'traceback': traceback.format_exc() if app.debug else None
         }), 500
+    
 # ============================================================
 # ROUTE 1: Home Page
 # ============================================================
 
 @app.route('/')
 def home():
-    """Render the main page"""
-    return render_template('index.html')
+    """API status endpoint"""
+    return jsonify({
+        "status": "online",
+        "service": "UrbanFlow Backend API",
+        "message": "Backend is running successfully"
+    })
 
 
 # ============================================================
@@ -2928,7 +3370,8 @@ def get_road_info():
 @app.route('/api/process-road-info', methods=['POST'])
 def process_road_info():
     """
-    NEW ENDPOINT - Process OSM road data and calculate capacities
+    ✅ ENHANCED: Process road info with INTERSECTION EXPANSION
+    Now fetches ALL roads within radius, not just one segment
     """
     try:
         data = request.get_json()
@@ -2940,7 +3383,24 @@ def process_road_info():
         max_speed = int(data.get('max_speed', 40))
         road_type = data.get('road_type', 'tertiary')
         
-        # Calculate road capacity (vehicles per hour)
+        # ✅ NEW: Get coordinates to fetch nearby roads
+        coords = data.get('coordinates', [])
+        
+        # ✅ NEW: Expand road network if at intersection
+        if coords and len(coords) > 0:
+            print(f"\n🔍 Expanding road network from {len(coords)} initial points")
+            expanded_coords = expand_road_network(coords, radius_meters=1000)
+            
+            # Replace original coords with expanded network
+            if expanded_coords and len(expanded_coords) > len(coords):
+                print(f"   ✅ Expanded to {len(expanded_coords)} points")
+                data['coordinates'] = expanded_coords
+                
+                # Recalculate length based on expanded network
+                length_km = calculate_path_length(expanded_coords)
+                print(f"   ✅ New length: {length_km:.2f} km")
+        
+        # Calculate road capacity (existing code continues)
         lane_capacity = calculate_lane_capacity(road_type, max_speed)
         total_capacity = lane_capacity * lanes
         
@@ -2964,7 +3424,7 @@ def process_road_info():
         return jsonify({
             'success': True,
             'road_info': {
-                **data,  # Include all original data from OSM
+                **data,  # Include all original + expanded coords
                 'lane_capacity': lane_capacity,
                 'total_capacity': total_capacity,
                 'free_flow_time_minutes': round(free_flow_time, 2),
@@ -2974,6 +3434,8 @@ def process_road_info():
         })
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': str(e)
@@ -3087,6 +3549,134 @@ def calculate_disruption_factors(lanes, length_km, road_type):
         for disruption, impact in base_impacts.items()
     }
 
+def expand_road_network(initial_coords, radius_meters=500):
+    """
+    ✅ NEW: Fetch ALL roads within radius of initial coordinates
+    This ensures intersections show severity in ALL directions
+    
+    Args:
+        initial_coords: List of [lat, lng] pairs from initial road
+        radius_meters: How far to search for connected roads (default 500m)
+    
+    Returns:
+        List of [lat, lng] coordinates covering expanded road network
+    """
+    try:
+        import requests
+        
+        if not initial_coords or len(initial_coords) == 0:
+            return initial_coords
+        
+        # Get center point of initial road
+        center_lat = sum(coord[0] for coord in initial_coords) / len(initial_coords)
+        center_lng = sum(coord[1] for coord in initial_coords) / len(initial_coords)
+        
+        print(f"🌐 Fetching roads around ({center_lat:.4f}, {center_lng:.4f}) within {radius_meters}m")
+        
+        # ✅ Overpass query to get ALL roads within radius
+        overpass_query = f"""
+        [out:json][timeout:25];
+        (
+          way(around:{radius_meters},{center_lat},{center_lng})
+            ["highway"~"^(motorway|trunk|primary|secondary|tertiary|residential)$"];
+        );
+        out geom;
+        """
+        
+        response = requests.post(
+            'https://overpass-api.de/api/interpreter',
+            data={'data': overpass_query},
+            timeout=30
+        )
+        
+        if response.status_code != 200:
+            print(f"   ⚠️ Overpass API failed: {response.status_code}")
+            return initial_coords
+        
+        osm_data = response.json()
+        elements = osm_data.get('elements', [])
+        
+        if not elements:
+            print(f"   ⚠️ No roads found in radius")
+            return initial_coords
+        
+        print(f"   ✅ Found {len(elements)} roads in area")
+        
+        # ✅ Collect ALL coordinates from ALL nearby roads
+        all_coords = []
+        road_count = 0
+        
+        for way in elements:
+            if way.get('type') == 'way' and 'geometry' in way:
+                road_coords = [[node['lat'], node['lon']] for node in way['geometry']]
+                
+                if len(road_coords) >= 2:
+                    all_coords.extend(road_coords)
+                    road_count += 1
+        
+        if not all_coords:
+            print(f"   ⚠️ No valid coordinates extracted")
+            return initial_coords
+        
+        # ✅ Remove duplicate points
+        unique_coords = []
+        seen = set()
+        
+        for coord in all_coords:
+            coord_key = (round(coord[0], 6), round(coord[1], 6))
+            if coord_key not in seen:
+                seen.add(coord_key)
+                unique_coords.append(coord)
+        
+        print(f"   ✅ Expanded network: {road_count} roads, {len(unique_coords)} unique points")
+        
+        return unique_coords
+        
+    except Exception as e:
+        print(f"   ❌ Road expansion failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return initial_coords
+
+
+def calculate_path_length(coordinates):
+    """
+    ✅ NEW: Calculate total length of a path in kilometers
+    Uses Haversine formula for accuracy
+    
+    Args:
+        coordinates: List of [lat, lng] pairs
+    
+    Returns:
+        float: Length in kilometers
+    """
+    from math import radians, sin, cos, sqrt, atan2
+    
+    if not coordinates or len(coordinates) < 2:
+        return 1.0  # Default fallback
+    
+    total_length_km = 0.0
+    
+    for i in range(len(coordinates) - 1):
+        lat1, lng1 = coordinates[i]
+        lat2, lng2 = coordinates[i + 1]
+        
+        # Haversine formula
+        R = 6371  # Earth's radius in km
+        
+        lat1_rad = radians(lat1)
+        lat2_rad = radians(lat2)
+        dlat = radians(lat2 - lat1)
+        dlng = radians(lng2 - lng1)
+        
+        a = sin(dlat/2)**2 + cos(lat1_rad) * cos(lat2_rad) * sin(dlng/2)**2
+        c = 2 * atan2(sqrt(a), sqrt(1-a))
+        
+        segment_length = R * c
+        total_length_km += segment_length
+    
+    return round(total_length_km, 3)
+
 # ============================================================
 # ROUTE 5: Single Prediction (Keep for testing)
 # ============================================================
@@ -3184,12 +3774,20 @@ def simulate_disruption():
             prediction = predictor.predict(hour_input)
             
             # IMPORTANT: Calculate delay with road-specific info
+         # âœ… UPDATED: Calculate delay with ALL dynamic factors
             delay_info = predictor.estimate_delay(
                 severity=prediction['severity'],
                 base_travel_time_minutes=free_flow_time,
                 road_length_km=length_km,
-                impact_factor=impact_factor
+                impact_factor=impact_factor,
+                hour=current_datetime.hour,  # âœ… Add this
+                lanes=lanes,  # âœ… Add this
+                disruption_type=disruption_type,  # âœ… Add this
+                realtime_speed_factor=realtime_speed_factor if apply_realtime_to_this_hour else None,
+                area=area  # âœ… Add this
             )
+            
+        
             
             # Add to results
             hourly_predictions.append({
@@ -3201,6 +3799,9 @@ def simulate_disruption():
                 'severity_label': prediction['severity_label'],
                 'confidence': round(prediction['confidence'], 3),
                 'delay_info': delay_info,  # ← THIS IS THE KEY LINE
+                'impact_zones': impact_zones,  # ✅ NEW
+                'location_multiplier': location_multiplier,  # ✅ NEW
+                'realtime_adjusted': bool(delay_info.get('realtime_adjusted', False)),
                 'probabilities': {
                     k: round(v, 3) for k, v in prediction['probabilities'].items()
                 }
@@ -3651,8 +4252,7 @@ def preview_file(filename):
 @app.route('/api/send-publish-otp', methods=['POST'])
 def send_publish_otp():
     """
-    Generate and send OTP for publishing verification
-    In production, this would send an email. For now, we'll return it in response for testing.
+    Generate and send OTP for publishing verification using direct SMTP
     """
     try:
         data = request.get_json()
@@ -3668,22 +4268,13 @@ def send_publish_otp():
         # Generate 6-digit OTP
         otp_code = ''.join(random.choices(string.digits, k=6))
         
-        # Initialize variables to avoid linting warnings
         user_email = None
         user_name = None
-        # Store OTP in database
         conn = None
+        
         try:
             conn = db._get_connection()
             cursor = conn.cursor()
-            
-            # Set expiry to 10 minutes from now
-            expires_at = datetime.now() + timedelta(minutes=10)
-            
-            cursor.execute("""
-                INSERT INTO verification_otps (user_id, simulation_id, otp_code, expires_at)
-                VALUES (%s, %s, %s, %s)
-            """, (user_id, simulation_id, otp_code, expires_at))
             
             # Get user email
             cursor.execute("""
@@ -3701,13 +4292,102 @@ def send_publish_otp():
                 }), 404
             
             user_email, user_name = user
-
+            
+            # Set expiry to 10 minutes from now
+            expires_at = datetime.now() + timedelta(minutes=10)
+            
+            # Store OTP in database
+            cursor.execute("""
+                INSERT INTO verification_otps (user_id, simulation_id, otp_code, expires_at)
+                VALUES (%s, %s, %s, %s)
+            """, (user_id, simulation_id, otp_code, expires_at))
+            
             conn.commit()
             
-            # Send actual email
+            # Send email using direct SMTP
+            import smtplib
+            from email.mime.text import MIMEText
+            from email.mime.multipart import MIMEMultipart
+            
+            # Get SMTP credentials from environment
+            smtp_email = os.getenv('SMTP_EMAIL')
+            smtp_password = os.getenv('SMTP_PASSWORD')
+            smtp_server = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
+            smtp_port = int(os.getenv('SMTP_PORT', 587))
+            
+            print(f"📧 Sending OTP to {user_email}")
+            print(f"📮 SMTP: {smtp_server}:{smtp_port}")
+            print(f"👤 From: {smtp_email}")
+            
+            # Create message
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = 'UrbanFlow - Verification Code'
+            msg['From'] = f"UrbanFlow Traffic System <{smtp_email}>"
+            msg['To'] = user_email
+            msg['Message-ID'] = f"<{otp_code}.{datetime.now().timestamp()}@urbanflowph.com>"
+            msg['Date'] = datetime.now().strftime('%a, %d %b %Y %H:%M:%S +0800')
+            
+            # HTML body
+            html_body = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #2563eb;">UrbanFlow Verification Code</h2>
+                <p>Hello {user_name},</p>
+                <p>Your verification code for publishing the simulation is:</p>
+                
+                <div style="background-color: #f3f4f6; padding: 30px; text-align: center; margin: 20px 0; border-radius: 8px;">
+                    <h1 style="color: #1f2937; letter-spacing: 10px; margin: 0; font-size: 36px;">{otp_code}</h1>
+                </div>
+                
+                <p style="color: #6b7280;">This code will expire in <strong>10 minutes</strong>.</p>
+                <p style="color: #6b7280;">If you did not request this code, please ignore this email.</p>
+                
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;" />
+                <p style="color: #9ca3af; font-size: 12px;">
+                    UrbanFlow Traffic Management System<br/>
+                    Calamba City Public Order and Safety Office<br/>
+                    Calamba City, Laguna, Philippines
+                </p>
+            </body>
+            </html>
+            """
+            
+            # Plain text fallback
+            text_body = f"""
+Hello {user_name},
+
+Your verification code for publishing the simulation is:
+
+{otp_code}
+
+This code will expire in 10 minutes.
+
+If you did not request this code, please ignore this email.
+
+Best regards,
+UrbanFlow Team
+Calamba City Public Order and Safety Office
+            """
+            
+            msg.attach(MIMEText(text_body, 'plain'))
+            msg.attach(MIMEText(html_body, 'html'))
+            
+            # Send email
             try:
-                send_otp_email(user_email, user_name, otp_code, expires_minutes=10)
-                print(f"✓ OTP email sent to {user_email}")
+                # Use SMTP_SSL for port 465, SMTP for port 587
+                if smtp_port == 465:
+                    with smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=10) as server:
+                        server.login(smtp_email, smtp_password)
+                        server.send_message(msg)
+                else:
+                    with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as server:
+                        server.ehlo()
+                        server.starttls()
+                        server.ehlo()
+                        server.login(smtp_email, smtp_password)
+                        server.send_message(msg)
+                
+                print(f"✅ OTP email sent successfully to {user_email}")
                 
                 return jsonify({
                     'success': True,
@@ -3715,8 +4395,9 @@ def send_publish_otp():
                     'expires_in_minutes': 10
                 })
                 
-            except Exception as email_error:
-                # Rollback OTP if email fails
+            except smtplib.SMTPAuthenticationError as auth_err:
+                print(f"❌ SMTP Authentication Error: {auth_err}")
+                # Rollback OTP
                 cursor.execute(
                     "DELETE FROM verification_otps WHERE simulation_id = %s AND otp_code = %s",
                     (simulation_id, otp_code)
@@ -3725,8 +4406,23 @@ def send_publish_otp():
                 
                 return jsonify({
                     'success': False,
-                    'error': 'Failed to send verification email. Please try again.',
-                    'details': str(email_error)
+                    'error': 'Email authentication failed. Please check email configuration.',
+                    'details': str(auth_err)
+                }), 500
+            
+            except smtplib.SMTPException as smtp_err:
+                print(f"❌ SMTP Error: {smtp_err}")
+                # Rollback OTP
+                cursor.execute(
+                    "DELETE FROM verification_otps WHERE simulation_id = %s AND otp_code = %s",
+                    (simulation_id, otp_code)
+                )
+                conn.commit()
+                
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to send email. Please try again.',
+                    'details': str(smtp_err)
                 }), 500
             
         finally:
@@ -3734,12 +4430,14 @@ def send_publish_otp():
                 conn.close()
                 
     except Exception as e:
-        print(f"✗ Error sending OTP: {e}")
+        print(f"❌ ERROR in send_publish_otp: {e}")
         import traceback
         traceback.print_exc()
+        
         return jsonify({
             'success': False,
-            'error': 'An error occurred while processing your request'
+            'error': 'An error occurred while processing your request',
+            'details': str(e)
         }), 500
 
 @app.route('/api/verify-publish-otp', methods=['POST'])
@@ -3940,4 +4638,13 @@ def validate_calculations():
 # ============================================================
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    debug = os.getenv('FLASK_ENV') != 'production'
+    
+    app.run(
+        debug=debug,  # False in production
+        host='0.0.0.0',
+        port=port
+    )
+    
+    application = app  # for cPanel Passenger WSGI

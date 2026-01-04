@@ -12,30 +12,51 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
 });
 
-export default function RawMap() {
-  // ============ SEARCH STATE (copied from HomeMapWithSidebar) ============
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [searchError, setSearchError] = useState(null);
-  const [searchMarker, setSearchMarker] = useState(null);
-  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
-
+export default function RawMap({
+  // Public data props
+  publicDisruptions,
+  setPublicDisruptions,
+  publishedReports,
+  setPublishedReports,
+  showPublicDisruptions,
+  setShowPublicDisruptions,
+  showPublicReports,
+  setShowPublicReports,
+  
+  // Search props
+  searchQuery,
+  setSearchQuery,
+  searchResults,
+  setSearchResults,
+  searchLoading,
+  setSearchLoading,
+  searchError,
+  setSearchError,
+  searchMarker,
+  setSearchMarker,
+  selectedSuggestionIndex,
+  setSelectedSuggestionIndex,
+  isSearchFocused,
+  setIsSearchFocused,
+  
+  // Refs
+  searchInputRef,
+  debounceTimerRef,
+  searchCacheRef,
+  reportMarkersRef
+}) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
-  const searchInputRef = useRef(null);
-  const debounceTimerRef = useRef(null);
-  const searchCacheRef = useRef(new Map());
+  const disruptionLayersRef = useRef([]);
 
-  // ============ MAP INITIALIZATION (copied from HomeMapWithSidebar) ============
+  // ============ MAP INITIALIZATION ============
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
 
     const map = L.map(mapRef.current, {
       center: [14.2096, 121.164], // Calamba, Laguna
       zoom: 13,
-      zoomControl: false, // Disable default zoom control
+      zoomControl: false,
     });
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -43,12 +64,7 @@ export default function RawMap() {
       maxZoom: 19,
     }).addTo(map);
 
-    // Add zoom control at bottom-left (same as HomeMapWithSidebar)
-    L.control
-      .zoom({
-        position: "bottomleft",
-      })
-      .addTo(map);
+    L.control.zoom({ position: "bottomleft" }).addTo(map);
 
     mapInstanceRef.current = map;
 
@@ -60,23 +76,291 @@ export default function RawMap() {
     };
   }, []);
 
-  // ============ CLICK OUTSIDE HANDLER (copied from HomeMapWithSidebar) ============
+  // ============ FETCH PUBLIC DISRUPTIONS ============
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (
-        searchInputRef.current &&
-        !searchInputRef.current.contains(event.target)
-      ) {
-        setIsSearchFocused(false);
+    const fetchPublicDisruptions = async () => {
+      try {
+        const response = await fetch('https://backend.urbanflowph.com/api/published-disruptions');
+        const data = await response.json();
+        
+        if (data.success) {
+          setPublicDisruptions(data.disruptions || []);
+          console.log(`✅ Loaded ${data.disruptions.length} public disruptions`);
+        }
+      } catch (error) {
+        console.error('Error fetching public disruptions:', error);
       }
     };
 
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    fetchPublicDisruptions();
+    const interval = setInterval(fetchPublicDisruptions, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [setPublicDisruptions]);
 
-  // ============ AUTOCOMPLETE SEARCH LOGIC (copied from HomeMapWithSidebar) ============
+  // ============ FETCH PUBLISHED REPORTS ============
+  useEffect(() => {
+    const fetchPublishedReports = async () => {
+      try {
+        const response = await fetch('https://backend.urbanflowph.com/api/public-reports/published');
+        const data = await response.json();
+        if (data.success) {
+          setPublishedReports(data.data);
+        }
+      } catch (error) {
+        console.error('Error fetching published reports:', error);
+      }
+    };
 
+    fetchPublishedReports();
+    const interval = setInterval(fetchPublishedReports, 60000);
+    return () => clearInterval(interval);
+  }, [setPublishedReports]);
+
+  // ============ DRAW DISRUPTION MARKERS ============
+  useEffect(() => {
+    if (!mapInstanceRef.current || !showPublicDisruptions) {
+      // Clear layers if toggle is off
+      disruptionLayersRef.current.forEach(layer => {
+        if (mapInstanceRef.current?.hasLayer(layer)) {
+          mapInstanceRef.current.removeLayer(layer);
+        }
+      });
+      disruptionLayersRef.current = [];
+      return;
+    }
+
+    drawDisruptionMarkers();
+  }, [publicDisruptions, showPublicDisruptions]);
+
+  // ============ DRAW REPORT MARKERS ============
+  useEffect(() => {
+    if (!mapInstanceRef.current || !showPublicReports) {
+      reportMarkersRef.current.forEach(marker => marker.remove());
+      reportMarkersRef.current = [];
+      return;
+    }
+
+    drawReportMarkers();
+  }, [publishedReports, showPublicReports, reportMarkersRef]);
+
+  // ============ DRAW DISRUPTIONS FUNCTION ============
+  const drawDisruptionMarkers = () => {
+    if (!mapInstanceRef.current) return;
+
+    const map = mapInstanceRef.current;
+
+    // Clear old layers
+    disruptionLayersRef.current.forEach(layer => {
+      if (map.hasLayer(layer)) {
+        map.removeLayer(layer);
+      }
+    });
+    disruptionLayersRef.current = [];
+
+    publicDisruptions.forEach((disruption) => {
+      if (!disruption.latitude || !disruption.longitude) return;
+
+      const color = getDisruptionColor(disruption.congestion_level);
+      const icon = getDisruptionIcon(disruption.type);
+
+      const marker = L.marker([disruption.latitude, disruption.longitude], {
+        icon: L.divIcon({
+          className: "disruption-marker-active",
+          html: `
+            <div style="position: relative; width: 40px; height: 40px;">
+              <div style="
+                position: absolute; top: 50%; left: 50%;
+                transform: translate(-50%, -50%);
+                width: 48px; height: 48px;
+                border: 2px solid ${color}; border-radius: 50%;
+                opacity: 0.3;
+                animation: pulse-active 2s ease-out infinite;
+              "></div>
+              <div style="
+                background: white;
+                border: 3px solid ${color};
+                border-radius: 50%;
+                width: 40px; height: 40px;
+                display: flex; align-items: center; justify-content: center;
+                font-size: 20px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                cursor: pointer;
+              ">${icon}</div>
+            </div>
+          `,
+          iconSize: [40, 40],
+          iconAnchor: [20, 20],
+        }),
+        zIndexOffset: 1000,
+      }).addTo(map);
+
+      marker.bindPopup(createDisruptionPopup(disruption));
+      disruptionLayersRef.current.push(marker);
+    });
+  };
+
+  // ============ DRAW REPORTS FUNCTION ============
+  const drawReportMarkers = () => {
+    if (!mapInstanceRef.current) return;
+
+    reportMarkersRef.current.forEach(marker => marker.remove());
+    reportMarkersRef.current = [];
+
+    publishedReports.forEach(report => {
+      const colors = {
+        severe: '#dc2626',
+        moderate: '#ea580c', 
+        minor: '#3b82f6'
+      };
+      
+      const emoji = 
+        report.report_type === 'accident' ? '🚗' :
+        report.report_type === 'flooding' ? '🌊' :
+        report.report_type === 'roadwork' ? '🚧' : '⚠️';
+      
+      const reportIcon = L.divIcon({
+        className: 'custom-report-marker',
+        html: `
+          <div style="
+            background-color: ${colors[report.severity]};
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            cursor: pointer;
+          ">
+            ${emoji}
+          </div>
+        `,
+        iconSize: [35, 35],
+        iconAnchor: [17, 17],
+      });
+
+      const marker = L.marker([report.latitude, report.longitude], {
+        icon: reportIcon
+      }).addTo(mapInstanceRef.current);
+
+      marker.bindPopup(createReportPopup(report), {
+        maxWidth: 350,
+        className: 'custom-report-popup'
+      });
+
+      reportMarkersRef.current.push(marker);
+    });
+  };
+
+  // ============ HELPER FUNCTIONS ============
+  const getDisruptionColor = (level) => {
+    switch (level?.toLowerCase()) {
+      case 'heavy': return '#ef4444';
+      case 'moderate': return '#f59e0b';
+      case 'light': return '#10b981';
+      default: return '#6b7280';
+    }
+  };
+
+  const getDisruptionIcon = (type) => {
+    switch (type) {
+      case 'roadwork': return '🚧';
+      case 'event': return '🎉';
+      case 'accident': return '⚠️';
+      case 'weather': return '🌧️';
+      default: return '📍';
+    }
+  };
+
+  const createDisruptionPopup = (disruption) => {
+    return `
+      <div style="font-family: -apple-system, sans-serif; padding: 10px; min-width: 200px;">
+        <h3 style="margin: 0 0 8px 0; font-size: 15px; font-weight: 600;">
+          🚧 ${disruption.title}
+        </h3>
+        <p style="margin: 4px 0; font-size: 12px; color: #6b7280;">
+          📍 ${disruption.location}
+        </p>
+        <div style="background: #f9fafb; padding: 6px; border-radius: 6px; margin-top: 6px;">
+          <p style="margin: 2px 0; font-size: 11px;">
+            <strong>Type:</strong> ${disruption.type}
+          </p>
+          <p style="margin: 2px 0; font-size: 11px;">
+            <strong>Delay:</strong> +${disruption.expected_delay} min
+          </p>
+          <p style="margin: 2px 0; font-size: 11px;">
+            <strong>Level:</strong> ${disruption.congestion_level}
+          </p>
+        </div>
+      </div>
+    `;
+  };
+
+  const createReportPopup = (report) => {
+    const expiresAt = new Date(report.expires_at);
+    const now = new Date();
+    const hoursRemaining = Math.max(0, Math.round((expiresAt - now) / (1000 * 60 * 60)));
+    const minutesRemaining = Math.max(0, Math.round((expiresAt - now) / (1000 * 60)) % 60);
+
+    const emoji = 
+      report.report_type === 'accident' ? '🚗' :
+      report.report_type === 'flooding' ? '🌊' :
+      report.report_type === 'roadwork' ? '🚧' : '⚠️';
+
+    return `
+      <div style="min-width: 250px; max-width: 350px;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+          <span style="font-size: 28px;">${emoji}</span>
+          <div>
+            <h3 style="font-weight: bold; text-transform: capitalize; margin: 0; font-size: 16px;">
+              ${report.report_type}
+            </h3>
+            <span style="
+              display: inline-block;
+              padding: 2px 8px;
+              border-radius: 12px;
+              font-size: 11px;
+              font-weight: bold;
+              margin-top: 4px;
+              ${report.severity === 'severe' ? 'background: #fee2e2; color: #991b1b;' :
+                report.severity === 'moderate' ? 'background: #fef3c7; color: #92400e;' :
+                'background: #dbeafe; color: #1e40af;'}
+            ">
+              ${report.severity.toUpperCase()}
+            </span>
+          </div>
+        </div>
+        
+        <p style="font-size: 14px; margin-bottom: 12px; color: #374151; line-height: 1.5;">
+          ${report.description}
+        </p>
+        
+        ${report.image_url ? `
+          <img 
+            src="https://backend.urbanflowph.com${report.image_url}"
+            style="width: 100%; height: 150px; object-fit: cover; border-radius: 8px; margin-bottom: 12px;"
+            alt="Report evidence"
+          />
+        ` : ''}
+        
+        <div style="font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb; padding-top: 8px;">
+          <div style="margin-bottom: 4px;">
+            <strong>Reported by:</strong> ${report.reporter_name || 'Anonymous'}
+          </div>
+          <div style="margin-bottom: 4px;">
+            <strong>Reported:</strong> ${new Date(report.reported_at).toLocaleString()}
+          </div>
+          <div style="color: #dc2626; font-weight: bold;">
+            ⏱️ Expires in: ${hoursRemaining}h ${minutesRemaining}m
+          </div>
+        </div>
+      </div>
+    `;
+  };
+
+  // ============ SEARCH FUNCTIONS ============
   const debouncedSearch = useCallback((query) => {
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
@@ -95,7 +379,7 @@ export default function RawMap() {
     debounceTimerRef.current = setTimeout(() => {
       performAutocompleteSearch(query);
     }, 300);
-  }, []);
+  }, [debounceTimerRef, setSearchResults, setSearchError, setSearchLoading]);
 
   const performAutocompleteSearch = async (query) => {
     if (!query.trim()) {
@@ -114,7 +398,6 @@ export default function RawMap() {
 
     try {
       const searchQueryFormatted = `${query}, Philippines`;
-
       const params = new URLSearchParams({
         q: searchQueryFormatted,
         format: "json",
@@ -126,12 +409,9 @@ export default function RawMap() {
       });
 
       const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
-
       const response = await fetch(url, {
         method: "GET",
-        headers: {
-          Accept: "application/json",
-        },
+        headers: { Accept: "application/json" },
       });
 
       if (!response.ok) {
@@ -139,7 +419,6 @@ export default function RawMap() {
       }
 
       const results = await response.json();
-
       searchCacheRef.current.set(cacheKey, results);
 
       if (searchCacheRef.current.size > 50) {
@@ -158,7 +437,7 @@ export default function RawMap() {
       setSelectedSuggestionIndex(-1);
     } catch (err) {
       console.error("Autocomplete search error:", err);
-      setSearchError("Search temporarily unavailable. Try again in a moment.");
+      setSearchError("Search temporarily unavailable.");
       setSearchResults([]);
     } finally {
       setSearchLoading(false);
@@ -191,48 +470,35 @@ export default function RawMap() {
           prev < searchResults.length - 1 ? prev + 1 : prev
         );
         break;
-
       case "ArrowUp":
         e.preventDefault();
         setSelectedSuggestionIndex((prev) => (prev > 0 ? prev - 1 : -1));
         break;
-
       case "Enter":
         e.preventDefault();
-        if (
-          selectedSuggestionIndex >= 0 &&
-          searchResults[selectedSuggestionIndex]
-        ) {
+        if (selectedSuggestionIndex >= 0 && searchResults[selectedSuggestionIndex]) {
           selectSearchResult(searchResults[selectedSuggestionIndex]);
         } else if (searchResults.length > 0) {
           selectSearchResult(searchResults[0]);
         }
         break;
-
       case "Escape":
         e.preventDefault();
         setIsSearchFocused(false);
         setSelectedSuggestionIndex(-1);
         searchInputRef.current?.blur();
         break;
-
       default:
         break;
     }
   };
 
-  /**
-   * Handle suggestion click without losing input focus
-   */
   const handleSuggestionClick = (result, e) => {
     e.preventDefault();
     e.stopPropagation();
     selectSearchResult(result);
   };
 
-  /**
-   * Select a search result and center map with marker
-   */
   const selectSearchResult = (result) => {
     if (!mapInstanceRef.current) return;
 
@@ -240,12 +506,10 @@ export default function RawMap() {
     const lat = parseFloat(result.lat);
     const lon = parseFloat(result.lon);
 
-    // Remove previous search marker if exists
     if (searchMarker) {
       map.removeLayer(searchMarker);
     }
 
-    // Create custom search marker icon (same as HomeMapWithSidebar)
     const searchIcon = L.divIcon({
       className: "search-marker",
       html: `
@@ -270,14 +534,10 @@ export default function RawMap() {
       iconAnchor: [20, 40],
     });
 
-    const marker = L.marker([lat, lon], {
-      icon: searchIcon,
-    }).addTo(map);
-
+    const marker = L.marker([lat, lon], { icon: searchIcon }).addTo(map);
     const displayName = result.display_name || "Selected Location";
-    marker
-      .bindPopup(
-        `
+    
+    marker.bindPopup(`
       <div style="font-family: -apple-system, sans-serif; padding: 10px; min-width: 200px;">
         <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #3b82f6;">
           📍 Search Result
@@ -289,25 +549,16 @@ export default function RawMap() {
           ${lat.toFixed(6)}, ${lon.toFixed(6)}
         </p>
       </div>
-    `
-      )
-      .openPopup();
+    `).openPopup();
 
     setSearchMarker(marker);
-
-    // Center and zoom map to the selected location
-    map.setView([lat, lon], 16, {
-      animate: true,
-      duration: 1,
-    });
-
+    map.setView([lat, lon], 16, { animate: true, duration: 1 });
     setSearchQuery(result.display_name);
     setIsSearchFocused(false);
     setSelectedSuggestionIndex(-1);
     searchInputRef.current?.blur();
   };
 
-  // ============ DERIVED STATE FOR DROPDOWN VISIBILITY ============
   const shouldShowDropdown =
     isSearchFocused &&
     (searchResults.length > 0 ||
@@ -317,7 +568,14 @@ export default function RawMap() {
   // ============ RENDER ============
   return (
     <div className="relative h-full w-full">
-      {/* ============ SEARCH BAR (copied from HomeMapWithSidebar) ============ */}
+      <style>{`
+        @keyframes pulse-active {
+          0% { transform: translate(-50%, -50%) scale(1); opacity: 0.3; }
+          100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+        }
+      `}</style>
+
+      {/* ============ SEARCH BAR ============ */}
       <div className="absolute top-20 left-4 z-[1002]" ref={searchInputRef}>
         <div className="bg-white rounded-lg shadow-lg p-3 w-96">
           <div className="flex items-center gap-2">
@@ -343,7 +601,6 @@ export default function RawMap() {
               onKeyDown={handleSearchKeyDown}
               onFocus={() => setIsSearchFocused(true)}
               onBlur={() => {
-                // Delay blur to allow click events on dropdown to fire
                 setTimeout(() => {
                   if (document.activeElement !== searchInputRef.current) {
                     setIsSearchFocused(false);
@@ -357,7 +614,6 @@ export default function RawMap() {
             )}
           </div>
 
-          {/* Search Error Message */}
           {searchError && !searchLoading && shouldShowDropdown && (
             <div className="mt-2 text-xs text-orange-600 bg-orange-50 p-2 rounded flex items-center gap-2">
               <span>⚠️</span>
@@ -365,14 +621,10 @@ export default function RawMap() {
             </div>
           )}
 
-          {/* Autocomplete Suggestions Dropdown */}
           {shouldShowDropdown && (
             <div
               className="mt-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-96 overflow-y-auto"
-              onMouseDown={(e) => {
-                // Prevent dropdown from stealing focus
-                e.preventDefault();
-              }}
+              onMouseDown={(e) => e.preventDefault()}
             >
               {searchLoading ? (
                 <div className="p-4 text-center text-gray-500 text-sm">
@@ -383,7 +635,6 @@ export default function RawMap() {
                 <div className="p-4 text-center text-gray-500 text-sm">
                   <div className="text-3xl mb-2">🔍</div>
                   <p>No places found</p>
-                  <p className="text-xs mt-1">Try a different search term</p>
                 </div>
               ) : (
                 searchResults.map((result, index) => (
@@ -392,9 +643,7 @@ export default function RawMap() {
                     onMouseDown={(e) => handleSuggestionClick(result, e)}
                     onMouseEnter={() => setSelectedSuggestionIndex(index)}
                     className={`p-3 cursor-pointer border-b last:border-b-0 transition-colors ${
-                      selectedSuggestionIndex === index
-                        ? "bg-blue-50"
-                        : "hover:bg-gray-50"
+                      selectedSuggestionIndex === index ? "bg-blue-50" : "hover:bg-gray-50"
                     }`}
                   >
                     <div className="flex items-start gap-2">
@@ -406,32 +655,10 @@ export default function RawMap() {
                         <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
                           {result.display_name}
                         </p>
-                        {result.type && (
-                          <span className="inline-block mt-1 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
-                            {result.type}
-                          </span>
-                        )}
                       </div>
                     </div>
                   </div>
                 ))
-              )}
-
-              {/* Keyboard navigation hint */}
-              {searchResults.length > 0 && (
-                <div className="px-3 py-2 text-xs text-gray-400 border-t bg-gray-50">
-                  <span className="mr-2">💡 Tip:</span>
-                  Use{" "}
-                  <kbd className="px-1 py-0.5 bg-white border rounded">↑</kbd>
-                  <kbd className="px-1 py-0.5 bg-white border rounded ml-1">
-                    ↓
-                  </kbd>{" "}
-                  to navigate,
-                  <kbd className="px-1 py-0.5 bg-white border rounded ml-1">
-                    Enter
-                  </kbd>{" "}
-                  to select
-                </div>
               )}
             </div>
           )}
@@ -439,7 +666,6 @@ export default function RawMap() {
       </div>
 
       {/* ============ MAP CONTAINER ============ */}
-      {/* Zoom controls are automatically added to bottom-left via Leaflet */}
       <div ref={mapRef} style={{ height: "100%", width: "100%" }} />
     </div>
   );

@@ -23,6 +23,21 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  overflow-x: hidden; /* Prevent horizontal scroll */
+}
+
+/* Prevent horizontal scroll on all devices */
+html {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+/* Only prevent vertical scroll on home page (map page) */
+body.map-page {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  height: 100%;
 }
 
 
@@ -154,4 +169,78 @@ body {
 /* Prevent body scroll when bottom sheet is expanded */
 .bottom-sheet-expanded {
   overflow: hidden;
+}
+
+/* Pulse animation for disruption markers */
+/* Pulse animation for disruption markers */
+@keyframes pulse-active {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.3;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.4);
+    opacity: 0;
+  }
+}
+
+@keyframes pulse-upcoming {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.4;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.4);
+    opacity: 0;
+  }
+}
+
+.disruption-marker-active,
+.disruption-marker-upcoming {
+  background: transparent !important;
+  border: none !important;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/*-------------------smooth sliding icons in about-------------------*/
+
+/* hide horizontal scrollbar */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE/Edge */
+  scrollbar-width: none;     /* Firefox */
+}
+
+/*--------hide default browser password visibility toggle----------*/
+
+/* Hide built-in password reveal button (Chrome, Edge, Safari) */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
+input[type="password"]::-webkit-textfield-decoration-container {
+  display: none;
+}
+
+/* user alternate routes */
+.user-route-line {
+  z-index: 1000 !important;
+  pointer-events: auto;
 }

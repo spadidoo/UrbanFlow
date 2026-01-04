@@ -30,6 +30,8 @@ export default function SmartResultsMap({
   simulationResults,
   selectedLocation,
   roadInfo,
+  alternateRoutes,
+  selectedRoute
 }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -57,6 +59,9 @@ export default function SmartResultsMap({
   const [currentHourIndex, setCurrentHourIndex] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const [apiStatus, setApiStatus] = useState({ status: "idle", message: "" }); // ✅ API status tracking
+  // ✅ Extract real-time integration data from backend
+  const realtimeIntegration = simulationResults?.realtime_integration || null;
+  const useRealtimeData = realtimeIntegration?.enabled || false;
   const [useGoogleApi, setUseGoogleApi] = useState(true); // Toggle for Google API
   const [googleRoadsData, setGoogleRoadsData] = useState(null);
 
@@ -68,9 +73,16 @@ export default function SmartResultsMap({
     ) {
       return simulationResults?.summary?.avg_severity || 1.0;
     }
+    
     const hourData = simulationResults.hourly_predictions[currentHourIndex];
+    
+    // ✅ Check if this hour was adjusted with real-time data
+    if (hourData?.realtime_adjusted && useRealtimeData) {
+      console.log(`🔴 Hour ${currentHourIndex} using real-time adjusted severity: ${hourData.severity}`);
+    }
+    
     return hourData?.severity ?? simulationResults.summary.avg_severity;
-  }, [simulationResults, currentHourIndex]);
+  }, [simulationResults, currentHourIndex, useRealtimeData]);
 
   const getCurrentHourSeverity = () => currentHourSeverity;
 
@@ -123,7 +135,13 @@ export default function SmartResultsMap({
   // MAP INITIALIZATION
   // ========================================
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return;
+    if (!mapRef.current) return;
+    
+    // ✅ Reinitialize map if it was cleaned up
+    if (mapInstanceRef.current) {
+      console.log('⚠️ Map already exists, skipping...');
+      return;
+    }
 
     const map = L.map(mapRef.current, {
       center: [14.2096, 121.164],
@@ -141,12 +159,46 @@ export default function SmartResultsMap({
 
     mapInstanceRef.current = map;
 
-    // ✅ Create layer groups
+    // ✅ Create layer groups - force recreation if null
+    if (!layerGroupsRef.current) {
+      layerGroupsRef.current = {};
+    }
+
     layerGroupsRef.current.shadows = L.layerGroup().addTo(map);
     layerGroupsRef.current.nearbyRoads = L.layerGroup().addTo(map);
     layerGroupsRef.current.connectedRoads = L.layerGroup().addTo(map);
     layerGroupsRef.current.mainRoads = L.layerGroup().addTo(map);
     layerGroupsRef.current.markers = L.layerGroup().addTo(map);
+
+    console.log('✅ Layer groups created:', Object.keys(layerGroupsRef.current));
+
+    // ✅ Add any pending segments that were created before initialization
+    if (window._pendingSegments && window._pendingSegments.length > 0) {
+      console.log('📥 Adding', window._pendingSegments.length, 'pending segments');
+      
+      window._pendingSegments.forEach(({ segment, targetGroup }) => {
+        if (layerGroupsRef.current[targetGroup]) {
+          layerGroupsRef.current[targetGroup].addLayer(segment);
+          layersRef.current.push(segment);
+        }
+      });
+      
+      window._pendingSegments = [];
+    }
+
+    // ✅ Same for shadows
+    if (window._pendingShadows && window._pendingShadows.length > 0) {
+      console.log('📥 Adding', window._pendingShadows.length, 'pending shadows');
+      
+      window._pendingShadows.forEach(shadow => {
+        if (layerGroupsRef.current.shadows) {
+          layerGroupsRef.current.shadows.addLayer(shadow);
+          layersRef.current.push(shadow);
+        }
+      });
+      
+      window._pendingShadows = [];
+    }
 
     // ✅ Set z-indices for proper layering
     layerGroupsRef.current.shadows.setZIndex(100);
@@ -155,15 +207,65 @@ export default function SmartResultsMap({
     layerGroupsRef.current.mainRoads.setZIndex(400);
     layerGroupsRef.current.markers.setZIndex(500);
 
+    // ✅ ADD THIS - Force layer group validation
+    console.log('✅ Layer groups ready:', {
+      shadows: !!layerGroupsRef.current.shadows,
+      mainRoads: !!layerGroupsRef.current.mainRoads,
+      connectedRoads: !!layerGroupsRef.current.connectedRoads,
+      nearbyRoads: !!layerGroupsRef.current.nearbyRoads,
+      markers: !!layerGroupsRef.current.markers,
+    });
+
     setMapReady(true);
 
     return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-        setMapReady(false);
+    console.log('🧹 Cleaning up SmartResultsMap...');
+    
+    // Clear all layers first
+    layersRef.current.forEach((layer) => {
+      try {
+        if (layer && mapInstanceRef.current && mapInstanceRef.current.hasLayer(layer)) {
+          if (layer.unbindPopup) layer.unbindPopup();
+          if (layer.unbindTooltip) layer.unbindTooltip();
+          if (layer.off) layer.off();
+          mapInstanceRef.current.removeLayer(layer);
+        }
+      } catch (e) {
+        console.error('Error removing layer:', e);
       }
-    };
+    });
+    layersRef.current = [];
+    
+    // Clear layer groups properly
+    if (layerGroupsRef.current) {
+      Object.keys(layerGroupsRef.current).forEach((key) => {
+        if (layerGroupsRef.current[key]) {
+          try {
+            layerGroupsRef.current[key].clearLayers();
+            if (mapInstanceRef.current && mapInstanceRef.current.hasLayer(layerGroupsRef.current[key])) {
+              mapInstanceRef.current.removeLayer(layerGroupsRef.current[key]);
+            }
+          } catch (error) {
+            console.warn(`Failed to clean up layer group ${key}:`, error);
+          }
+        }
+      });
+      // Reset to empty object (not null, to prevent errors)
+      layerGroupsRef.current = null;
+    }
+    
+    // Clear pending items
+    window._pendingShadows = [];
+    window._pendingSegments = [];
+    
+    segmentLayersRef.current.clear();
+    
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.remove();
+      mapInstanceRef.current = null;
+      setMapReady(false);
+    }
+  };
   }, []);
 
   // ========================================
@@ -180,49 +282,7 @@ export default function SmartResultsMap({
   // ========================================
   useEffect(() => {
     if (!selectedLocation || !simulationResults || !mapReady) return;
-
-    // ✅ NEW: Fetch roads using Google API
-    const fetchGoogleRoads = async () => {
-      if (!useGoogleApi || !isGoogleApiEnabled()) {
-        console.log("⚠️ Google API disabled, skipping...");
-        return null;
-      }
-
-      try {
-        setApiStatus({
-          status: "loading",
-          message: "Fetching roads from Google Maps...",
-        });
-
-        const center = selectedLocation.center;
-
-        // Get severity to determine radius
-        const avgSeverity = simulationResults?.summary?.avg_severity || 1.0;
-        const baseRadius =
-          avgSeverity >= 1.5 ? 1000 : avgSeverity >= 1.0 ? 700 : 500;
-
-        const googleRoads = await getConnectedRoads(
-          center.lat,
-          center.lng,
-          baseRadius
-        );
-
-        if (googleRoads && googleRoads.length > 0) {
-          console.log(
-            "✅ Google Roads loaded:",
-            googleRoads.map((r) => r.name)
-          );
-          setGoogleRoadsData(googleRoads);
-          return googleRoads;
-        }
-
-        return null;
-      } catch (error) {
-        console.error("❌ Google API failed:", error);
-        return null;
-      }
-    };
-
+    
     const fetchRoadNetworkWithRetry = async (retries = 3, delay = 1000) => {
       const cacheKey = `${selectedLocation.center.lat.toFixed(
         4
@@ -240,27 +300,6 @@ export default function SmartResultsMap({
       setLoading(true);
       setApiStatus({ status: "loading", message: "Fetching road network..." });
 
-      // ✅ TRY GOOGLE API FIRST (if enabled)
-      if (useGoogleApi && isGoogleApiEnabled()) {
-        const googleRoads = await fetchGoogleRoads();
-        if (googleRoads && googleRoads.length >= 2) {
-          // Process Google roads into our format
-          const processedNetwork = processGoogleRoads(
-            googleRoads,
-            selectedLocation.center,
-            roadInfo
-          );
-
-          roadNetworkCacheRef.current.set(cacheKey, processedNetwork);
-          setRoadNetwork(processedNetwork);
-          setApiStatus({ status: "success", message: "Google Maps data" });
-          setLoading(false);
-          return;
-        }
-        console.log(
-          "⚠️ Google API returned insufficient data, falling back to OSM..."
-        );
-      }
 
       for (let attempt = 0; attempt < retries; attempt++) {
         try {
@@ -435,7 +474,7 @@ export default function SmartResultsMap({
         if (coords.length < 2) return null;
 
         // âœ… NEW: Check if this segment is actually near the disruption
-        if (!isSegmentConnectedToDisruption(coords, center, 600)) {
+        if (!isSegmentConnectedToDisruption(coords, center, 1500)) {
           console.log(
             `âŒ Filtering disconnected segment: ${way.tags.name || "unnamed"}`
           );
@@ -621,6 +660,8 @@ export default function SmartResultsMap({
     ways.forEach((way) => {
       if (mainRoadWay && way.id === mainRoadWay.id) return;
 
+        
+
       // ✅ NEW: EXCLUDE UNWANTED ROADS FIRST
       const shouldExclude = checkIfShouldExclude(way, context);
       if (shouldExclude) {
@@ -660,7 +701,7 @@ export default function SmartResultsMap({
       // ✅ NEW: Check if road passes near disruption center (catches all intersection directions)
       const passesNearCenter = way.coordinates.some(
         (coord) =>
-          getDistance(center.lat, center.lng, coord.lat, coord.lng) < 180
+          getDistance(center.lat, center.lng, coord.lat, coord.lng) < 250
       );
 
       // ✅ NEW: Check if this is Ipil-Ipil Street  (Letran exit routes)
@@ -796,11 +837,29 @@ export default function SmartResultsMap({
       const isActuallyConnected =
         isLetranExitRoute || passesNearCenter || isDirectlyConnected;
 
+      // ✅ FORCE: All National Highway/Maharlika segments are HIGH priority
+      if (isMajorHighway && way.minDistToCenter < 1000) {
+        const roadData = {
+          ...way,
+          road_name: way.name,
+          road_type: way.type,
+          impactLevel: "high",
+          impactMultiplier: 0.9,
+          distanceToDisruption: way.minDistToCenter,
+          connectionType: "major_highway",
+          sharedNodeCount: sharedNodes.length,
+          passesNearCenter: passesNearCenter,
+          isLetranExitRoute: false,
+        };
+        connectedRoads.push(roadData);
+        console.log(`✅ Added major highway segment: ${way.name}`);
+        return; // Skip normal classification
+      }
+
       // ✅ STRICT: Only include roads that are ACTUALLY CONNECTED
       if (isAccessibleFromMainRoad) {
-        // ✅ EXTRA CHECK: Verify the road physically connects to main road or passes through disruption
         const hasPhysicalConnection =
-          isDirectlyConnected || passesNearCenter || isLetranExitRoute;
+          isDirectlyConnected || passesNearCenter || isLetranExitRoute || isMajorHighway; // ✅ Added
 
         if (hasPhysicalConnection) {
           connectedRoads.push(roadData);
@@ -1051,6 +1110,12 @@ export default function SmartResultsMap({
     if (!mapInstanceRef.current || !simulationResults || !mapReady || loading)
       return;
 
+     
+    if (!layerGroupsRef.current?.shadows || !layerGroupsRef.current?.mainRoads) {
+      console.warn("⚠️ Layer groups not ready yet, waiting...");
+      return;
+    }
+
     const map = mapInstanceRef.current;
     const { mainRoad, connectedRoads, nearbyRoads } = roadNetwork;
 
@@ -1060,6 +1125,9 @@ export default function SmartResultsMap({
       simulationResults.hourly_predictions?.[currentHourIndex];
     const baseSeverity =
       currentHourData?.severity ?? simulationResults.summary.avg_severity;
+
+      // ✅ DEBUG: Check if severity actually changes per hour
+    console.log(`📊 Hour ${currentHourIndex}: severity=${currentHourData?.severity?.toFixed(2) || 'N/A'}`);
 
     // ✅ OPTIMIZATION: Only update colors if hour changed, not full re-render
     // ✅ OPTIMIZATION: Only update colors if hour changed, not full re-render
@@ -1100,6 +1168,12 @@ export default function SmartResultsMap({
       const coords = road.coordinates;
       if (coords.length < 2) return;
 
+      // ✅ CRITICAL: Verify layer groups exist before processing
+      if (!layerGroupsRef.current?.shadows || !layerGroupsRef.current?.mainRoads) {
+        console.warn("⚠️ Layer groups not initialized, skipping road drawing");
+        return; // Exit the entire function early
+      }
+
       // ✅ Severity-based radius expansion
       // ✅ FIXED: Smaller radius so gradient shows properly
       const severityExpansion =
@@ -1125,15 +1199,15 @@ export default function SmartResultsMap({
 
         let segmentImpact, impactIntensity;
 
-        if (distToCenter < 80) {
+        if (distToCenter < 120) {
           segmentImpact = "direct";
           impactIntensity = 1.0;
-        } else if (distToCenter < 200) {
+        } else if (distToCenter < 300) {
           segmentImpact = "high";
-          impactIntensity = 0.95 - ((distToCenter - 80) / 120) * 0.2; // Slower falloff
+          impactIntensity = 0.95 - ((distToCenter - 120) / 180) * 0.2; // Slower falloff
         } else if (distToCenter < 400) {
           segmentImpact = "medium-high";
-          impactIntensity = 0.75 - ((distToCenter - 200) / 200) * 0.2;
+          impactIntensity = 0.75 - ((distToCenter - 300) / 300) * 0.2;
         } else if (distToCenter < 700) {
           segmentImpact = "medium";
           impactIntensity = 0.55 - ((distToCenter - 400) / 300) * 0.2;
@@ -1187,8 +1261,16 @@ export default function SmartResultsMap({
             renderer: canvasRenderer,
           }
         );
-        layerGroupsRef.current.shadows.addLayer(shadow);
-        layersRef.current.push(shadow);
+        // ✅ Add shadow with proper validation
+       // ✅ Add shadow with proper validation
+        if (layerGroupsRef.current?.shadows && mapInstanceRef.current && typeof layerGroupsRef.current.shadows.addLayer === 'function') {
+          try {
+            layerGroupsRef.current.shadows.addLayer(shadow);
+            layersRef.current.push(shadow);
+          } catch (error) {
+            console.warn('⚠️ Shadow layer failed:', error.message);
+          }
+        }
 
         const segment = L.polyline(
           [
@@ -1211,17 +1293,29 @@ export default function SmartResultsMap({
           }
         );
 
-        const targetGroup = isMainRoad ? "mainRoads" : groupType;
-        layerGroupsRef.current[targetGroup].addLayer(segment);
-        layersRef.current.push(segment);
+      const targetGroup = isMainRoad ? "mainRoads" : groupType;
 
-        // ✅ Store segment reference for fast updates
-        const segmentId = `${road.id}-${i}`;
-        segmentLayersRef.current.set(segmentId, {
-          layer: segment,
-          impactLevel: segmentImpact,
-          impactIntensity: impactIntensity,
-        });
+      // ✅ Validate and add segment safely
+      if (layerGroupsRef.current?.[targetGroup] && typeof layerGroupsRef.current[targetGroup].addLayer === 'function') {
+        try {
+          layerGroupsRef.current[targetGroup].addLayer(segment);
+          layersRef.current.push(segment);
+          
+          // ✅ Store segment reference for fast updates
+          const segmentId = `${road.id}-${i}`;
+          segmentLayersRef.current.set(segmentId, {
+            layer: segment,
+            impactLevel: segmentImpact,
+            impactIntensity: impactIntensity,
+          });
+        } catch (error) {
+          console.warn(`⚠️ Failed to add segment ${i}:`, error.message);
+        }
+      } else {
+        console.warn(`⚠️ Skipping segment ${i} - layer group '${targetGroup}' not ready`);
+      }
+
+  
       }
 
       const fullLine = L.polyline(
@@ -1236,21 +1330,32 @@ export default function SmartResultsMap({
       );
 
       const targetGroup = isMainRoad ? "mainRoads" : groupType;
-      layerGroupsRef.current[targetGroup].addLayer(fullLine);
 
-      if (isMainRoad) {
-        fullLine.bindPopup(
-          createMainRoadPopup(
-            road,
-            baseSeverity,
-            simulationResults,
-            currentHourData
-          )
-        );
+      // ✅ Validate and add fullLine safely
+      if (layerGroupsRef.current?.[targetGroup] && typeof layerGroupsRef.current[targetGroup].addLayer === 'function') {
+        try {
+          layerGroupsRef.current[targetGroup].addLayer(fullLine);
+          
+          if (isMainRoad) {
+            fullLine.bindPopup(
+              createMainRoadPopup(
+                road,
+                baseSeverity,
+                simulationResults,
+                currentHourData
+              )
+            );
+          } else {
+            fullLine.bindPopup(createRoadPopup(road, baseSeverity));
+          }
+          
+          layersRef.current.push(fullLine);
+        } catch (error) {
+          console.warn(`⚠️ Failed to add fullLine:`, error.message);
+        }
       } else {
-        fullLine.bindPopup(createRoadPopup(road, baseSeverity));
+        console.warn(`⚠️ Layer group '${targetGroup}' not ready for fullLine`);
       }
-      layersRef.current.push(fullLine);
     };
 
     // ✅ IMPROVED: Coordinate filtering to prevent gaps
@@ -1259,7 +1364,10 @@ export default function SmartResultsMap({
     const trimCoordinates = (coords, maxDist, roadName = "", roadType = "") => {
       if (coords.length < 2) return coords;
 
-      // ✅ Check if this road should extend toward National Highway
+
+      // ✅ DEBUG: Log to verify maxDist is changing
+      console.log(`✂️ Trimming ${roadName}: maxDist=${Math.round(maxDist)}m`);
+
       const isFeederRoad =
         roadName.toLowerCase().includes("bucal") ||
         roadName.toLowerCase().includes("chipeco") ||
@@ -1277,100 +1385,55 @@ export default function SmartResultsMap({
       const isChipeco = roadName.toLowerCase().includes("chipeco");
       const isIpilIpil = roadName.toLowerCase().includes("ipil");
 
-      let closestIndex = -1;
-      let minDistToCenter = Infinity;
+      // ✅ NEW APPROACH: Include ALL segments within range, then extend
+      const withinRange = [];
+      const distanceMap = new Map();
 
-      // Find point closest to disruption
+      // First pass: Find ALL points within maxDist
       coords.forEach((coord, index) => {
         const dist = getDistance(center.lat, center.lng, coord.lat, coord.lng);
-        if (dist < minDistToCenter) {
-          minDistToCenter = dist;
-          closestIndex = index;
+        distanceMap.set(index, dist);
+        
+        if (dist < maxDist * 1.5) { // Initial broad capture
+          withinRange.push(index);
         }
       });
 
-      if (closestIndex === -1) return coords;
+      if (withinRange.length === 0) {
+        // Fallback: find closest point
+        let closestIdx = 0;
+        let minDist = Infinity;
+        coords.forEach((coord, idx) => {
+          const dist = getDistance(center.lat, center.lng, coord.lat, coord.lng);
+          if (dist < minDist) {
+            minDist = dist;
+            closestIdx = idx;
+          }
+        });
+        withinRange.push(closestIdx);
+      }
 
-      const trimmed = [];
+      // Find the continuous range
+      const minIndex = Math.min(...withinRange);
+      const maxIndex = Math.max(...withinRange);
 
-      // ✅ SMART DIRECTION LOGIC
+      // ✅ Calculate extension based on road type
+      let extendBefore, extendAfter, distMultiplier;
+
       if (isMainHighway) {
-        // Highways: Extend BOTH directions equally (bidirectional traffic)
-        const extendPoints = 40; // Extend 25 points in each direction
-        const startIndex = Math.max(0, closestIndex - extendPoints); //- 15
-        const endIndex = Math.min(
-          coords.length - 1,
-          closestIndex + extendPoints
-        );
-
-        for (let i = startIndex; i <= endIndex; i++) {
-          const coord = coords[i];
-          const dist = getDistance(
-            center.lat,
-            center.lng,
-            coord.lat,
-            coord.lng
-          );
-
-          if (dist < maxDist * 2.5) {
-            // Extra buffer for highways
-            trimmed.push(coord);
-          }
-        }
-      } else if (isIpilIpil) {
-        // ✅ Ipil-Ipil: Very short extension (local street)
-        // NOTE: previous code used a fractional extendPoints (0.2) which
-        // produced non-integer indices and prevented trimming from working.
-        // Use small integer counts and a small but sensible meter cap.
-        const extendPoints = 1; // 1 point on each side (very short)
-        const startIndex = Math.max(0, Math.floor(closestIndex - extendPoints));
-        const endIndex = Math.min(
-          coords.length - 1,
-          Math.ceil(closestIndex + extendPoints)
-        );
-
-        for (let i = startIndex; i <= endIndex; i++) {
-          const coord = coords[i];
-          if (!coord) continue;
-          const dist = getDistance(
-            center.lat,
-            center.lng,
-            coord.lat,
-            coord.lng
-          );
-
-          // Use a small, sensible cap (meters). Tweak 15 -> smaller/larger as desired.
-          if (dist < Math.min(maxDist * 0.15, 15)) {
-            trimmed.push(coord);
-          }
-        }
+        extendBefore = 80;
+        extendAfter = 80;
+        distMultiplier = 4.0;
       } else if (isChipeco) {
-        // Chipeco: Extend MORE in both directions for visibility
-        const extendPoints = 20;
-        const startIndex = Math.max(0, closestIndex - extendPoints);
-        const endIndex = Math.min(
-          coords.length - 1,
-          closestIndex + extendPoints
-        );
-
-        for (let i = startIndex; i <= endIndex; i++) {
-          const coord = coords[i];
-          const dist = getDistance(
-            center.lat,
-            center.lng,
-            coord.lat,
-            coord.lng
-          );
-
-          if (dist < maxDist * 1.2) {
-            trimmed.push(coord);
-          }
-        }
+        extendBefore = 45;
+        extendAfter = 45;
+        distMultiplier = 2.5;
+      } else if (isIpilIpil) {
+        extendBefore = 5;
+        extendAfter = 5;
+        distMultiplier = 0.5;
       } else if (isFeederRoad) {
-        // ✅ Feeder roads: Extend MORE toward the direction AWAY from disruption
-        // (traffic backs up in the direction people are trying to GO)
-
-        // Determine which end is farther from disruption (that's the highway direction)
+        // Determine which direction goes toward the highway
         const distToStart = getDistance(
           center.lat,
           center.lng,
@@ -1384,120 +1447,142 @@ export default function SmartResultsMap({
           coords[coords.length - 1].lng
         );
 
-        let startIndex, endIndex;
-
         if (distToEnd > distToStart) {
-          // Highway is at the END - extend more in that direction
-          startIndex = Math.max(0, closestIndex - 5);
-          endIndex = Math.min(coords.length - 1, closestIndex + 20); // ✅ 4x more toward highway
+          // Highway is at the END
+          extendBefore = 10;
+          extendAfter = 50;
         } else {
-          // Highway is at the START - extend more in that direction
-          startIndex = Math.max(0, closestIndex - 20); // ✅ 4x more toward highway
-          endIndex = Math.min(coords.length - 1, closestIndex + 5);
+          // Highway is at the START
+          extendBefore = 50;
+          extendAfter = 10;
         }
-
-        for (let i = startIndex; i <= endIndex; i++) {
-          const coord = coords[i];
-          const dist = getDistance(
-            center.lat,
-            center.lng,
-            coord.lat,
-            coord.lng
-          );
-
-          if (dist < maxDist * 1.2) {
-            trimmed.push(coord);
-          }
-        }
+        distMultiplier = 2.2;
       } else {
-        // Other roads: Balanced extension
-        const extendPoints = 15;
-        const startIndex = Math.max(0, closestIndex - extendPoints);
-        const endIndex = Math.min(
-          coords.length - 1,
-          closestIndex + extendPoints
+        // Default roads
+        extendBefore = 30;
+        extendAfter = 30;
+        distMultiplier = 2.5;
+      }
+
+      // ✅ Calculate final range with extensions
+      const startIndex = Math.max(0, minIndex - extendBefore);
+      const endIndex = Math.min(coords.length - 1, maxIndex + extendAfter);
+
+      // ✅ Build final coordinate list - include ALL points in range
+      const trimmed = [];
+      const effectiveMaxDist = maxDist * distMultiplier;
+
+      for (let i = startIndex; i <= endIndex; i++) {
+        const coord = coords[i];
+        const dist = distanceMap.get(i) || getDistance(center.lat, center.lng, coord.lat, coord.lng);
+        
+        // ✅ Include point if it's within extended range OR part of continuous segment
+        if (dist < effectiveMaxDist || (i >= minIndex && i <= maxIndex)) {
+          trimmed.push(coord);
+        }
+      }
+
+      // ✅ Add fade-out points at BOTH ends
+      if (trimmed.length > 0) {
+        // Extend at the start
+        const firstTrimmedIdx = coords.indexOf(trimmed[0]);
+        for (let i = Math.max(0, firstTrimmedIdx - 15); i < firstTrimmedIdx; i++) {
+          const coord = coords[i];
+          const dist = getDistance(center.lat, center.lng, coord.lat, coord.lng);
+          if (dist < effectiveMaxDist * 1.3) {
+            trimmed.unshift(coord); // Add to beginning
+          }
+        }
+
+        // Extend at the end
+        const lastTrimmedIdx = coords.indexOf(trimmed[trimmed.length - 1]);
+        for (let i = lastTrimmedIdx + 1; i < Math.min(coords.length, lastTrimmedIdx + 15); i++) {
+          const coord = coords[i];
+          const dist = getDistance(center.lat, center.lng, coord.lat, coord.lng);
+          if (dist < effectiveMaxDist * 1.3) {
+            trimmed.push(coord);
+          }
+        }
+      }
+
+      // ✅ Safety check: ensure minimum length
+      if (trimmed.length < 2) {
+        console.warn(`⚠️ Trimmed coords too short for ${roadName}, using more points`);
+        return coords.slice(
+          Math.max(0, startIndex - 20), 
+          Math.min(coords.length, endIndex + 20)
         );
-
-        for (let i = startIndex; i <= endIndex; i++) {
-          const coord = coords[i];
-          const dist = getDistance(
-            center.lat,
-            center.lng,
-            coord.lat,
-            coord.lng
-          );
-
-          if (dist < maxDist * 1.3) {
-            trimmed.push(coord);
-          }
-        }
       }
 
-      // ✅ Add gradient fade points at the end
-      const lastIncludedDist =
-        trimmed.length > 0
-          ? getDistance(
-              center.lat,
-              center.lng,
-              trimmed[trimmed.length - 1].lat,
-              trimmed[trimmed.length - 1].lng
-            )
-          : 0;
-
-      if (lastIncludedDist < maxDist * 1.4 && trimmed.length > 0) {
-        // Find next 3-5 points for fade
-        const lastIndex = coords.indexOf(trimmed[trimmed.length - 1]);
-        for (
-          let i = lastIndex + 1;
-          i < Math.min(coords.length, lastIndex + 6);
-          i++
-        ) {
-          const coord = coords[i];
-          const dist = getDistance(
-            center.lat,
-            center.lng,
-            coord.lat,
-            coord.lng
-          );
-          if (dist < maxDist * 1.5) {
-            trimmed.push(coord);
-          }
-        }
-      }
-
-      return trimmed.length >= 2 ? trimmed : coords;
+      return trimmed;
     };
 
     // Render nearby roads
+    // Render nearby roads
     nearbyRoads.forEach((road) => {
-      const currentDelay =
-        currentHourData?.delay_info?.additional_delay_min ??
-        simulationResults.summary.avg_delay_minutes ??
-        5;
-      const severityMultiplier = Math.min(
-        Math.max(0.8, 0.8 + currentDelay / 25),
-        2.5
-      );
-      const maxDist = 500 * severityMultiplier;
+        const currentDelay =
+          currentHourData?.delay_info?.additional_delay_min ??
+          simulationResults.summary.avg_delay_minutes ??
+          5;
+        
+        // ✅ Use the SAME severity factor as connected roads
+        const currentSeverity = currentHourData?.severity ?? baseSeverity;
+        const isPeakHour = (currentHourData?.hour >= 6 && currentHourData?.hour <= 9) || 
+                          (currentHourData?.hour >= 17 && currentHourData?.hour <= 20);
+        const isSuperPeak = currentHourData?.hour === 7 || currentHourData?.hour === 8 || 
+                            currentHourData?.hour === 18;
 
-      const trimmedCoords = trimCoordinates(
-        road.coordinates,
-        maxDist,
-        road.name,
-        road.type
-      );
-      if (trimmedCoords.length >= 2) {
-        drawRoadWithGradient(
-          { ...road, coordinates: trimmedCoords },
-          false,
-          "nearbyRoads"
+        let severityFactor;
+        if (currentSeverity >= 2.0) {
+          severityFactor = 3.5;
+        } else if (currentSeverity >= 1.5) {
+          severityFactor = 2.8;
+        } else if (currentSeverity >= 1.0) {
+          severityFactor = 1.8;
+        } else if (currentSeverity >= 0.5) {
+          severityFactor = 1.2;
+        } else {
+          severityFactor = 0.8;
+        }
+
+        if (isSuperPeak && currentSeverity >= 1.5) {
+          severityFactor *= 1.2;
+        } else if (isPeakHour && currentSeverity >= 1.0) {
+          severityFactor *= 1.1;
+        }
+
+        const delayFactor = Math.min(1.0 + currentDelay / 40, 1.3);
+        const finalMultiplier = severityFactor * delayFactor;
+
+        // ✅ CALCULATE maxDist BEFORE using it in console.log
+        const baseMaxDist = 800;
+        const maxDist = baseMaxDist * finalMultiplier;
+
+        // ✅ NOW it's safe to log maxDist
+        console.log(
+          `🛣️ ${road.name}: severity=${currentSeverity.toFixed(
+            2
+          )}, length=${maxDist.toFixed(0)}m`
         );
-      }
-    });
+
+        const trimmedCoords = trimCoordinates(
+          road.coordinates,
+          maxDist,
+          road.name,
+          road.type
+        );
+        if (trimmedCoords.length >= 2) {
+          drawRoadWithGradient(
+            { ...road, coordinates: trimmedCoords },
+            false,
+            "nearbyRoads"
+          );
+        }
+      });
 
     // Render connected roads with extended inner lane coverage
     // Render connected roads with extended inner lane coverage
-    // Render connected roads with extended inner lane coverage
+  // Render connected roads with extended inner lane coverage
     connectedRoads.forEach((road) => {
       const hour =
         currentHourData?.hour ??
@@ -1511,32 +1596,38 @@ export default function SmartResultsMap({
       // ✅ USE CURRENT HOUR'S SEVERITY (not average!)
       const currentSeverity = currentHourData?.severity ?? baseSeverity;
 
+      // ✅ SKIP non-main roads if severity is light
+      if (currentSeverity < 0.7 && !road.isCriticalPath && road.impactLevel !== "high") {
+        console.log(`⏭️ Skipping ${road.name} - severity too light (${currentSeverity.toFixed(2)})`);
+        return; // Skip this road
+      }
+
       const isPeakHour = (hour >= 6 && hour <= 9) || (hour >= 17 && hour <= 20);
       const isSuperPeak = hour === 7 || hour === 8 || hour === 18;
 
       // ✅ SEVERITY-BASED LENGTH - recalculated every hour!
       let severityFactor;
       if (currentSeverity >= 2.0) {
-        severityFactor = 3.5; // Extreme - very long
+        severityFactor = 4.0; // Extreme - very long
       } else if (currentSeverity >= 1.5) {
         severityFactor = 2.8; // Heavy - long
       } else if (currentSeverity >= 1.0) {
         severityFactor = 1.8; // Moderate - medium
       } else if (currentSeverity >= 0.5) {
-        severityFactor = 1.2; // Light-Moderate - short-medium
+        severityFactor = 1.4; // Light-Moderate - short-medium
       } else {
-        severityFactor = 0.8; // Light - very short
+        severityFactor = 0.6; // Light - very short
       }
 
       // Peak hour bonus
       if (isSuperPeak && currentSeverity >= 1.5) {
-        severityFactor *= 1.2; // ✅ Reduced from 1.3
+        severityFactor *= 1.2;
       } else if (isPeakHour && currentSeverity >= 1.0) {
-        severityFactor *= 1.1; // ✅ Reduced from 1.15
+        severityFactor *= 1.1;
       }
 
       // ✅ Delay factor (more conservative)
-      const delayFactor = Math.min(1.0 + currentDelay / 40, 1.3); // ✅ Reduced impact
+      const delayFactor = Math.min(1.0 + currentDelay / 40, 1.3);
       const finalMultiplier = severityFactor * delayFactor;
 
       // Road-specific base distances
@@ -1549,21 +1640,21 @@ export default function SmartResultsMap({
 
       let baseMaxDist;
       if (isIpilIpil) {
-        baseMaxDist = 12; // Short local road (use small sensible meters instead of 2)
+        baseMaxDist = 12; // Short local road
       } else if (isChipeco) {
-        baseMaxDist = 220; // Limit Chipeco
+        baseMaxDist = 300; // Limit Chipeco
       } else if (isMainHighway) {
-        baseMaxDist = 550; // Highways
+        baseMaxDist = 500; // Highways
       } else if (
         road.passesNearCenter ||
         road.connectionType === "intersection"
       ) {
         baseMaxDist = 350;
       } else {
-        baseMaxDist = 250;
+        baseMaxDist = 300;
       }
 
-      // ✅ FINAL DISTANCE - changes every hour!
+      // ✅ CALCULATE maxDist (removed nested loop duplication)
       const maxDist = baseMaxDist * finalMultiplier;
 
       console.log(
@@ -1578,12 +1669,14 @@ export default function SmartResultsMap({
         road.name,
         road.type
       );
+      
       // Debug: log trimming results so we can verify length changes
       console.log(
         `Trim result for ${road.name}: ${trimmedCoords.length}/${
           road.coordinates.length
         } points (maxDist=${Math.round(maxDist)}m)`
       );
+      
       if (trimmedCoords.length >= 2) {
         drawRoadWithGradient(
           { ...road, coordinates: trimmedCoords },
@@ -1591,7 +1684,7 @@ export default function SmartResultsMap({
           "connectedRoads"
         );
       }
-    });
+    }); // ✅ End of connectedRoads.forEach
 
     // Render main road with extended coverage during heavy traffic
     if (mainRoad) {
@@ -1635,7 +1728,7 @@ export default function SmartResultsMap({
       const delayFactor = Math.min(1.0 + currentDelay / 35, 1.4);
       const finalMultiplier = severityFactor * delayFactor;
 
-      const maxMainDist = 900 * finalMultiplier; // ✅ Reduced base
+      const maxMainDist = 600 * finalMultiplier; // ✅ Reduced base
 
       console.log(
         `🚧 Main road: severity=${currentSeverity.toFixed(
@@ -1722,20 +1815,34 @@ export default function SmartResultsMap({
     layerGroupsRef.current.markers.addLayer(epicenter);
     layersRef.current.push(epicenter);
 
-    // Fit bounds
+    // Fit bounds with validation
     const allCoords = [];
     if (mainRoad?.coordinates) {
-      allCoords.push(...mainRoad.coordinates.map((c) => [c.lat, c.lng]));
+      mainRoad.coordinates.forEach((c) => {
+        if (c?.lat != null && c?.lng != null) {
+          allCoords.push([c.lat, c.lng]);
+        }
+      });
     }
     connectedRoads.forEach((road) => {
-      allCoords.push(...road.coordinates.map((c) => [c.lat, c.lng]));
+      if (road?.coordinates) {
+        road.coordinates.forEach((c) => {
+          if (c?.lat != null && c?.lng != null) {
+            allCoords.push([c.lat, c.lng]);
+          }
+        });
+      }
     });
 
     if (allCoords.length > 0) {
-      map.fitBounds(L.latLngBounds(allCoords), {
-        padding: [60, 60],
-        maxZoom: 17,
-      });
+      try {
+        map.fitBounds(L.latLngBounds(allCoords), {
+          padding: [60, 60],
+          maxZoom: 17,
+        });
+      } catch (error) {
+        console.warn('⚠️ Could not fit bounds:', error.message);
+      }
     }
   }, [
     simulationResults,
@@ -2021,28 +2128,24 @@ export default function SmartResultsMap({
             <p className="text-xs text-gray-500 mt-1">
               ⌨️ Use arrow keys or spacebar
             </p>
-            {/* Google API Toggle */}
+          {/* Real-Time Integration Status */}
             <div className="mt-2 pt-2 border-t border-gray-200">
-              <label className="flex items-center gap-2 text-xs cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={useGoogleApi}
-                  onChange={(e) => {
-                    setUseGoogleApi(e.target.checked);
-                    // Clear cache to refetch
-                    roadNetworkCacheRef.current.clear();
-                  }}
-                  className="w-3 h-3"
-                />
-                <span
-                  className={useGoogleApi ? "text-green-600" : "text-gray-500"}
-                >
-                  {useGoogleApi ? "🟢 Google API" : "⚪ OSM Only"}
-                </span>
-              </label>
-              {roadNetwork.mainRoad?.isGoogleData && (
-                <p className="text-xs text-green-600 mt-1">
-                  ✓ Using Google Maps
+              {useRealtimeData && realtimeIntegration ? (
+                <div>
+                  <p className="text-xs text-blue-600 font-semibold flex items-center gap-1">
+                    <span className="inline-block w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+                    Live Traffic Active
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {realtimeIntegration.hours_adjusted} of {simulationResults.summary.total_hours} hours adjusted
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Speed: {realtimeIntegration.current_speed} km/h
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500">
+                  📊 Historical Patterns
                 </p>
               )}
             </div>

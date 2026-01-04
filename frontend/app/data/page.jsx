@@ -44,9 +44,9 @@ export default function DataPage() {
   // 🔍 DEBUG: Log user info on mount
   // ============================================================
   useEffect(() => {
-    console.log("📊 DataPage mounted");
-    console.log("👤 Current user:", user);
-    console.log("🆔 User ID:", userId);
+    console.log("DataPage mounted");
+    console.log("Current user:", user);
+    console.log("User ID:", userId);
   }, [user, userId]);
 
   // ============================================================
@@ -54,23 +54,41 @@ export default function DataPage() {
   // ============================================================
   useEffect(() => {
     if (userId) {
-      console.log("🔄 useEffect triggered - fetching disruptions");
+      console.log("useEffect triggered - fetching disruptions");
       fetchDisruptions();
     } else {
       console.warn("⚠️ No userId available, skipping fetch");
       setLoading(false);
     }
-  }, [userId]); // ✅ FIXED: Added userId as dependency
+  }, [userId]); // FIXED: Added userId as dependency
 
   // ============================================================
   // Fetch datasets when switching to datasets tab
   // ============================================================
   useEffect(() => {
     if (activeTab === "datasets") {
-      console.log("📂 Switching to datasets tab");
+      console.log("Switching to datasets tab");
       fetchDatasets();
     }
   }, [activeTab]);
+
+  // ✅ ADD THIS NEW EFFECT - Check for published updates
+  useEffect(() => {
+    // Listen for publish events from other tabs
+    const handleStorageChange = (e) => {
+      if (e.key === 'simulationPublished') {
+        console.log("Detected publish event, refreshing...");
+        fetchDisruptions();
+        localStorage.removeItem('simulationPublished');
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [userId]);
 
   // ============================================================
   // Clean up stale publish payloads
@@ -99,23 +117,23 @@ export default function DataPage() {
     setLoading(true);
     setError(null);
 
-    console.log("📂 Fetching datasets...");
+    console.log("Fetching datasets...");
 
     try {
-      const response = await fetch("http://localhost:5000/api/files/list");
+      const response = await fetch("https://backend.urbanflowph.com/api/files/list");
       const data = await response.json();
 
-      console.log("✅ Datasets API response:", data);
+      console.log("Datasets API response:", data);
 
       if (data.success) {
-        console.log(`📊 Found ${data.files.length} datasets`);
+        console.log(`Found ${data.files.length} datasets`);
         setDatasets(data.files);
       } else {
-        console.error("❌ Datasets API error:", data.error);
+        console.error("Datasets API error:", data.error);
         setError(data.error || "Failed to load datasets");
       }
     } catch (err) {
-      console.error("❌ Failed to fetch datasets:", err);
+      console.error("Failed to fetch datasets:", err);
       setError("Failed to connect to server");
     } finally {
       setLoading(false);
@@ -147,7 +165,7 @@ export default function DataPage() {
     formData.append("file", file);
 
     try {
-      const response = await fetch("http://localhost:5000/api/files/upload", {
+      const response = await fetch("https://backend.urbanflowph.com/api/files/upload", {
         method: "POST",
         body: formData,
       });
@@ -155,7 +173,7 @@ export default function DataPage() {
       const data = await response.json();
 
       if (data.success) {
-        setSuccess(`✅ "${data.file.name}" uploaded successfully!`);
+        setSuccess(`File: "${data.file.name}" uploaded successfully!`);
         fetchDatasets();
         setTimeout(() => setSuccess(null), 3000);
       } else {
@@ -176,7 +194,7 @@ export default function DataPage() {
   const handleDownloadSingle = async (filename) => {
     try {
       const response = await fetch(
-        `http://localhost:5000/api/files/download/${filename}`
+        `https://backend.urbanflowph.com/api/files/download/${filename}`
       );
 
       if (!response.ok) {
@@ -193,7 +211,7 @@ export default function DataPage() {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
 
-      setSuccess(`✅ Downloaded "${filename}"`);
+      setSuccess(`Downloaded "${filename}"`);
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       console.error("Download error:", err);
@@ -212,7 +230,7 @@ export default function DataPage() {
 
     try {
       const response = await fetch(
-        "http://localhost:5000/api/files/download-multiple",
+        "https://backend.urbanflowph.com/api/files/download-multiple",
         {
           method: "POST",
           headers: {
@@ -238,7 +256,7 @@ export default function DataPage() {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
 
-      setSuccess(`✅ Downloaded ${selectedDatasets.length} file(s) as ZIP`);
+      setSuccess(`Downloaded ${selectedDatasets.length} file(s) as ZIP`);
       setSelectedDatasets([]);
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
@@ -260,7 +278,7 @@ export default function DataPage() {
     }
 
     try {
-      const response = await fetch("http://localhost:5000/api/files/delete", {
+      const response = await fetch("https://backend.urbanflowph.com/api/files/delete", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -273,7 +291,7 @@ export default function DataPage() {
       const data = await response.json();
 
       if (data.success) {
-        setSuccess(`✅ ${data.message}`);
+        setSuccess(`✓ ${data.message}`);
         setSelectedDatasets([]);
         fetchDatasets();
         setTimeout(() => setSuccess(null), 3000);
@@ -314,37 +332,57 @@ export default function DataPage() {
       setLoading(false);
       return;
     }
-    
+
     try {
       setLoading(true);
       setError(null);
       
       console.log("🔄 Fetching simulations for user:", userId);
-      console.log("📡 Calling API:", `http://localhost:5000/api/my-simulations?user_id=${userId}`);
+      console.log("📡 Calling API:", `https://backend.urbanflowph.com/api/my-simulations?user_id=${userId}`);
       
       const response = await api.getMySimulations(userId);
       
-      console.log("✅ Raw API Response:", response);
-      console.log("📊 Response type:", typeof response);
-      console.log("📦 Response keys:", Object.keys(response || {}));
+      console.log("Raw API Response:", response);
+      console.log("Response type:", typeof response);
+      console.log("Response keys:", Object.keys(response || {}));
 
       if (response && response.success) {
         // ✅ FIXED: Backend returns 'simulations', not 'disruptions'
         const simulationsData = response.simulations || [];
-        console.log(`✅ Found ${simulationsData.length} simulations`);
-        console.log("📋 First simulation:", simulationsData[0]);
-        
+        console.log(` Found ${simulationsData.length} simulations`);
+        console.log(" First simulation:", simulationsData[0]);
+        // ✅ ADD THIS DEBUG
+        console.log(" Edit data check:");
+        simulationsData.forEach(sim => {
+          if (sim.is_edited) {
+            console.log(`   Simulation ${sim.simulation_id}:`, {
+              is_edited: sim.is_edited,
+              last_edited_at: sim.last_edited_at
+            });
+          }
+        });
+
+
         setDisruptions(simulationsData);
+
+        // ✅ DEBUG - Check if edited data exists
+        console.log("🔍 Checking for edited simulations:");
+        simulationsData.forEach(sim => {
+          console.log(`Sim ${sim.simulation_id}:`, {
+            is_edited: sim.is_edited,
+            last_edited_at: sim.last_edited_at
+          });
+        });
         
         if (simulationsData.length === 0) {
           console.log("ℹ️ No simulations found for this user");
         }
       } else {
-        console.error("❌ API returned success=false:", response);
+        console.error("API returned success=false:", response);
         setError(response?.error || "Failed to load simulations");
       }
     } catch (err) {
-      console.error("❌ Failed to fetch disruptions:", err);
+      console.error("Failed to fetch disruptions:", err);
       console.error("Error details:", {
         message: err.message,
         stack: err.stack
@@ -352,7 +390,7 @@ export default function DataPage() {
       setError("Failed to load simulations");
     } finally {
       setLoading(false);
-      console.log("✅ Fetch completed");
+      console.log("Fetch completed");
     }
   };
 
@@ -365,19 +403,19 @@ export default function DataPage() {
     );
   };
 
-const selectAll = () => {
-  if (selectedDisruptions.length === sortedDisruptions.length) {
-    setSelectedDisruptions([]);
-  } else {
-    setSelectedDisruptions(sortedDisruptions.map((d) => d.simulation_id));
-  }
-};
+  const selectAll = () => {
+    if (selectedDisruptions.length === sortedDisruptions.length) {
+      setSelectedDisruptions([]);
+    } else {
+      setSelectedDisruptions(sortedDisruptions.map((d) => d.simulation_id));
+    }
+  };
 
   // ============================================================
   // 🔍 FIXED: Filter Disruptions with Null Checks
   // ============================================================
   const filteredDisruptions = disruptions.filter((d) => {
-    // ✅ FIXED: Add null checks for all fields
+    // FIXED: Add null checks for all fields
     const matchesFilter = 
       filter === "all" ||
       (filter === "published" && d.simulation_status === "published") ||
@@ -411,7 +449,7 @@ const selectAll = () => {
   }
 });
 
-  console.log("🔍 Filter applied:", {
+  console.log("Filter applied:", {
     total: disruptions.length,
     filtered: filteredDisruptions.length,
     filter,
@@ -430,9 +468,25 @@ const selectAll = () => {
       
       if (details) {
         const simulationData = details.simulation || details;
-        console.log(" Saving to session:", simulationData);
+        console.log("💾 Saving to session:", simulationData);
         
-        sessionStorage.setItem("editSimulation", JSON.stringify(simulationData));
+        // Mark as edit mode - Remove the old is_edited fields first
+        const { is_edited, last_edited_at, ...cleanData } = simulationData;
+        
+        const editData = {
+          ...cleanData,
+          _isEditMode: true,
+          _originalId: simulation.simulation_id
+        };
+        
+        console.log("✏️ Edit mode data:", editData);
+        sessionStorage.setItem("editSimulation", JSON.stringify(editData));
+
+        //  ADD THIS DEBUG
+        console.log(" Stored in sessionStorage:", sessionStorage.getItem("editSimulation"));
+        console.log(" Can read back?", JSON.parse(sessionStorage.getItem("editSimulation"))._isEditMode);
+
+
         router.push("/simulation");
       }
     } catch (error) {
@@ -495,7 +549,7 @@ const selectAll = () => {
   // VERIFY OTP AND PUBLISH
   // ============================================================
   const handleVerifyAndPublish = async () => {
-    if (!otpCode || otpCode.length !== 6) {	
+    if (!otpCode || otpCode.length !== 6) {
       setOTPError("Please enter a valid 6-digit OTP");
       return;
     }
@@ -504,38 +558,74 @@ const selectAll = () => {
       setOTPLoading(true);
       setOTPError(null);
 
-      const storedData = sessionStorage.getItem('publishPayload');
+      // Get stored publish payload
+      const storedData = sessionStorage.getItem("publishPayload");
       if (!storedData) {
         throw new Error("Publish data not found. Please try again.");
       }
 
-      const { payload, originPage, type } = JSON.parse(storedData);
+      const { payload } = JSON.parse(storedData);
 
-      const response = await api.verifyPublishOTP(
-        payload.simulation_id,
-        otpCode,
-        payload.title,
-        payload.public_description,
-        payload.user_id
+      console.log("📤 Sending to verify:", {
+        simulation_id: payload.simulation_id,
+        otp_code: otpCode,
+        user_id: payload.user_id,
+      });
+
+      //  FIXED: Call the VERIFY endpoint, not send-publish-otp
+      const response = await fetch(
+        "https://backend.urbanflowph.com/api/verify-publish-otp",  // ← Changed this line
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            simulation_id: payload.simulation_id,
+            otp_code: otpCode,
+            title: payload.title,
+            public_description: payload.public_description,
+            user_id: payload.user_id,
+          }),
+        }
       );
 
-      if (response.success) {
-        sessionStorage.removeItem('publishPayload');
-        setShowOTPModal(false);
-        
-        alert(
-          `✅ ${type === 'simulation' ? 'Simulation' : 'Data'} published successfully!\n\n` +
-          `Public URL: ${response.public_url || ''}\n` +
-          `This ${type} is now visible on the public map.`
-        );
+      const data = await response.json();
 
+      if (data.success) {
+        // Clear stored payload
+        sessionStorage.removeItem("publishPayload");
+
+        // Close modal
+        setShowOTPModal(false);
+        setOTPCode("");
+        setOTPSent(false);
+
+        // Update publish success state
+        setSuccess(true);
+
+        //  ADD THIS - Notify other tabs
+        localStorage.setItem('simulationPublished', Date.now().toString());
+
+        //  ADD THIS LINE - Refresh the disruptions list
         fetchDisruptions();
+
+        // Show success message
+        alert(
+          ` Simulation published successfully!\n\n` +
+            `Public URL: ${
+              data.public_url || window.location.origin + "/map"
+            }\n` +
+            `This simulation is now visible on the public map.`
+        );
       } else {
-        setOTPError(response.error || "Invalid OTP");
+        setOTPError(data.error || "Invalid OTP");
       }
     } catch (error) {
       console.error("Error verifying OTP:", error);
-      setOTPError(error.message || "Verification failed. Please check your OTP.");
+      setOTPError(
+        error.message || "Verification failed. Please check your OTP."
+      );
     } finally {
       setOTPLoading(false);
     }
@@ -556,14 +646,14 @@ const selectAll = () => {
       );
 
       if (response.success) {
-        alert("✅ Simulation unpublished successfully!");
+        alert("Simulation unpublished successfully!");
         fetchDisruptions();
       } else {
-        alert("❌ Failed to unpublish simulation");
+        alert("Failed to unpublish simulation");
       }
     } catch (error) {
       console.error("Error unpublishing:", error);
-      alert("❌ Failed to unpublish simulation");
+      alert("Failed to unpublish simulation");
     }
   };
 
@@ -579,6 +669,48 @@ const selectAll = () => {
   };
 
   // ============================================================
+  // HANDLE GENERATE REPORT
+  // ============================================================
+  const handleGenerateReport = async (simulation) => {
+    try {
+      console.log("📊 Generating report for simulation:", simulation.simulation_id);
+      
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || 'https://backend.urbanflowph.com'}/api/reports/generate`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            simulation_id: simulation.simulation_id,
+            user_id: userId,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Show success message
+        alert(
+          `Report generated successfully!\n\n` +
+          `You will be redirected to the Reports page to view it.`
+        );
+        
+        // Redirect to reports page
+        router.push('/reports');
+      } else {
+        alert(`Failed to generate report: ${data.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error("Error generating report:", error);
+      alert("Failed to generate report. Please try again.");
+    }
+  };
+
+
+  // ============================================================
   // CONFIRM DELETE
   // ============================================================
   const handleConfirmDelete = async () => {
@@ -587,17 +719,17 @@ const selectAll = () => {
 
       if (response.success) {
         alert(
-          `✅ Successfully deleted ${response.deleted_count} simulation(s)`
+          `Successfully deleted ${response.deleted_count} simulation(s)`
         );
         setSelectedDisruptions([]);
         setShowDeleteModal(false);
         fetchDisruptions();
       } else {
-        alert("❌ Failed to delete some simulations");
+        alert("Failed to delete some simulations");
       }
     } catch (error) {
       console.error("Error deleting simulations:", error);
-      alert("❌ Failed to delete simulations");
+      alert("Failed to delete simulations");
     }
   };
 
@@ -750,7 +882,7 @@ const selectAll = () => {
                             >
                               {option.label}
                               {sortBy === option.value && (
-                                <span className="ml-auto text-orange-600">✓</span>
+                                <span className="ml-auto text-orange-600"></span>
                               )}
                             </button>
                           ))}
@@ -875,9 +1007,14 @@ const selectAll = () => {
                     <span className={`px-2 py-1 text-xs rounded-full font-semibold ${getSeverityColor(d.severity_level)}`}>
                       {d.severity_level || "N/A"}
                     </span>
+                    {d.is_edited && d.last_edited_at && (
+                      <span className="px-2 py-1 text-xs rounded-full font-semibold bg-yellow-100 text-yellow-700">
+                        Edited {new Date(d.last_edited_at).toLocaleDateString()}
+                      </span>
+                    )}
                   </div>
                 </div>
-
+          
                 <div className="text-sm text-gray-600 space-y-2 mb-4 bg-gray-50 rounded p-3">
                   <p className="flex items-center gap-2">
                     <span className="font-semibold"> Location:</span> {d.disruption_location || "Unknown"}
@@ -894,8 +1031,15 @@ const selectAll = () => {
                 </div>
 
                 <div className="flex justify-end gap-2">
-                  <button onClick={() => handleEdit(d)} className="px-4 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-semibold">
+                  <button onClick={() => handleEdit(d)} className="px-4 py-2 text-sm border-1 border-[#757575] text-[#757575] rounded-lg hover:bg-[#4285F4] hover:text-white transition font-semibold">
                     Edit
+                  </button>
+                   <button
+                    onClick={() => handleGenerateReport(d)}
+                    className="px-4 py-2 text-sm border-1 border-[#757575] text-[#757575] rounded-lg hover:bg-[#4285F4] hover:text-white transition font-semibold"
+                    title="Generate Report"
+                  >
+                    Generate Report
                   </button>
                   {d.simulation_status === "published" ? (
                     <button onClick={() => handleUnpublish(d)} className="px-4 py-2 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition font-semibold">
@@ -952,6 +1096,13 @@ const selectAll = () => {
                     {d.simulation_status === "published" && (
                       <span className="px-2 py-1 text-xs rounded-full font-semibold bg-purple-100 text-purple-700">Published ✓</span>
                     )}
+                    
+                    {d.is_edited && d.last_edited_at && (
+                      <span className="px-2 py-1 text-xs rounded-full font-semibold bg-yellow-100 text-yellow-700">
+                        Edited {new Date(d.last_edited_at).toLocaleDateString()}
+                      </span>
+                    )}
+
                     <span className={`px-2 py-1 text-xs rounded-full font-semibold ${getSeverityColor(d.severity_level)}`}>{d.severity_level || "N/A"}</span>
                   </div>
                 </div>
@@ -969,6 +1120,13 @@ const selectAll = () => {
 
                 <div className="flex justify-end gap-2">
                   <button onClick={() => handleEdit(d)} className="px-4 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-semibold"> Edit</button>
+                    <button
+                      onClick={() => handleGenerateReport(d)}
+                      className="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-semibold"
+                      title="Generate Report"
+                    >
+                      📊 Generate Report
+                    </button>
                   {d.simulation_status === "published" ? (
                     <button onClick={() => handleUnpublish(d)} className="px-4 py-2 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition font-semibold"> Unpublish</button>
                   ) : (
@@ -1019,6 +1177,11 @@ const selectAll = () => {
                   <div className="flex flex-col gap-1">
                     {d.simulation_status === "published" && (
                       <span className="px-2 py-1 text-xs rounded-full font-semibold bg-purple-100 text-purple-700">Published ✓</span>
+                    )}
+                    {d.is_edited && d.last_edited_at && (
+                      <span className="px-2 py-1 text-xs rounded-full font-semibold bg-yellow-100 text-yellow-700">
+                        Edited {new Date(d.last_edited_at).toLocaleDateString()}
+                      </span>
                     )}
                     <span className={`px-2 py-1 text-xs rounded-full font-semibold ${getSeverityColor(d.severity_level)}`}>{d.severity_level || "N/A"}</span>
                   </div>
@@ -1184,7 +1347,7 @@ const selectAll = () => {
             {/* Empty State */}
             {!loading && datasets.length === 0 && (
               <div className="text-center py-12 text-gray-500">
-                <div className="text-6xl mb-4">📂</div>
+                
                 <p className="text-lg font-semibold">No datasets found</p>
                 <p className="text-sm mt-2">Upload a CSV file to get started</p>
               </div>

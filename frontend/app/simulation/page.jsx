@@ -10,7 +10,49 @@ import {
 import dynamic from "next/dynamic";
 import { use, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { 
+  FaRoute, 
+  FaTimes, 
+  FaSpinner, 
+  FaMobileAlt, 
+  FaEnvelope, 
+  FaLink,
+  FaRoad,
+  FaClock,
+  FaExclamationTriangle,
+  FaMap
+} from 'react-icons/fa';
 
+// Add polyline decoder
+function decodePolyline(encoded) {
+  if (!encoded || typeof encoded !== "string") return [];
+  let index = 0, lat = 0, lng = 0, coordinates = [];
+
+  while (index < encoded.length) {
+    let b, shift = 0, result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const deltaLat = result & 1 ? ~(result >> 1) : result >> 1;
+    lat += deltaLat;
+
+    shift = 0;
+    result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const deltaLng = result & 1 ? ~(result >> 1) : result >> 1;
+    lng += deltaLng;
+
+    coordinates.push([lat / 1e5, lng / 1e5]);
+  }
+
+  return coordinates;
+}
 
 const SmartResultsMap = dynamic(() => import("@/components/SmartResultsMap"), {
   ssr: false,
@@ -39,6 +81,74 @@ const AggregatedResultsMaps = dynamic(
   }
 );
 
+const RouteCard = ({ route, onSelect, isSelected }) => {
+  return (
+    <div
+      className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
+        isSelected
+          ? 'border-blue-500 bg-blue-50 shadow-md'
+          : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
+      }`}
+      onClick={onSelect}
+    >
+      {/* Route Badge */}
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center space-x-2">
+          <div
+            className="w-5 h-5 rounded-full border-2 border-white shadow"
+            style={{ backgroundColor: route.color }}
+          />
+          <h4 className="font-bold text-gray-900">{route.name}</h4>
+        </div>
+        
+        {!route.passes_through_disruption && (
+          <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">
+            ✓ Clear
+          </span>
+        )}
+      </div>
+      
+      {/* Stats Grid */}
+      <div className="space-y-2 text-sm mb-3">
+        <div className="flex items-center justify-between">
+          <span className="text-gray-600 flex items-center">
+            <FaRoad className="mr-1" /> Distance
+          </span>
+          <span className="font-semibold">{route.distance_text}</span>
+        </div>
+        
+        <div className="flex items-center justify-between">
+          <span className="text-gray-600 flex items-center">
+            <FaClock className="mr-1" /> Time
+          </span>
+          <span className="font-semibold">{route.duration_text}</span>
+        </div>
+        
+        {route.passes_through_disruption && (
+          <div className="flex items-center justify-between text-orange-600">
+            <span className="flex items-center">
+              <FaExclamationTriangle className="mr-1" /> Delay
+            </span>
+            <span className="font-semibold">+{route.estimated_delay_minutes} min</span>
+          </div>
+        )}
+      </div>
+      
+      {/* Description */}
+      <p className="text-xs text-gray-500 leading-relaxed">
+        {route.description}
+      </p>
+      
+      {/* Action Button */}
+      {isSelected && (
+        <button className="mt-3 w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition">
+          Showing on Map ✓
+        </button>
+      )}
+    </div>
+  );
+};
+
 export default function SimulationPage() {
   const { user } = useAuth();
   const userId = user?.user_id || user?.id;
@@ -60,9 +170,17 @@ export default function SimulationPage() {
   const [roadInfo, setRoadInfo] = useState(null);
   const [loadingRoadInfo, setLoadingRoadInfo] = useState(false);
 
+  const [alternateRoutes, setAlternateRoutes] = useState([]);
+  const [loadingRoutes, setLoadingRoutes] = useState(false);
+  const [selectedRoute, setSelectedRoute] = useState(null);
+  const [simulationResults, setSimulationResults] = useState(null);
+
   const [results, setResults] = useState(null);
   const [simulating, setSimulating] = useState(false);
   const [error, setError] = useState(null);
+
+  const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
+  const [recommendationsError, setRecommendationsError] = useState(null);
 
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -83,6 +201,20 @@ export default function SimulationPage() {
   // Load simulation data if editing
   //=======================================
   // Replaced your existing useEffect in simulation/page.jsx:
+
+  // RIGHT AT THE TOP - before any other code
+  useEffect(() => {
+    const editSession = sessionStorage.getItem("editSimulation");
+    console.log("🔍 RAW sessionStorage:", editSession);
+    if (editSession) {
+      const parsed = JSON.parse(editSession);
+      console.log("🔍 PARSED editSimulation:", parsed);
+      console.log("🔍 Has _isEditMode?", parsed._isEditMode);
+      console.log("🔍 Has _originalId?", parsed._originalId);
+    } else {
+      console.log("❌ No editSimulation in sessionStorage");
+    }
+  }, []);
 
   useEffect(() => {
     const editData = sessionStorage.getItem("editSimulation");
@@ -267,9 +399,6 @@ export default function SimulationPage() {
           console.log("❌ No valid hourly_predictions found");
         }
 
-        // Clear from session storage after loading
-        sessionStorage.removeItem("editSimulation");
-
         alert("📝 Simulation loaded for editing");
       } catch (error) {
         console.error("❌ Error loading edit data:", error);
@@ -315,7 +444,7 @@ export default function SimulationPage() {
 
       // Process road info through backend
       const response = await fetch(
-        "http://localhost:5000/api/process-road-info",
+        `https://backend.urbanflowph.com/api/process-road-info`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -373,7 +502,7 @@ export default function SimulationPage() {
 
         // Process road info through backend
         const response = await fetch(
-          "http://localhost:5000/api/process-road-info",
+            `https://backend.urbanflowph.com/api/process-road-info`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -510,7 +639,7 @@ export default function SimulationPage() {
       console.log("🚀 Sending simulation request:", simulationData);
 
       const response = await fetch(
-        "http://localhost:5000/api/simulate-disruption-realtime",
+          `https://backend.urbanflowph.com/api/simulate-disruption-realtime`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -524,19 +653,219 @@ export default function SimulationPage() {
 
       if (data.success) {
         setResults(data);
+        // After successful simulation response:
+        setSimulationResults(data);
+        
         document
           .getElementById("results-section")
           ?.scrollIntoView({ behavior: "smooth" });
       } else {
         throw new Error(data.error || "Simulation failed");
       }
-    } catch (err) {
-      console.error("Simulation error:", err);
-      setError(err.message || "Failed to run simulation");
+      } catch (err) {
+        console.error("Simulation error:", err);
+        setError(err.message || "Failed to run simulation");
+      } finally {
+        setSimulating(false);
+      }
+    };
+
+  const calculateAlternateRoutes = async () => {
+    if (!simulationResults || !selectedLocation?.center) {
+      alert('⚠️ Please complete simulation and select a location first');
+      return;
+    }
+    
+    setLoadingRoutes(true);
+    
+    try {
+      const disruption_center = selectedLocation.center;
+      
+      // Calculate origin/destination based on road corridor direction
+      const roadName = roadInfo?.road_name?.toLowerCase() || '';
+      // Calculate better origin/destination points for cleaner routes
+      // Use larger distances to show proper alternate routes
+      let origin, destination;
+      
+      // Calculate 4 potential route endpoints (N, S, E, W) at 2km distance
+      const distance_km = 0.02; // ~2km for better route visibility
+      
+      // Determine main road orientation from disruption location
+      const isHighway = roadInfo?.road_name?.toLowerCase().includes('highway') || 
+                       roadInfo?.road_name?.toLowerCase().includes('national');
+      const isEastWest = roadInfo?.road_name?.toLowerCase().includes('rizal') ||
+                        roadInfo?.road_name?.toLowerCase().includes('cuervo');
+      
+      if (isHighway) {
+        // North-South main road (like National Highway)
+        // Create routes that go around east or west
+        origin = {
+          lat: disruption_center.lat - distance_km, // 2km south
+          lng: disruption_center.lng
+        };
+        destination = {
+          lat: disruption_center.lat + distance_km, // 2km north
+          lng: disruption_center.lng
+        };
+      } else if (isEastWest) {
+        // East-West road
+        // Create routes that go around north or south  
+        origin = {
+          lat: disruption_center.lat,
+          lng: disruption_center.lng - distance_km // 2km west
+        };
+        destination = {
+          lat: disruption_center.lat,
+          lng: disruption_center.lng + distance_km // 2km east
+        };
+      } else {
+        // Default: diagonal
+        origin = {
+          lat: disruption_center.lat - distance_km * 0.7,
+          lng: disruption_center.lng - distance_km * 0.7
+        };
+        destination = {
+          lat: disruption_center.lat + distance_km * 0.7,
+          lng: disruption_center.lng + distance_km * 0.7
+        };
+      }
+      
+      console.log('🗺️ Calculating routes with:', {
+        roadType: isHighway ? 'Highway' : isEastWest ? 'East-West' : 'Default',
+        origin,
+        destination,
+        disruption_center
+      });
+      
+      const data = await response.json();
+      
+      if (data.success && data.routes) {
+        setAlternateRoutes(data.routes);
+        console.log(`✅ Found ${data.routes.length} alternate routes`);
+      } else {
+        console.error('Failed to fetch routes:', data.error);
+        alert('Unable to calculate routes. The disruption area may be in a complex location.');
+      }
+      
+    } catch (error) {
+      console.error('❌ Route calculation error:', error);
+      alert('Error calculating alternate routes. Please check your connection.');
     } finally {
-      setSimulating(false);
+      setLoadingRoutes(false);
     }
   };
+
+  const drawRouteOnSmartMap = (route) => {
+    if (!route.polyline) {
+      console.error('No polyline data for route');
+      return;
+    }
+    
+    // Decode polyline
+    const coordinates = decodePolyline(route.polyline);
+    
+    if (coordinates.length === 0) {
+      console.error('Failed to decode polyline');
+      return;
+    }
+    
+    console.log(`🗺️ Drawing route: ${route.name}`, {
+      pointCount: coordinates.length,
+      color: route.color
+    });
+    
+    // Store route data for SmartResultsMap to pick up
+    setSelectedRoute({
+      ...route,
+      decodedCoordinates: coordinates
+    });
+    
+    // Scroll to map
+    document.getElementById('results-section')?.scrollIntoView({ 
+      behavior: 'smooth',
+      block: 'start'
+    });
+  };
+
+  const showRouteOnMap = (route) => {
+    // ✅ For simulation page - you'll need to pass this to SmartResultsMap
+    console.log('📍 Route selected:', route.name);
+    
+    // Store in state to pass to map component
+  // ✅ FIXED: Pass complete route with decoded polyline
+    setSelectedRoute({
+      ...route,
+      polyline: route.polyline, // Keep original polyline
+      color: route.color,
+      name: route.name
+    });
+    drawRouteOnSmartMap(route);
+    
+    // Scroll to map
+    document.getElementById('aggregated_view')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+const fetchRecommendations = async (simulationId, simulationData) => {
+  setIsLoadingRecommendations(true);
+  setRecommendationsError(null);
+
+  // ✅ Convert string to integer if needed
+  const numericId = typeof simulationId === 'string' 
+    ? parseInt(simulationId.split('_').pop()) 
+    : simulationId;
+  
+  try {
+    const response = await fetch(
+      `https://backend.urbanflowph.com/api/generate-recommendations`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          simulation_id: numericId,
+          simulation_data: {
+            disruption_type: formData.disruptionType,
+            disruption_location: `${roadInfo?.area} - ${roadInfo?.road_name}`,
+            start_datetime: `${formData.startDate}T${formData.startTime}:00`,
+            end_datetime: `${formData.endDate}T${formData.endTime}:00`,
+          },
+          results_summary: simulationData.summary
+        })
+      }
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      
+      if (data.success && data.recommendations) {
+        // Map database fields to frontend expectations
+        const mappedRecs = data.recommendations.map(rec => ({
+          type: rec.recommendation_type || rec.type,
+          text: rec.recommendation_text || rec.text,
+          priority: rec.priority_level || rec.priority,
+          impact: rec.estimated_impact || rec.impact,
+          cost: rec.cost_estimate || rec.cost,
+          timeline: rec.implementation_timeline || rec.timeline
+        }));
+        
+        setResults(prev => ({
+          ...prev,
+          recommendations: mappedRecs
+        }));
+        
+        console.log('✅ Loaded AI recommendations:', mappedRecs.length);
+      } else {
+        setRecommendationsError('No recommendations generated');
+      }
+    } else {
+      setRecommendationsError('Failed to generate recommendations');
+    }
+  } catch (error) {
+    console.error('Error fetching recommendations:', error);
+    setRecommendationsError('Error loading recommendations');
+  } finally {
+    setIsLoadingRecommendations(false);
+  }
+};
 
   const handleSaveSimulation = async () => {
     setSaving(true);
@@ -552,6 +881,13 @@ export default function SimulationPage() {
 
       console.log("💾 Using user_id:", currentUserId);
 
+      // ✅ Check if we're in edit mode
+      const editSession = sessionStorage.getItem("editSimulation");
+      const isEditMode = editSession ? JSON.parse(editSession)._isEditMode : false;
+      const originalSimId = editSession ? JSON.parse(editSession)._originalId : null;
+
+      console.log("📝 Edit mode:", isEditMode, "Original ID:", originalSimId);
+
       // ✅ Create Date objects from form inputs (these are in LOCAL time)
       const startDate = new Date(
         `${formData.startDate}T${formData.startTime}:00`
@@ -559,8 +895,9 @@ export default function SimulationPage() {
       const endDate = new Date(`${formData.endDate}T${formData.endTime}:00`);
 
       // ✅ Convert to ISO string (this converts to UTC automatically)
-      const startDatetime = startDate.toISOString();
-      const endDatetime = endDate.toISOString();
+      // ✅ Convert to ISO string without milliseconds
+      const startDatetime = startDate.toISOString().replace(/\.\d{3}Z$/, '');
+      const endDatetime = endDate.toISOString().replace(/\.\d{3}Z$/, '');
 
       // ✅ GET THE ACTUAL COORDINATES FROM selectedLocation
       const coords = selectedLocation?.center || { lat: 14.2096, lng: 121.164 };
@@ -601,6 +938,8 @@ export default function SimulationPage() {
               : results.summary.avg_severity < 1.5
               ? "moderate"
               : "severe",
+          is_edited: isEditMode,  // ← ADD THIS
+          original_simulation_id: originalSimId  // ← ADD THIS
         },
         results_data: {
           summary: results.summary,
@@ -612,7 +951,7 @@ export default function SimulationPage() {
       };
 
       const response = await fetch(
-        "http://localhost:5000/api/save-simulation",
+          `https://backend.urbanflowph.com/api/save-simulation`,
         {
           method: "POST",
           headers: {
@@ -627,8 +966,16 @@ export default function SimulationPage() {
       if (data.success) {
         setSaveSuccess(true);
         setSavedSimulationId(data.simulation_id);
+
+        await fetchRecommendations(data.simulation_id, results);
+        
+        // ✅ Clear edit session after successful save
+        if (isEditMode) {
+          sessionStorage.removeItem("editSimulation");
+        }
+        
         alert(
-          `✅ Simulation saved successfully!\nSimulation ID: ${data.simulation_id}`
+          `✅ Simulation ${isEditMode ? 'updated' : 'saved'} successfully!\nSimulation ID: ${data.simulation_id}`
         );
       } else {
         throw new Error(data.error || "Failed to save simulation");
@@ -690,7 +1037,7 @@ export default function SimulationPage() {
       setOTPError(null);
 
       const response = await fetch(
-        "http://localhost:5000/api/send-publish-otp",
+          `https://backend.urbanflowph.com/api/send-publish-otp`,
         {
           method: "POST",
           headers: {
@@ -742,7 +1089,7 @@ export default function SimulationPage() {
 
       // Verify OTP and publish
       const response = await fetch(
-        "http://localhost:5000/api/verify-publish-otp",
+          `https://backend.urbanflowph.com/api/verify-publish-otp`,
         {
           method: "POST",
           headers: {
@@ -750,7 +1097,7 @@ export default function SimulationPage() {
           },
           body: JSON.stringify({
             simulation_id: payload.simulation_id,
-            otp: otpCode,
+            otp_code: otpCode,
             title: payload.title,
             public_description: payload.public_description,
             user_id: payload.user_id,
@@ -1300,7 +1647,22 @@ export default function SimulationPage() {
                 )}
               </div>
 
-              {results.aggregated_view ? (
+                {/* DEBUG */}
+              {console.log('🗺️ Map rendering decision:', {
+                hasAggregatedView: !!results.aggregated_view,
+                willRender: results.aggregated_view ? 'AggregatedResultsMaps' : 'SmartResultsMap',
+                alternateRoutesCount: alternateRoutes.length
+              })}
+
+              {alternateRoutes.length > 0 ? (
+                <SmartResultsMap
+                  simulationResults={results}
+                  selectedLocation={selectedLocation}
+                  roadInfo={roadInfo}
+                  alternateRoutes={alternateRoutes} 
+                  selectedRoute={selectedRoute}
+                />
+              ) : results.aggregated_view ? (
                 <AggregatedResultsMaps
                   aggregatedView={results.aggregated_view}
                   selectedLocation={selectedLocation}
@@ -1312,6 +1674,8 @@ export default function SimulationPage() {
                   simulationResults={results}
                   selectedLocation={selectedLocation}
                   roadInfo={roadInfo}
+                  alternateRoutes={alternateRoutes} 
+                  selectedRoute={selectedRoute}
                 />
               )}
             </div>
@@ -1692,6 +2056,128 @@ export default function SimulationPage() {
               </details>
             </div>
 
+            {/* AI Mitigation Recommendations Section */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                <h3 className="text-xl font-semibold text-gray-800">
+                  AI-Powered Mitigation Recommendations
+                </h3>
+                {!isLoadingRecommendations && results?.recommendations && (
+                  <span className="ml-auto text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">
+                    Generated by AI
+                  </span>
+                )}
+              </div>
+
+              {/* Loading State */}
+              {isLoadingRecommendations && (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <span className="ml-3 text-gray-600">Generating AI recommendations...</span>
+                </div>
+              )}
+
+              {/* Error State */}
+              {recommendationsError && !isLoadingRecommendations && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                  <p className="text-sm text-yellow-800">{recommendationsError}</p>
+                </div>
+              )}
+
+              {/* Recommendations List */}
+              {!isLoadingRecommendations && results?.recommendations && results.recommendations.length > 0 && (
+                <>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Based on the simulation results, here are actionable strategies to reduce traffic impact:
+                  </p>
+                  
+                  <div className="space-y-3">
+                    {results.recommendations.map((rec, index) => {
+                      const priorityColors = {
+                        high: 'bg-red-50 border-red-200',
+                        medium: 'bg-yellow-50 border-yellow-200',
+                        low: 'bg-green-50 border-green-200'
+                      };
+                      
+                      const priorityBadgeColors = {
+                        high: 'bg-red-100 text-red-700',
+                        medium: 'bg-yellow-100 text-yellow-700',
+                        low: 'bg-green-100 text-green-700'
+                      };
+                      
+                      const typeIcons = {
+                        scheduling: '📅',
+                        traffic_management: '🚦',
+                        communication: '📢',
+                        infrastructure: '🏗️',
+                        alternative_routes: '🗺️',
+                        general: '💡'
+                      };
+                      
+                      return (
+                        <div 
+                          key={index}
+                          className={`border-l-4 p-4 rounded-r-lg ${priorityColors[rec.priority] || priorityColors.medium}`}
+                        >
+                          <div className="flex items-start justify-between gap-3 mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-2xl">{typeIcons[rec.type] || '💡'}</span>
+                              <span className="text-xs font-medium uppercase tracking-wide text-gray-600">
+                                {rec.type?.replace('_', ' ')}
+                              </span>
+                            </div>
+                            <div className="flex gap-2">
+                              <span className={`text-xs px-2 py-1 rounded-full font-medium ${priorityBadgeColors[rec.priority]}`}>
+                                {rec.priority?.toUpperCase()}
+                              </span>
+                              {rec.timeline && (
+                                <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-medium">
+                                  {rec.timeline}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <p className="text-sm text-gray-800 mb-2 leading-relaxed">
+                            {rec.text}
+                          </p>
+                          
+                          {rec.impact && (
+                            <div className="mt-2 pt-2 border-t border-gray-200">
+                              <p className="text-xs text-gray-600">
+                                <span className="font-semibold">Expected Impact:</span> {rec.impact}
+                              </p>
+                              {rec.cost && (
+                                <p className="text-xs text-gray-600 mt-1">
+                                  <span className="font-semibold">Cost:</span> {rec.cost}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  
+                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-xs text-blue-800">
+                      <strong>Note:</strong> These recommendations are AI-generated based on simulation results and should be reviewed by traffic management professionals before implementation.
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {/* No Recommendations State */}
+              {!isLoadingRecommendations && (!results?.recommendations || results.recommendations.length === 0) && !recommendationsError && (
+                <p className="text-gray-500 text-center py-4">
+                  Save Simulation to generate AI Recommendations.
+                </p>
+              )}
+            </div>
+
             {/* Save and Publish Buttons */}
             <div className="bg-white rounded-lg shadow-md p-6">
               <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -1769,7 +2255,7 @@ export default function SimulationPage() {
       {showOTPModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-8 max-w-md w-full">
-            <h2 className="text-2xl font-bold mb-4">Verify & Publish</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Verify & Publish</h2>
 
             {!otpSent ? (
               <>
@@ -1822,7 +2308,7 @@ export default function SimulationPage() {
                     setOTPCode(e.target.value.replace(/\D/g, ""))
                   }
                   placeholder="000000"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-center text-2xl tracking-widest mb-4"
+                  className="w-full px-4 py-3 border border-gray-700 rounded-lg text-center text-2xl text-gray-900 placeholder-gray-400 tracking-widest mb-4"
                 />
 
                 {otpError && (

@@ -9,7 +9,7 @@ class TrafficAPIService:
     
     def __init__(self):
         # Get API key from environment variable
-        self.api_key = os.getenv('TOMTOM_API_KEY', 'gTkYjtezuYmWeZeTxueWpvNR8PgzST2L')
+        self.api_key = os.getenv('TOMTOM_API_KEY', '8ygXf7BbtcoyFImExdnJe3U4I8zIVaQX')
         self.base_url = "https://api.tomtom.com/traffic/services/4"
     
     def get_traffic_flow(self, lat, lng, radius=500):
