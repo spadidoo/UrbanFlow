@@ -201,17 +201,16 @@ export default function ContactPage() {
                       initials="NV"
                     />
                     <LinkedInPerson
-                      name="Edzon Deveras"
-                      href="https://www.linkedin.com/in/edzon-deveras-6b8a7b392"
-                      imgSrc="/Edzon2.png"
-                      initials="ED"
-                    />
-
-                    <LinkedInPerson
                       name="Fate Almario"
                       href="https://www.linkedin.com/in/fate-almario-239a23350"
                       imgSrc="/fate.jpg"
                       initials="FA"
+                    />
+                    <LinkedInPerson
+                      name="Edzon Deveras"
+                      href="https://www.linkedin.com/in/edzon-deveras-6b8a7b392"
+                      imgSrc="/Edzon2.png"
+                      initials="ED"
                     />
                   </div>
                 </div>
