@@ -231,17 +231,41 @@ class TrafficPredictor:
         # CREATE DATAFRAME WITH CORRECT COLUMN ORDER
         # ============================================================
         
-        df = pd.DataFrame([features])
+        features_df = pd.DataFrame([features])
         
         # Ensure all training features are present
         for feature in self.feature_names:
-            if feature not in df.columns:
-                df[feature] = 0
+            if feature not in features_df.columns:
+                features_df[feature] = 0
         
         # Reorder columns to match training
-        df = df[self.feature_names]
+        features_df = features_df[self.feature_names]
         
-        return df
+        # ============================================================
+        # ADD FEATURE VALIDATION (CRITICAL!)
+        # ============================================================
+        
+        # Create DataFrame
+        features_df = pd.DataFrame([features])
+        
+        # CRITICAL CHECK: Ensure all training features are present
+        missing_features = set(self.feature_names) - set(features_df.columns)
+        if missing_features:
+            print(f"⚠️  WARNING: Missing features in input:")
+            for feat in missing_features:
+                print(f"   - {feat}")
+                features_df[feat] = 0  # Fill with default value
+        
+        # Ensure correct feature order (CRITICAL!)
+        features_df = features_df[self.feature_names]
+        
+        # Validate data types
+        for col in features_df.columns:
+            if not np.issubdtype(features_df[col].dtype, np.number):
+                print(f"⚠️  WARNING: Non-numeric value in {col}")
+                features_df[col] = pd.to_numeric(features_df[col], errors='coerce').fillna(0)
+        
+        return features_df
     
     def predict(self, input_data):
         """
@@ -400,6 +424,51 @@ class TrafficPredictor:
             }
         }
     
+    def predict_with_confidence(self, input_data):
+        """
+        Make prediction with confidence intervals
+        Research: Random Forest provides prediction uncertainty via tree voting
+        """
+        
+        # Prepare features
+        features = self.prepare_features(input_data)
+        
+        # Get predictions from all trees
+        tree_predictions = np.array([tree.predict(features)[0] for tree in self.model.estimators_])
+        
+        # Final prediction (majority vote)
+        prediction = self.model.predict(features)[0]
+        
+        # Calculate confidence (% of trees agreeing)
+        confidence = (tree_predictions == prediction).mean()
+        
+        # Get prediction probabilities for each class
+        probabilities = self.model.predict_proba(features)[0]
+        
+        return {
+            'prediction': int(prediction),
+            'confidence': float(confidence),
+            'probabilities': {
+                'light': float(probabilities[0]),
+                'moderate': float(probabilities[1]),
+                'heavy': float(probabilities[2])
+            },
+            'severity_label': ['Light', 'Moderate', 'Heavy'][prediction],
+            'interpretation': self._interpret_confidence(confidence)
+        }
+
+    def _interpret_confidence(self, confidence):
+        """Interpret confidence level"""
+        if confidence >= 0.90:
+            return "Very High Confidence"
+        elif confidence >= 0.75:
+            return "High Confidence"
+        elif confidence >= 0.60:
+            return "Moderate Confidence"
+        else:
+            return "Low Confidence - Consider additional data"
+
+
     def _calculate_variance_level(self, hour, has_disruption, disruption_type):
         """
         Calculate how much variance to apply based on conditions

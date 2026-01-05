@@ -1,48 +1,214 @@
 import pandas as pd
+import numpy as np
 import os
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FINAL_DIR = os.path.join(PROJECT_ROOT, 'data', 'final')
 
-print("Checking for non-numeric columns...")
+print("="*70)
+print("FEATURE ENGINEERING FOR URBANFLOW")
+print("="*70)
 
-# Load model training data
+# Load data
 df = pd.read_csv(os.path.join(FINAL_DIR, 'model_training_data.csv'))
 
-print(f"\nTotal columns: {len(df.columns)}")
-print(f"Total rows: {len(df)}")
+print(f"\n📂 Loaded data: {df.shape[0]} rows, {df.shape[1]} columns")
 
-# Check data types
-print("\nColumn data types:")
-print(df.dtypes.value_counts())
+# Ensure datetime column exists (adjust column name as needed)
+if 'timestamp' in df.columns:
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+elif 'date' in df.columns:
+    df['timestamp'] = pd.to_datetime(df['date'])
 
-# Find non-numeric columns
-non_numeric = df.select_dtypes(include=['object']).columns.tolist()
+# ============================================================
+# CRITICAL ADDITION #1: LAG FEATURES (Proven in Literature)
+# ============================================================
+# Research: Lieskovska et al. (2024), Wang & Susanto (2023)
+# "Lag features representing values from previous hour and same hour 
+# on previous day consistently improve prediction accuracy"
 
-if non_numeric:
-    print(f"\n⚠️  Found {len(non_numeric)} non-numeric columns:")
-    for col in non_numeric:
-        print(f"   - {col}: {df[col].dtype}")
-        print(f"     Sample values: {df[col].unique()[:5]}")
+print("\n🕐 Adding lag features...")
+
+# Sort by road_id and timestamp
+if 'road_id' in df.columns:
+    df = df.sort_values(['road_id', 'timestamp'])
     
-    print(f"\n🔧 Removing non-numeric columns...")
-    df_clean = df.drop(columns=non_numeric)
+    # Group by road for proper lag calculation
+    for col in ['total_volume', 'avg_speed', 'congestion_severity']:
+        if col in df.columns:
+            # Previous hour (lag 1)
+            df[f'{col}_lag_1h'] = df.groupby('road_id')[col].shift(1)
+            
+            # Same hour yesterday (lag 24)
+            df[f'{col}_lag_24h'] = df.groupby('road_id')[col].shift(24)
+            
+            # Same hour last week (lag 168)
+            df[f'{col}_lag_168h'] = df.groupby('road_id')[col].shift(168)
+
+print(f"   ✓ Added lag features for temporal patterns")
+
+# ============================================================
+# CRITICAL ADDITION #2: ROLLING STATISTICS (Proven Effective)
+# ============================================================
+# Research: Feature engineering for congestion forecasting (2022)
+# "Rolling statistics capture short-term trends"
+
+print("\n📊 Adding rolling statistics...")
+
+if 'road_id' in df.columns:
+    for col in ['total_volume', 'avg_speed']:
+        if col in df.columns:
+            # 3-hour rolling mean
+            df[f'{col}_rolling_mean_3h'] = df.groupby('road_id')[col].transform(
+                lambda x: x.rolling(window=3, min_periods=1).mean()
+            )
+            
+            # 3-hour rolling std (volatility)
+            df[f'{col}_rolling_std_3h'] = df.groupby('road_id')[col].transform(
+                lambda x: x.rolling(window=3, min_periods=1).std()
+            )
+            
+            # 24-hour rolling max (peak detection)
+            df[f'{col}_rolling_max_24h'] = df.groupby('road_id')[col].transform(
+                lambda x: x.rolling(window=24, min_periods=1).max()
+            )
+
+print(f"   ✓ Added rolling statistics")
+
+# ============================================================
+# CRITICAL ADDITION #3: RUSH HOUR INDICATORS (Domain Knowledge)
+# ============================================================
+# Research: Traffic patterns show distinct rush hour behavior
+
+print("\n🚗 Adding rush hour indicators...")
+
+if 'hour' in df.columns:
+    # Morning rush: 7-9 AM
+    df['is_morning_rush'] = ((df['hour'] >= 7) & (df['hour'] <= 9)).astype(int)
     
-    print(f"\n✓ Cleaned dataset:")
-    print(f"   Columns: {len(df_clean.columns)}")
-    print(f"   All numeric: {df_clean.select_dtypes(include=['number']).shape[1] == len(df_clean.columns)}")
+    # Evening rush: 5-7 PM
+    df['is_evening_rush'] = ((df['hour'] >= 17) & (df['hour'] <= 19)).astype(int)
     
-    # Save cleaned version
-    output_path = os.path.join(FINAL_DIR, 'model_training_data.csv')
-    df_clean.to_csv(output_path, index=False)
+    # Any rush hour
+    df['is_rush_hour'] = (df['is_morning_rush'] | df['is_evening_rush']).astype(int)
     
-    print(f"\n✓ Saved cleaned data to: {output_path}")
+    # Off-peak
+    df['is_off_peak'] = (~df['is_rush_hour'].astype(bool)).astype(int)
+
+print(f"   ✓ Added rush hour indicators")
+
+# ============================================================
+# CRITICAL ADDITION #4: TRAFFIC FLOW RATIO (Derived Feature)
+# ============================================================
+# Research: Speed-to-volume ratios indicate congestion onset
+
+print("\n⚡ Adding derived features...")
+
+if 'avg_speed' in df.columns and 'total_volume' in df.columns:
+    # Speed-volume ratio (capacity indicator)
+    df['speed_volume_ratio'] = df['avg_speed'] / (df['total_volume'] + 1)  # +1 avoid div by 0
     
-    print(f"\nRemoved columns:")
-    for col in non_numeric:
-        print(f"   - {col}")
+    # Volume change rate (trend detection)
+    df['volume_change_rate'] = df.groupby('road_id')['total_volume'].pct_change()
+
+print(f"   ✓ Added derived features")
+
+# ============================================================
+# CRITICAL ADDITION #5: DISRUPTION INTERACTION FEATURES
+# ============================================================
+
+print("\n🚧 Adding disruption interaction features...")
+
+if 'has_disruption' in df.columns:
+    # Disruption during rush hour (high impact)
+    df['disruption_during_rush'] = df['has_disruption'] * df['is_rush_hour']
+    
+    # Disruption severity (if disruption type column exists)
+    if 'disruption_type' in df.columns:
+        disruption_severity_map = {
+            'roadwork': 2,
+            'incident': 3,
+            'accident': 3,
+            'weather': 1,
+            'event': 1
+        }
+        df['disruption_severity'] = df['disruption_type'].map(disruption_severity_map).fillna(0)
+        df['disruption_severity'] = df['disruption_severity'] * df['has_disruption']
+
+print(f"   ✓ Added disruption interaction features")
+
+# ============================================================
+# FEATURE QUALITY CHECK
+# ============================================================
+
+print("\n🔍 Feature quality check...")
+
+# Check for infinite values
+inf_cols = df.columns[df.isin([np.inf, -np.inf]).any()].tolist()
+if inf_cols:
+    print(f"   ⚠️  Found infinite values in: {inf_cols}")
+    df = df.replace([np.inf, -np.inf], np.nan)
+    print(f"   ✓ Replaced infinite values with NaN")
+
+# Check for NaN values
+nan_counts = df.isnull().sum()
+nan_cols = nan_counts[nan_counts > 0]
+if len(nan_cols) > 0:
+    print(f"\n   NaN values found:")
+    for col, count in nan_cols.items():
+        pct = (count / len(df)) * 100
+        print(f"      {col}: {count} ({pct:.1f}%)")
+    
+    # Fill NaN values intelligently
+    print(f"\n   Filling NaN values...")
+    
+    # For lag features: forward fill (use last known value)
+    lag_cols = [col for col in df.columns if '_lag_' in col]
+    if lag_cols:
+        df[lag_cols] = df[lag_cols].fillna(method='ffill')
+    
+    # For rolling features: backward fill then forward fill
+    rolling_cols = [col for col in df.columns if '_rolling_' in col]
+    if rolling_cols:
+        df[rolling_cols] = df[rolling_cols].fillna(method='bfill').fillna(method='ffill')
+    
+    # For any remaining: fill with 0
+    df = df.fillna(0)
+    
+    print(f"   ✓ Filled all NaN values")
+
+# ============================================================
+# REMOVE NON-NUMERIC COLUMNS
+# ============================================================
+
+print("\n🧹 Cleaning data...")
+
+# Keep only numeric columns for model training
+numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+non_numeric_cols = df.select_dtypes(exclude=[np.number]).columns.tolist()
+
+if non_numeric_cols:
+    print(f"\n   Removing non-numeric columns:")
+    for col in non_numeric_cols:
+        print(f"      - {col}")
+    df_clean = df[numeric_cols]
 else:
-    print("\n✓ All columns are already numeric!")
+    df_clean = df.copy()
 
-print("\n" + "="*60)
-print("You can now run the training script again!")
+# ============================================================
+# SAVE ENHANCED DATASET
+# ============================================================
+
+output_path = os.path.join(FINAL_DIR, 'model_training_data.csv')
+df_clean.to_csv(output_path, index=False)
+
+print(f"\n✅ FEATURE ENGINEERING COMPLETE!")
+print(f"\n📊 Final dataset:")
+print(f"   Rows: {df_clean.shape[0]:,}")
+print(f"   Features: {df_clean.shape[1]:,}")
+print(f"   Original features: {df.shape[1]}")
+print(f"   New features added: {df_clean.shape[1] - df.shape[1]}")
+
+print(f"\n💾 Saved to: {output_path}")
+
+print(f"\n🎯 Next step: Run RF_training_script.py")

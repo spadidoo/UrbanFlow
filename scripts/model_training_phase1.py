@@ -46,7 +46,7 @@ print("="*70)
 print("\n" + "="*70)
 print("📂 STEP 1: Loading preprocessed data...")
 
-data_path = os.path.join(DATA_DIR, 'model_training_data.csv')
+data_path = os.path.join(DATA_DIR, 'model_training_data_2.csv')
 df = pd.read_csv(data_path)
 
 print(f"   ✓ Loaded {len(df):,} records")
@@ -414,7 +414,7 @@ summary = f"""
 - Chawla et al. (2002). SMOTE: Synthetic Minority Over-sampling Technique
 """
 
-summary_path = os.path.join(MODELS_DIR, 'ULTIMATE_TRAINING_SUMMARY.md')
+summary_path = os.path.join(MODELS_DIR, 'ULTIMATE_TRAINING_SUMMARY_2.md')
 with open(summary_path, 'w') as f:
     f.write(summary)
 
