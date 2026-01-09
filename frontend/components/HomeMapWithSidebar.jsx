@@ -552,23 +552,23 @@ export default function HomeMapWithSidebar() {
             <span className="font-semibold">{route.distance_text}</span>
           </div>
 
-          <div className="flex items-center justify-between">
-            <span className="text-gray-600 flex items-center">
-              <FaClock className="mr-1" /> Time
-            </span>
-            <span className="font-semibold">{route.duration_text}</span>
-          </div>
+         <div className="flex items-center justify-between">
+          <span className="text-gray-600 flex items-center">
+            <FaClock className="mr-1" /> Total Time
+          </span>
+          <span className="font-semibold">{route.duration_text}</span>
+        </div>
 
-          {route.passes_through_disruption && (
-            <div className="flex items-center justify-between text-orange-600">
-              <span className="flex items-center">
-                <FaExclamationTriangle className="mr-1" /> Delay
-              </span>
-              <span className="font-semibold">
-                +{route.estimated_delay_minutes} min
-              </span>
-            </div>
-          )}
+        {route.passes_through_disruption && (
+          <div className="flex items-center justify-between text-xs text-orange-600">
+            <span className="flex items-center">
+              <FaExclamationTriangle className="mr-1" /> Includes delay
+            </span>
+            <span className="font-medium">
+              (+{route.estimated_delay_minutes} min)
+            </span>
+          </div>
+        )}    o
         </div>
 
         {/* Description */}
@@ -915,9 +915,10 @@ export default function HomeMapWithSidebar() {
           label: "Direct routes",
         });
 
-        // Request 2: If there's a blocking disruption, request route that avoids that area
-        activeDisruptions.forEach((disruption, idx) => {
-          if (!disruption.latitude || !disruption.longitude) return;
+        // ✅ SIMPLIFIED: Let Google Maps naturally find alternatives
+        // Only add ONE strategic waypoint request if there's a blocking disruption
+        const hasBlockingDisruption = activeDisruptions.some((disruption) => {
+          if (!disruption.latitude || !disruption.longitude) return false;
 
           const distFromOrigin = getDistanceMeters(
             fromCoordinates.lat,
@@ -933,64 +934,28 @@ export default function HomeMapWithSidebar() {
             disruption.longitude
           );
 
-          // If disruption is on the direct path
-          if (distFromOrigin + distFromDest < distanceApart * 1.2) {
-            console.log(`⚠️ Disruption "${disruption.title}" is blocking path`);
-
-            // Calculate a point that's clearly away from the disruption
-            // Use perpendicular offset based on the line from origin to destination
-            const bearing = Math.atan2(
-              toCoordinates.lng - fromCoordinates.lng,
-              toCoordinates.lat - fromCoordinates.lat
-            );
-
-            // Create waypoint perpendicular to path, at disruption's latitude/longitude
-            const offsetDist = 0.01; // ~1km
-
-            // Try both sides (left and right of path)
-            const leftWaypoint = {
-              lat:
-                disruption.latitude +
-                offsetDist * Math.cos(bearing + Math.PI / 2),
-              lng:
-                disruption.longitude +
-                offsetDist * Math.sin(bearing + Math.PI / 2),
-            };
-
-            const rightWaypoint = {
-              lat:
-                disruption.latitude +
-                offsetDist * Math.cos(bearing - Math.PI / 2),
-              lng:
-                disruption.longitude +
-                offsetDist * Math.sin(bearing - Math.PI / 2),
-            };
-
-            // Add BOTH left and right waypoint requests (to get more alternatives)
-            requests.push({
-              body: {
-                origin: originStr,
-                destination: destStr,
-                waypoints: `${leftWaypoint.lat},${leftWaypoint.lng}`,
-                alternatives: false,
-              },
-              label: `Detour left of "${disruption.title}"`,
-            });
-
-            requests.push({
-              body: {
-                origin: originStr,
-                destination: destStr,
-                waypoints: `${rightWaypoint.lat},${rightWaypoint.lng}`,
-                alternatives: false,
-              },
-              label: `Detour right of "${disruption.title}"`,
-            });
-          }
+          // Check if disruption is between origin and destination
+          return distFromOrigin + distFromDest < distanceApart * 1.3;
         });
 
+        // If there's a blocking disruption, request routes that avoid it
+        if (hasBlockingDisruption) {
+          console.log("⚠️ Disruption detected on direct path - requesting avoidance routes");
+          
+          // Add a second request with avoid parameter (let Google decide the best detour)
+          requests.push({
+            body: {
+              origin: originStr,
+              destination: destStr,
+              alternatives: true,
+              avoid: "tolls", // This forces Google to find different routes
+            },
+            label: "Alternative routes avoiding disruption",
+          });
+        }
+
         // Limit to 3 requests total to avoid API quota issues
-        const limitedRequests = requests.slice(0, 3);
+        const limitedRequests = requests; //from 3 to 2
 
         console.log(
           `📤 Making ${limitedRequests.length} Google Maps request(s)...`
@@ -1040,9 +1005,9 @@ export default function HomeMapWithSidebar() {
               // Check if this is a duplicate route
               const isDuplicate = seenRoutes.some((existing) => {
                 const distDiff = Math.abs(existing.distance - distanceKm);
-                if (distDiff > 0.3) return false;
+                if (distDiff > 0.2) return false; //STRICTER distance check from 0.3 to 0.1
 
-                const samplePoints = Math.min(10, decodedCoords.length);
+                const samplePoints = Math.min(15, decodedCoords.length); //changed 10 to 25
                 const step = Math.floor(decodedCoords.length / samplePoints);
                 let matches = 0;
 
@@ -1059,14 +1024,34 @@ export default function HomeMapWithSidebar() {
                         existingPoint[0],
                         existingPoint[1]
                       );
-                      return dist < 100;
+                      return dist < 100; //changed 100 to 50 meters
                     }
                   );
 
                   if (hasMatch) matches++;
                 }
 
-                return matches > samplePoints * 0.7;
+                // Require 85% overlap to be considered duplicate (instead of 75%)
+                const overlapRatio = matches / samplePoints;
+                if (overlapRatio < 0.85) return false;
+
+                // 3. NEW: Check if start and end points are very similar
+                const startDist = getDistanceMeters(
+                  decodedCoords[0][0],
+                  decodedCoords[0][1],
+                  existing.coordinates[0][0],
+                  existing.coordinates[0][1]
+                );
+
+                const endDist = getDistanceMeters(
+                  decodedCoords[decodedCoords.length - 1][0],
+                  decodedCoords[decodedCoords.length - 1][1],
+                  existing.coordinates[existing.coordinates.length - 1][0],
+                  existing.coordinates[existing.coordinates.length - 1][1]
+                );
+
+                // If start AND end are within 100m, AND route overlaps 85%+ → it's a duplicate
+                return startDist < 100 && endDist < 100;
               });
 
               if (isDuplicate) {
@@ -1111,6 +1096,8 @@ export default function HomeMapWithSidebar() {
 
                 const disruptionAnalysis = affectedDisruptions.map((d) => {
                   let totalDisruptionDistance = 0;
+                  let pointsInDisruption = 0;
+
 
                   decodedCoords.forEach((point, idx) => {
                     const distToDisruption = getDistanceMeters(
@@ -1128,12 +1115,14 @@ export default function HomeMapWithSidebar() {
                         point[1]
                       );
                       totalDisruptionDistance += segmentDist;
+                      pointsInDisruption++;
                     }
                   });
 
                   return {
                     disruption: d,
                     distanceKm: totalDisruptionDistance / 1000,
+                    pointsInDisruption: pointsInDisruption,
                   };
                 });
 
@@ -1145,6 +1134,8 @@ export default function HomeMapWithSidebar() {
                       disruption_id: analysis.disruption.id,
                       route_distance: distanceKm,
                       distance_through_disruption: analysis.distanceKm,
+                      route_points_in_disruption: analysis.pointsInDisruption,
+                      total_route_points: decodedCoords.length,
                     }),
                   })
                     .then((response) => {
@@ -1156,6 +1147,7 @@ export default function HomeMapWithSidebar() {
                     .then((predictionData) => ({
                       disruption: analysis.disruption,
                       distanceKm: analysis.distanceKm,
+                      pointsInDisruption: analysis.pointsInDisruption,
                       delay: predictionData.predicted_delay_minutes,
                       delayRatio: predictionData.average_delay_ratio,
                       severityLevel: predictionData.severity_level,
@@ -1167,18 +1159,58 @@ export default function HomeMapWithSidebar() {
                         `ML prediction failed for "${analysis.disruption.title}":`,
                         error
                       );
-                      const delayRatio =
-                        analysis.disruption.average_delay_ratio || 1.2;
-                      const normalTime = (analysis.distanceKm / 30) * 60;
-                      const delayedTime = normalTime * delayRatio;
-                      const fallbackDelay = delayedTime - normalTime;
 
+                      // ✅ CRITICAL FIX: Use disruption's expected_delay as MINIMUM baseline
+                      const baseDisruptionDelay = analysis.disruption.expected_delay || 20;
+                      const disruptionSeverity = analysis.disruption.avg_severity || 1.5;
+                      
+                      // ✅ Check if route passes through disruption zone (within 250m)
+                      const isDirectlyAffected = analysis.distanceKm > 0.1; // More than 100m through disruption
+                      
+                      // ✅ If route passes directly through disruption, apply FULL delay
+                      if (isDirectlyAffected) {
+                        // Routes passing directly through get the full expected delay
+                        const directImpactMultiplier = Math.min(1.5, (analysis.distanceKm / distanceKm) * 3);
+                        const finalDelay = baseDisruptionDelay * directImpactMultiplier * (disruptionSeverity / 1.5);
+                        
+                        console.log(`⚠️ Direct impact - using full delay: ${Math.round(finalDelay)}min`);
+                        
+                        return {
+                          disruption: analysis.disruption,
+                          distanceKm: analysis.distanceKm,
+                          pointsInDisruption: analysis.pointsInDisruption,
+                          delay: Math.max(Math.round(finalDelay), baseDisruptionDelay), // Never less than expected delay
+                          delayRatio: 1.0 + (finalDelay / 60),
+                          confidence: "fallback-direct",
+                          success: false,
+                        };
+                      }
+                      
+                      // ✅ For routes near (but not through) disruption, apply reduced delay
+                      const impactRatio = Math.min(0.7, (analysis.distanceKm / distanceKm) * 1.5);
+                      const lengthFactor = Math.min(1.0, distanceKm / 5);
+                      const scaledDelay = baseDisruptionDelay * impactRatio * lengthFactor;
+                      
+                      // Apply severity multiplier
+                      const severityMultiplier = disruptionSeverity / 1.5; // Normalize to moderate severity
+                    //  const finalDelay = scaledDelay * severityMultiplier;
+
+                      console.log(`⚠️ Fallback calculation for "${analysis.disruption.title}":`);
+                      console.log(`   Base disruption delay: ${disruptionDelay}min`);
+                      console.log(`   Impact ratio: ${(impactRatio * 100).toFixed(1)}% (${analysis.distanceKm.toFixed(2)}km through disruption)`);
+                      console.log(`   Length factor: ${(lengthFactor * 100).toFixed(1)}%`);
+                      console.log(`   Severity multiplier: ${severityMultiplier.toFixed(2)}x`);
+                      console.log(`   Final delay: ${Math.round(finalDelay)}min`);
+
+                      const finalDelay = scaledDelay * (disruptionSeverity / 1.5);
+  
                       return {
                         disruption: analysis.disruption,
                         distanceKm: analysis.distanceKm,
-                        delay: Math.max(fallbackDelay, 3),
-                        delayRatio: delayRatio,
-                        confidence: "fallback",
+                        pointsInDisruption: analysis.pointsInDisruption,
+                        delay: Math.max(Math.round(finalDelay), Math.round(baseDisruptionDelay * 0.3)), // At least 30% of expected delay
+                        delayRatio: 1.0 + (finalDelay / 60),
+                        confidence: "fallback-nearby",
                         success: false,
                       };
                     })
@@ -1186,10 +1218,17 @@ export default function HomeMapWithSidebar() {
 
                 const predictions = await Promise.all(predictionPromises);
 
-                predictions.forEach((pred) => {
-                  const delayMinutes = Math.round(pred.delay);
-                  estimatedDelay += delayMinutes;
-                  affectedDisruptionNames.push(pred.disruption.title);
+              predictions.forEach((pred) => {
+                const delayMinutes = Math.round(pred.delay);
+                
+                // ✅ Ensure delay is never less than the disruption's expected delay
+                const minDelay = pred.disruption.expected_delay || 0;
+                const finalDelay = Math.max(delayMinutes, minDelay);
+                
+                estimatedDelay += finalDelay;
+                affectedDisruptionNames.push(pred.disruption.title);
+                
+                console.log(`   Adding delay for "${pred.disruption.title}": ${finalDelay}min (predicted: ${delayMinutes}min, expected: ${minDelay}min)`);
 
                   if (pred.success) {
                     console.log(
@@ -1206,7 +1245,7 @@ export default function HomeMapWithSidebar() {
                     console.log(`      Confidence: ${pred.confidence}`);
                   } else {
                     console.log(
-                      `   ⚠️ Fallback delay for "${pred.disruption.title}": +${delayMinutes}min (ratio: ${pred.delayRatio})`
+                      `   ⚠️ Fallback delay for "${pred.disruption.title}": +${delayMinutes}min (ratio: ${pred.delayRatio.toFixed(2)})`
                     );
                   }
                 });
@@ -1225,12 +1264,13 @@ export default function HomeMapWithSidebar() {
                 );
               }
 
+              // alternative route colors
               const colors = [
-                "#10B981",
-                "#3B82F6",
-                "#8B5CF6",
-                "#F59E0B",
-                "#EC4899",
+                "#2F18A3",
+                "#2F18A3",
+                "#2F18A3",
+                "#2F18A3",
+                "#2F18A3"
               ];
 
               routes.push({
@@ -1273,33 +1313,93 @@ export default function HomeMapWithSidebar() {
         throw new Error("No routes found. Please try different locations.");
       }
 
-      // Sort routes: prioritize those avoiding disruptions, then by total time
-      routes.sort((a, b) => {
-        if (a.hasDisruption && !b.hasDisruption) return 1;
-        if (!a.hasDisruption && b.hasDisruption) return -1;
-        return a.duration - b.duration;
-      });
+      // ✅ STEP 1: Separate clean routes from disrupted routes
+      const cleanRoutes = routes.filter((r) => !r.hasDisruption);
+      const disruptedRoutes = routes.filter((r) => r.hasDisruption);
+
+      console.log(`\n📊 Route breakdown:`);
+      console.log(`   - ${cleanRoutes.length} avoid disruptions`);
+      console.log(`   - ${disruptedRoutes.length} pass through disruptions`);
+
+      // ✅ STEP 2: Sort each group by duration (fastest first)
+      cleanRoutes.sort((a, b) => a.duration - b.duration);
+      disruptedRoutes.sort((a, b) => a.duration - b.duration);
+
+      // ✅ STEP 3: Build final route list with smart selection
+      const finalRoutes = [];
+
+      // Always include the FASTEST clean route (if exists)
+      if (cleanRoutes.length > 0) {
+        const bestCleanRoute = cleanRoutes[0];
+        finalRoutes.push(bestCleanRoute);
+        console.log(`✅ Including best clean route: ${bestCleanRoute.duration}min, ${bestCleanRoute.distance}km`);
+      }
+
+      // Find the absolute fastest route (might be disrupted)
+      const absoluteFastest = routes.reduce((fastest, route) => 
+        route.duration < fastest.duration ? route : fastest
+      );
+
+      // If fastest overall is disrupted AND different from clean route, include it
+      if (absoluteFastest.hasDisruption && 
+          !finalRoutes.find(r => r.unique_id === absoluteFastest.unique_id)) {
+        finalRoutes.push(absoluteFastest);
+        console.log(`⚡ Including fastest overall route: ${absoluteFastest.duration}min (has disruption)`);
+      }
+
+      // ✅ STEP 4: Add more routes up to 4 total, avoiding duplicates
+      const shortestDistance = parseFloat(absoluteFastest.distance);
+      const shortestTime = absoluteFastest.duration;
+
+      // Combine remaining routes (prioritize clean routes first)
+      const remainingRoutes = [...cleanRoutes.slice(1), ...disruptedRoutes];
+
+      for (const route of remainingRoutes) {
+        if (finalRoutes.length >= 4) break;
+        
+        // Skip if already included
+        if (finalRoutes.find(r => r.unique_id === route.unique_id)) continue;
+
+        const distanceRatio = parseFloat(route.distance) / shortestDistance;
+        const timeRatio = route.duration / shortestTime;
+
+        // ✅ Be more lenient with clean routes
+        const maxDistanceRatio = route.hasDisruption ? 2.5 : 3.0; // Clean routes can be 3x longer
+        const maxTimeRatio = route.hasDisruption ? 2.5 : 3.0;
+
+        if (distanceRatio <= maxDistanceRatio && timeRatio <= maxTimeRatio) {
+          finalRoutes.push(route);
+          console.log(`✓ Including route: ${route.duration}min, ${route.distance}km ${route.hasDisruption ? '(disrupted)' : '(clean)'}`);
+        } else {
+          console.log(`✗ Rejecting route: ${route.duration}min - too long (${distanceRatio.toFixed(1)}x distance, ${timeRatio.toFixed(1)}x time)`);
+        }
+      }
+
+      console.log(`\n✅ Final selection: ${finalRoutes.length} routes`);
+      console.log(`   - ${finalRoutes.filter(r => !r.hasDisruption).length} clean routes`);
+      console.log(`   - ${finalRoutes.filter(r => r.hasDisruption).length} with disruptions`);
 
       routes.splice(4);
 
-      // Rename routes based on sorted order
-      routes.forEach((route, index) => {
+      // ✅ Smart route naming based on characteristics
+      finalRoutes.forEach((route, index) => {
         if (index === 0) {
-          route.name = route.hasDisruption
-            ? "⚠️ Fastest Route (has delays)"
-            : "🏁 Best Route (avoids disruptions)";
+          // First route - name based on whether it's clean or fastest
+          if (!route.hasDisruption) {
+            route.name = "✅ Safest Route (No Disruptions)";
+          } else {
+            route.name = "🏆 Fastest Route";
+          }
         } else if (index === 1) {
-          route.name = route.hasDisruption
-            ? "⚠️ Alternative Route 1"
-            : "⚡ Alternative Route 1";
+          if (!route.hasDisruption && finalRoutes[0].hasDisruption) {
+            route.name = "✅ Clean Alternative (Avoids Disruption)";
+          } else {
+            route.name = "⚡ Alternative Route 1";
+          }
         } else if (index === 2) {
-          route.name = route.hasDisruption
-            ? "⚠️ Alternative Route 2"
-            : "🛣️ Alternative Route 2";
+          route.name = "🛣️ Alternative Route 2";
         } else {
-          route.name = route.hasDisruption
-            ? `⚠️ Alternative Route ${index}`
-            : `🛣️ Alternative Route ${index}`;
+          route.name = `🛣️ Alternative Route ${index}`;
         }
       });
 
@@ -1315,17 +1415,17 @@ export default function HomeMapWithSidebar() {
         } pass through disruptions`
       );
 
-      setCalculatedRoutes(routes);
-      setSelectedUserRoute(routes[0]);
+      setCalculatedRoutes(finalRoutes); // Use filtered routes
+      setSelectedUserRoute(finalRoutes[0]);
 
       // Draw routes on map
       setTimeout(() => {
-        drawUserRoutesOnMap(routes, routes[0]);
+        drawUserRoutesOnMap(finalRoutes, finalRoutes[0]);
       }, 100);
 
       // Zoom to route
-      if (mapInstanceRef.current && routes[0].coordinates.length > 0) {
-        const bounds = L.latLngBounds(routes[0].coordinates);
+      if (mapInstanceRef.current && finalRoutes[0].coordinates.length > 0) {
+        const bounds = L.latLngBounds(finalRoutes[0].coordinates);
         mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50] });
       }
     } catch (error) {
@@ -1338,12 +1438,15 @@ export default function HomeMapWithSidebar() {
   // Helper: Check if route overlaps with disruptions (IMPROVED)
   // Helper: Check if route overlaps with disruptions (IMPROVED)
   function checkRouteDisruptionOverlap(routeCoords, disruptions) {
-    const PROXIMITY_THRESHOLD = 200; // meters - more sensitive
+    const PROXIMITY_THRESHOLD = 150; // ✅ REDUCED from 200m - more strict
+    const MIN_OVERLAP_POINTS = 3; // ✅ Require multiple points near disruption
 
     if (!routeCoords || routeCoords.length === 0) return false;
 
     for (const disruption of disruptions) {
       if (disruption.status !== "active") continue;
+
+      let nearbyPointsCount = 0; // ✅ Count how many route points are near disruption
 
       // Check disruption center point
       if (disruption.latitude && disruption.longitude) {
@@ -1356,12 +1459,20 @@ export default function HomeMapWithSidebar() {
           );
 
           if (distance < PROXIMITY_THRESHOLD) {
-            console.log(
-              `⚠️ Route passes near disruption: ${
-                disruption.title
-              } (${Math.round(distance)}m away)`
-            );
-            return true;
+            nearbyPointsCount++;
+            
+            // ✅ Only consider it "passing through" if multiple consecutive points are near
+            if (nearbyPointsCount >= MIN_OVERLAP_POINTS) {
+              console.log(
+                `⚠️ Route passes through disruption: ${
+                  disruption.title
+                } (${nearbyPointsCount} points within ${Math.round(distance)}m)`
+              );
+              return true;
+            }
+          } else {
+            // ✅ Reset counter if points are not consecutive
+            nearbyPointsCount = 0;
           }
         }
       }
@@ -2037,11 +2148,12 @@ export default function HomeMapWithSidebar() {
         coord.longitude,
       ]);
 
+      //live traffic lines
       const severityColors = {
-        low: "#22c55e",
-        moderate: "#eab308",
-        high: "#f97316",
-        severe: "#ef4444",
+        low: "#22c55e", //green
+        moderate: "#eab308", //yellow
+        high: "#ef4444", //red
+        severe: "#dc2626", //darker red
       };
 
       const color = severityColors[segment.severity] || "#6b7280";
@@ -2479,8 +2591,13 @@ export default function HomeMapWithSidebar() {
       const realtimeBaseline = disruption.realtime.congestion_ratio;
       
       // ✅ ADD disruption impact to current real-time conditions
-      severity = realtimeBaseline + (predictedDisruptionSeverity * 0.6); // 60% of predicted impact added
-      delayMin = (disruption.realtime.delay_minutes || 0) + predictedDelay;
+      // ✅ Blend real-time congestion with predicted disruption severity
+      severity = realtimeBaseline + (predictedDisruptionSeverity * 0.6);
+      
+      // ✅ CRITICAL FIX: Use HIGHER of real-time delay or predicted delay
+      const realtimeDelay = disruption.realtime.delay_minutes || 0;
+      delayMin = Math.max(realtimeDelay, predictedDelay, disruption.expected_delay || 0);
+      
       isUsingRealTime = true;
       
       console.log(`🔴 BLENDED: ${disruption.title}`);
@@ -4861,11 +4978,11 @@ export default function HomeMapWithSidebar() {
                           />
                         </svg>
                         <span className="font-semibold text-gray-900">
-                          {route.duration} min
+                          {route.duration} min total
                         </span>
                         {route.estimatedDelay > 0 && (
-                          <span className="text-orange-600 font-medium">
-                            +{route.estimatedDelay}min delay
+                          <span className="text-xs text-orange-600">
+                            (includes +{route.estimatedDelay}min delay)   
                           </span>
                         )}
                       </div>
