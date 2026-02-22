@@ -701,7 +701,7 @@ export default function PlannerMapWithSidebar() {
   useEffect(() => {
     const fetchPublishedReports = async () => {
       try {
-        const response = await fetch(`https://backend.urbanflowph.com/api/public-reports/published`);
+        const response = await fetch(`https://api.urbanflowph.com/api/public-reports/published`);
         const data = await response.json();
         if (data.success) {
           setPublishedReports(data.data);
@@ -738,7 +738,7 @@ export default function PlannerMapWithSidebar() {
       setError(null);
 
       const response = await fetch(
-        `https://backend.urbanflowph.com/api/published-disruptions`
+        `https://api.urbanflowph.com/api/published-disruptions`
       );
       const data = await response.json();
 
@@ -782,7 +782,7 @@ export default function PlannerMapWithSidebar() {
       const boundsString = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
 
       const response = await fetch(
-        `https://backend.urbanflowph.com/api/traffic/live-flow?bounds=${boundsString}`
+        `https://api.urbanflowph.com/api/traffic/live-flow?bounds=${boundsString}`
       );
       const data = await response.json();
 
@@ -1113,7 +1113,7 @@ export default function PlannerMapWithSidebar() {
   const fetchRealtimeForDisruption = async (disruption) => {
     try {
       const response = await fetch(
-          `https://backend.urbanflowph.com/api/realtime-traffic`,
+          `https://api.urbanflowph.com/api/realtime-traffic`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1852,7 +1852,7 @@ export default function PlannerMapWithSidebar() {
           
           ${report.image_url ? `
             <img 
-              src="https://backend.urbanflowph.com${report.image_url}"
+              src="https://api.urbanflowph.com${report.image_url}"
               style="width: 100%; height: 150px; object-fit: cover; border-radius: 8px; margin-bottom: 12px;"
               alt="Report evidence"
             />

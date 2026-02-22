@@ -143,7 +143,7 @@ function MiniOngoingMap() {
     try {
       setLoading(true);
       const response = await fetch(
-        `https://backend.urbanflowph.com/api/published-disruptions`
+        `https://api.urbanflowph.com/api/published-disruptions`
       );
       const data = await response.json();
 
@@ -537,7 +537,7 @@ const [trendView, setTrendView] = useState("weekly"); // 'weekly' or 'daily'
     const startTime = Date.now();
 
     try {
-      const response = await fetch( `https://backend.urbanflowph.com/api/health`);
+      const response = await fetch( `https://api.urbanflowph.com/api/health`);
       const endTime = Date.now();
       const responseTime = endTime - startTime;
 
@@ -575,7 +575,7 @@ const [trendView, setTrendView] = useState("weekly"); // 'weekly' or 'daily'
       // - Your own backend endpoint: http://  `${process.env.next_public_api_url}/api/traffic-status
 
       const response = await fetch(
-        `https://backend.urbanflowph.com/api/traffic-status?road=${encodeURIComponent(
+        `https://api.urbanflowph.com/api/traffic-status?road=${encodeURIComponent(
           roadName
         )}&hour=${hour}`
       );
@@ -654,7 +654,7 @@ const [trendView, setTrendView] = useState("weekly"); // 'weekly' or 'daily'
             if (isCurrent || (isPast && currentHour - hour <= 3)) {
               try {
                 const response = await fetch(
-                    `https://backend.urbanflowph.com/api/traffic-status?area=${encodeURIComponent(
+                    `https://api.urbanflowph.com/api/traffic-status?area=${encodeURIComponent(
                     area.name
                   )}&hour=${hour}`
                 );
@@ -887,9 +887,9 @@ useEffect(() => {
   // Fetch public reports
   const fetchPublicReports = async () => {
     try {
-      console.log('Fetching reports from:', `https://backend.urbanflowph.com/api/public-reports`);
+      console.log('Fetching reports from:', `https://api.urbanflowph.com/api/public-reports`);
       
-      const response = await fetch(`https://backend.urbanflowph.com/api/public-reports`);
+      const response = await fetch(`https://api.urbanflowph.com/api/public-reports`);
       console.log('Response status:', response.status);
       
       const data = await response.json();
@@ -966,7 +966,7 @@ useEffect(() => {
       console.log('Publishing report:', reportId, 'Duration:', durationHours);
       
       // ✅ FIX: Remove extra closing brace in URL
-      const response = await fetch(`https://backend.urbanflowph.com/api/public-reports/${reportId}`, {
+      const response = await fetch(`https://api.urbanflowph.com/api/public-reports/${reportId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -1045,7 +1045,7 @@ useEffect(() => {
     try {
       console.log(`🔧 Resolving report ${reportId}...`);
       
-      const response = await fetch(`https://backend.urbanflowph.com/api/public-reports/${reportId}`, {
+      const response = await fetch(`https://api.urbanflowph.com/api/public-reports/${reportId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'resolve' })
@@ -1142,7 +1142,7 @@ useEffect(() => {
 
     try {
       const savedResponse = await fetch(
-        `https://backend.urbanflowph.com/api/my-simulations?user_id=${userId}`
+        `https://api.urbanflowph.com/api/my-simulations?user_id=${userId}`
       );
       const savedData = await savedResponse.json();
 
@@ -1192,7 +1192,7 @@ useEffect(() => {
       }
 
       const publishedResponse = await fetch(
-        `https://backend.urbanflowph.com/api/published-simulations`
+        `https://api.urbanflowph.com/api/published-simulations`
       );
       const publishedData = await publishedResponse.json();
 
@@ -2553,7 +2553,7 @@ useEffect(() => {
                       Debug URL: {selectedReport.image_url}
 
                     <img 
-                      src={`https://backend.urbanflowph.com${selectedReport.image_url}`}
+                      src={`https://api.urbanflowph.com${selectedReport.image_url}`}
                       alt="Report evidence"
                       className="w-full h-64 object-cover rounded border border-gray-200"
                     />

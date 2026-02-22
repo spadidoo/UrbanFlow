@@ -80,7 +80,7 @@ export default function RawMap({
   useEffect(() => {
     const fetchPublicDisruptions = async () => {
       try {
-        const response = await fetch('https://backend.urbanflowph.com/api/published-disruptions');
+        const response = await fetch('https://api.urbanflowph.com/api/published-disruptions');
         const data = await response.json();
         
         if (data.success) {
@@ -101,7 +101,7 @@ export default function RawMap({
   useEffect(() => {
     const fetchPublishedReports = async () => {
       try {
-        const response = await fetch('https://backend.urbanflowph.com/api/public-reports/published');
+        const response = await fetch('https://api.urbanflowph.com/api/public-reports/published');
         const data = await response.json();
         if (data.success) {
           setPublishedReports(data.data);
@@ -339,7 +339,7 @@ export default function RawMap({
         
         ${report.image_url ? `
           <img 
-            src="https://backend.urbanflowph.com${report.image_url}"
+            src="https://api.urbanflowph.com${report.image_url}"
             style="width: 100%; height: 150px; object-fit: cover; border-radius: 8px; margin-bottom: 12px;"
             alt="Report evidence"
           />

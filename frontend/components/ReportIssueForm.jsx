@@ -45,7 +45,7 @@ export default function ReportIssueForm({ position, onClose, onSubmit, marker })
         submitData.append('image', formData.image);
       }
 
-      const response = await fetch(`https://backend.urbanflowph.com/api/public-reports`, {
+      const response = await fetch(`https://api.urbanflowph.com/api/public-reports`, {
         method: 'POST',
         body: submitData
       });

@@ -964,7 +964,7 @@ export default function HomeMapWithSidebar() {
         // Execute all requests
         const responses = await Promise.all(
           limitedRequests.map((req) =>
-            fetch("https://backend.urbanflowph.com/api/google-directions", {
+            fetch("https://api.urbanflowph.com/api/google-directions", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(req.body),
@@ -1127,7 +1127,7 @@ export default function HomeMapWithSidebar() {
                 });
 
                 const predictionPromises = disruptionAnalysis.map((analysis) =>
-                  fetch("https://backend.urbanflowph.com/api/predict-delay", {
+                  fetch("https://api.urbanflowph.com/api/predict-delay", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
@@ -2002,7 +2002,7 @@ export default function HomeMapWithSidebar() {
     const fetchPublishedReports = async () => {
       try {
         const response = await fetch(
-          `https://backend.urbanflowph.com/api/public-reports/published`
+          `https://api.urbanflowph.com/api/public-reports/published`
         );
         const data = await response.json();
         if (data.success) {
@@ -2035,7 +2035,7 @@ export default function HomeMapWithSidebar() {
       setError(null);
 
       const response = await fetch(
-        `https://backend.urbanflowph.com/api/published-disruptions`
+        `https://api.urbanflowph.com/api/published-disruptions`
       );
       const data = await response.json();
 
@@ -2109,7 +2109,7 @@ export default function HomeMapWithSidebar() {
       const boundsString = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
 
       const response = await fetch(
-        `https://backend.urbanflowph.com/api/traffic/live-flow?bounds=${boundsString}`
+        `https://api.urbanflowph.com/api/traffic/live-flow?bounds=${boundsString}`
       );
       const data = await response.json();
 
@@ -2448,7 +2448,7 @@ export default function HomeMapWithSidebar() {
   const fetchRealtimeForDisruption = async (disruption) => {
     try {
       const response = await fetch(
-        `https://backend.urbanflowph.com/api/realtime-traffic`,
+        `https://api.urbanflowph.com/api/realtime-traffic`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -3162,7 +3162,7 @@ export default function HomeMapWithSidebar() {
       const routePromises = routeScenarios.map(async (scenario, index) => {
         try {
           const response = await fetch(
-            "https://backend.urbanflowph.com/api/calculate-alternate-routes",
+            "https://api.urbanflowph.com/api/calculate-alternate-routes",
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -3816,7 +3816,7 @@ export default function HomeMapWithSidebar() {
             report.image_url
               ? `
             <img 
-              src="https://backend.urbanflowph.com${report.image_url}"
+              src="https://api.urbanflowph.com${report.image_url}"
               style="width: 100%; height: 150px; object-fit: cover; border-radius: 8px; margin-bottom: 12px;"
               alt="Report evidence"
             />

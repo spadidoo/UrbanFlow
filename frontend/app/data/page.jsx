@@ -120,7 +120,7 @@ export default function DataPage() {
     console.log("Fetching datasets...");
 
     try {
-      const response = await fetch("https://backend.urbanflowph.com/api/files/list");
+      const response = await fetch("https://api.urbanflowph.com/api/files/list");
       const data = await response.json();
 
       console.log("Datasets API response:", data);
@@ -165,7 +165,7 @@ export default function DataPage() {
     formData.append("file", file);
 
     try {
-      const response = await fetch("https://backend.urbanflowph.com/api/files/upload", {
+      const response = await fetch("https://api.urbanflowph.com/api/files/upload", {
         method: "POST",
         body: formData,
       });
@@ -194,7 +194,7 @@ export default function DataPage() {
   const handleDownloadSingle = async (filename) => {
     try {
       const response = await fetch(
-        `https://backend.urbanflowph.com/api/files/download/${filename}`
+        `https://api.urbanflowph.com/api/files/download/${filename}`
       );
 
       if (!response.ok) {
@@ -230,7 +230,7 @@ export default function DataPage() {
 
     try {
       const response = await fetch(
-        "https://backend.urbanflowph.com/api/files/download-multiple",
+        "https://api.urbanflowph.com/api/files/download-multiple",
         {
           method: "POST",
           headers: {
@@ -278,7 +278,7 @@ export default function DataPage() {
     }
 
     try {
-      const response = await fetch("https://backend.urbanflowph.com/api/files/delete", {
+      const response = await fetch("https://api.urbanflowph.com/api/files/delete", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -338,7 +338,7 @@ export default function DataPage() {
       setError(null);
       
       console.log("🔄 Fetching simulations for user:", userId);
-      console.log("📡 Calling API:", `https://backend.urbanflowph.com/api/my-simulations?user_id=${userId}`);
+      console.log("📡 Calling API:", `https://api.urbanflowph.com/api/my-simulations?user_id=${userId}`);
       
       const response = await api.getMySimulations(userId);
       
@@ -574,7 +574,7 @@ export default function DataPage() {
 
       //  FIXED: Call the VERIFY endpoint, not send-publish-otp
       const response = await fetch(
-        "https://backend.urbanflowph.com/api/verify-publish-otp",  // ← Changed this line
+        "https://api.urbanflowph.com/api/verify-publish-otp",  // ← Changed this line
         {
           method: "POST",
           headers: {
@@ -676,7 +676,7 @@ export default function DataPage() {
       console.log("📊 Generating report for simulation:", simulation.simulation_id);
       
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'https://backend.urbanflowph.com'}/api/reports/generate`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'https://api.urbanflowph.com'}/api/reports/generate`,
         {
           method: 'POST',
           headers: {

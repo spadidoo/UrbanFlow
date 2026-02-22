@@ -444,7 +444,7 @@ export default function SimulationPage() {
 
       // Process road info through backend
       const response = await fetch(
-        `https://backend.urbanflowph.com/api/process-road-info`,
+        `https://api.urbanflowph.com/api/process-road-info`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -502,7 +502,7 @@ export default function SimulationPage() {
 
         // Process road info through backend
         const response = await fetch(
-            `https://backend.urbanflowph.com/api/process-road-info`,
+            `https://api.urbanflowph.com/api/process-road-info`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -639,7 +639,7 @@ export default function SimulationPage() {
       console.log("🚀 Sending simulation request:", simulationData);
 
       const response = await fetch(
-          `https://backend.urbanflowph.com/api/simulate-disruption-realtime`,
+          `https://api.urbanflowph.com/api/simulate-disruption-realtime`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -816,7 +816,7 @@ const fetchRecommendations = async (simulationId, simulationData) => {
   
   try {
     const response = await fetch(
-      `https://backend.urbanflowph.com/api/generate-recommendations`,
+      `https://api.urbanflowph.com/api/generate-recommendations`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -951,7 +951,7 @@ const fetchRecommendations = async (simulationId, simulationData) => {
       };
 
       const response = await fetch(
-          `https://backend.urbanflowph.com/api/save-simulation`,
+          `https://api.urbanflowph.com/api/save-simulation`,
         {
           method: "POST",
           headers: {
@@ -1037,7 +1037,7 @@ const fetchRecommendations = async (simulationId, simulationData) => {
       setOTPError(null);
 
       const response = await fetch(
-          `https://backend.urbanflowph.com/api/send-publish-otp`,
+          `https://api.urbanflowph.com/api/send-publish-otp`,
         {
           method: "POST",
           headers: {
@@ -1089,7 +1089,7 @@ const fetchRecommendations = async (simulationId, simulationData) => {
 
       // Verify OTP and publish
       const response = await fetch(
-          `https://backend.urbanflowph.com/api/verify-publish-otp`,
+          `https://api.urbanflowph.com/api/verify-publish-otp`,
         {
           method: "POST",
           headers: {

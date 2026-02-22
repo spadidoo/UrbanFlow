@@ -108,7 +108,7 @@ export default function SettingsPage() {
         formData.append("avatar", avatarFile);
         formData.append("user_id", user.id);
 
-        const uploadResponse = await fetch("https://backend.urbanflowph.com/api/upload-avatar", {
+        const uploadResponse = await fetch("https://api.urbanflowph.com/api/upload-avatar", {
           method: "POST",
           body: formData,
         });
