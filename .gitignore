@@ -20,6 +20,9 @@ venv/
 env/
 ENV/
 .venv/
+.env
+.env.local
+.env.production
 
 # Ignore model files
 *.pkl
